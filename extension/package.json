@@ -150,7 +150,7 @@
         "l0-git.notifyOnNew": {
           "type": "boolean",
           "default": true,
-          "description": "Show a notification when a new finding appears."
+          "description": "Show a toast when a new ERROR-severity finding appears (cap 3 + summary). Warnings and info never toast — they're visible in the sidebar tree and Problems pane."
         },
         "l0-git.runOnStartup": {
           "type": "boolean",

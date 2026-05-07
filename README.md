@@ -239,6 +239,14 @@ The active state ("12 findings · group: severity · status: ignored") is
 shown in the view's description line. View state persists across sessions
 in `globalState`.
 
+**Default visibility:** the sidebar shows `error` + `warning` only. `info`
+findings are hidden by default — toggle them on via the severity filter
+when you want the audit-trail layer (TODO/FIXME, missing CONTRIBUTING.md,
+…). `override_accepted` is suppressed from the tree at every severity
+level — overrides still land in the DB and surface in the dashboard /
+`lgit list -gate=override_accepted`. Toasts fire for `error` only;
+warnings and info live exclusively in the sidebar and Problems pane.
+
 ### Quick fixes
 
 Most presence-style gates ship a stub generator. From the Problems pane,
@@ -300,7 +308,7 @@ avoid the cost on very large repos.
 |------------------------|---------|------------------------------------------------------------------------------------|
 | `l0-git.binaryPath`    | `""`    | Absolute path to `lgit`. Empty = use the discovery rules above.                    |
 | `l0-git.dbPath`        | `""`    | Override SQLite DB path (sets `LGIT_DB`). Empty = `~/.l0-git/findings.db`.         |
-| `l0-git.notifyOnNew`   | `true`  | Show a toast for each newly-detected finding (cap 3 + summary).                    |
+| `l0-git.notifyOnNew`   | `true`  | Show a toast for each newly-detected **error** (cap 3 + summary). Warnings and info never toast — they live in the sidebar / Problems pane only. |
 | `l0-git.runOnStartup`  | `true`  | Run gate checks automatically when the workspace opens.                            |
 | `l0-git.autoStartMCP`  | `false` | Spawn the MCP stdio server in the background on activation. Usually unneeded.      |
 | `l0-git.showBlame`     | `false` | Annotate finding rows with `git blame` info. One git invocation per affected file. |

@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- **Sidebar defaults rebalanced for signal-to-noise.** New installs hide
+  `info`-severity findings by default — toggle via the severity filter to
+  bring them back. `override_accepted` is now suppressed from the tree at
+  every severity level (still persisted, still surfaced in the dashboard
+  and `lgit list -gate=override_accepted`). Toasts fire for `error` only;
+  warnings and info live in the sidebar / Problems pane. Existing users
+  with customised filters keep them.
+- Sidebar empty state now distinguishes "no actionable findings, N info
+  hidden" from "no findings at all" so a clean tree no longer disguises
+  pending audit work.
+
 ## [0.1.4] - 2026-05-07
 
 ### Fixed

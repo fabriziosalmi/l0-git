@@ -50,11 +50,15 @@ interface ViewState {
   query: string;
 }
 
+// Info findings are off by default — they're audit-trail / nice-to-have
+// (TODO comments, missing CONTRIBUTING.md, override_accepted, …) and
+// drown out errors and warnings when they share the same tree. Toggle
+// them on via the severity filter when you want the full picture.
 const DEFAULT_VIEW_STATE: ViewState = {
   groupBy: "severity",
   sortBy: "severity",
   status: "open",
-  severities: { error: true, warning: true, info: true },
+  severities: { error: true, warning: true, info: false },
   query: "",
 };
 
@@ -378,8 +382,13 @@ async function doRunChecksAndRefresh(context: vscode.ExtensionContext): Promise<
       vscode.window.showErrorMessage(`l0-git check failed for ${root}: ${err.message}`);
     }
   }
-  if (newlyOpen.length > 0 && vscode.workspace.getConfiguration("l0-git").get<boolean>("notifyOnNew")) {
-    notifyNewFindings(context, newlyOpen);
+  // Toasts are reserved for errors. Warning/info toasts on every workspace
+  // open trained users to dismiss without reading — defeating the point.
+  // Errors-only keeps the interruption budget for things that actually need
+  // a human now (leaked secret, merge conflict marker, …).
+  const newErrors = newlyOpen.filter((f) => f.severity === "error");
+  if (newErrors.length > 0 && vscode.workspace.getConfiguration("l0-git").get<boolean>("notifyOnNew")) {
+    notifyNewFindings(context, newErrors);
   }
   await syncDiagnostics(context, roots);
   provider.refresh();
@@ -670,13 +679,31 @@ class FindingsTreeProvider implements vscode.TreeDataProvider<TreeNode> {
       return [PlaceholderItem.make(`Error: ${err.message}`)];
     }
 
-    const filtered = findings.filter((f) => severityIncluded(f.severity, this.state.severities));
+    // override_accepted is audit-trail noise in the working surface — it
+    // exists so silent / unjustified overrides land in the DB and dashboard.
+    // Hide it from the tree unconditionally (the warning-bumped variant for
+    // missing-reason overrides also gets suppressed; query the dashboard
+    // or `lgit list -gate=override_accepted` to audit them).
+    const filtered = findings.filter(
+      (f) => f.gate_id !== "override_accepted" && severityIncluded(f.severity, this.state.severities),
+    );
     refreshTreeViewDescription(filtered.length, this.state);
 
     if (filtered.length === 0) {
-      const empty = anyFilterActive(this.state)
-        ? `No findings match the active filters — adjust or clear them`
-        : `No ${this.state.status === "open" ? "open " : this.state.status + " "}findings — clean slate ✓`;
+      // When the default-hidden info layer is the only thing keeping the
+      // tree non-empty, say so explicitly — otherwise the user thinks the
+      // project is clean while N info findings sit waiting.
+      const hiddenInfoCount = !this.state.severities.info
+        ? findings.filter((f) => f.severity === "info" && f.gate_id !== "override_accepted").length
+        : 0;
+      let empty: string;
+      if (hiddenInfoCount > 0) {
+        empty = `No actionable findings — ${hiddenInfoCount} info hidden (toggle severity to view)`;
+      } else if (anyFilterActive(this.state)) {
+        empty = `No findings match the active filters — adjust or clear them`;
+      } else {
+        empty = `No ${this.state.status === "open" ? "open " : this.state.status + " "}findings — clean slate ✓`;
+      }
       return [PlaceholderItem.make(empty)];
     }
 
