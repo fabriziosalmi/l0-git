@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -273,5 +272,3 @@ func TestGitLsFilesWithMode_ReturnsMode(t *testing.T) {
 	}
 }
 
-// Avoid the unused-import warning if `os/exec` isn't otherwise touched.
-var _ = exec.Command

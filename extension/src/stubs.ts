@@ -296,7 +296,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # TODO: set up your toolchain here.
+      # Set up your toolchain below — the commented examples are for Go.
       # - uses: actions/setup-go@v5
       #   with: { go-version: '1.23.x' }
       # - run: go test ./...

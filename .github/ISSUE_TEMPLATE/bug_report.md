@@ -27,6 +27,6 @@ A clear, one-sentence description of the problem.
 Paste relevant output from the **l0-git** output channel (extension) or the
 MCP server's stderr.
 
-```
+```text
 <logs here>
 ```

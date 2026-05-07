@@ -24,20 +24,30 @@ project never blocks on probabilistic signals.
 - **34 built-in gates** across project hygiene, security (incl. history scanning),
   git hygiene, accessibility, frontend quality, containers, governance,
   documentation, release hygiene.
-- **`.l0git.json`** lets a project ignore gates, override severity, or pass
-  per-gate options without touching code.
-- **Inline overrides** via `# l0git: ignore <rule_id> reason: …` (Dockerfile,
-  Compose, HTML/CSS/Markdown via comment) — every override emits an
-  `override_accepted` audit-trail finding.
+- **`.l0git.json`** per-project config: ignore gates, override severity,
+  pass per-gate options (`exclude_paths`, `skip_default_fixture_paths`,
+  `disabled_rules`, thresholds, …) without touching code.
+- **Inline overrides** via `# l0git: ignore <rule_id> reason: …` (and the
+  YAML / HTML / CSS / Markdown comment variants) — every override emits
+  an `override_accepted` audit-trail finding.
 - **Quick fixes** in the Problems pane generate stubs (LICENSE picker with
-  6 SPDX choices, README/CHANGELOG/CI workflow, …).
+  6 SPDX choices, README/CHANGELOG/CI workflow/Probot Settings, …).
 - **Findings persist**: re-running a gate retires findings the rule no
   longer reports (`status = resolved`) and never resurfaces ones the user
   marked `ignored`.
 
+## Status
+
+- 34 gates registered. l0-git scans clean against itself with the
+  bundled [`.l0git.json`](.l0git.json) (test fixtures and gate-source
+  self-references suppressed).
+- 179 PASS, race-clean. CI matrix: Linux / macOS / Windows × Go 1.22 / 1.23.
+- Released artefacts at every tag (`v0.1.x`): cross-compiled binaries
+  for darwin / linux / windows × amd64 / arm64, plus the bundled `.vsix`.
+
 ## Repository layout
 
-```
+```text
 server/      Go MCP server + CLI (the `lgit` binary)
 extension/   VSCode extension (TreeView + Overview + bundled binaries)
 ```
@@ -370,7 +380,7 @@ make vsix            # cross-compiles all platform binaries and packages the .vs
 
 ```sh
 make build        # server/lgit
-make test         # go vet + go test -race  (171 PASS, race-clean)
+make test         # go vet + go test -race  (179 PASS, race-clean)
 make vsix         # full extension build incl. cross-compiled binaries
 make clean
 ```

@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
-	"strings"
 )
 
 // secretsHistoryOptions plumbs the standard scanOptions plus an explicit
@@ -122,10 +120,6 @@ func scanHistoryBlob(b blobInfo, data []byte) []Finding {
 	return out
 }
 
-// pathExcluded already exists in scan_options.go; this is a defensive
-// stub in case the helper moves.
-var _ = filepath.Match // keep filepath import alive if pathExcluded migrates
-
 func parseSecretsHistoryOptions(opts json.RawMessage) secretsHistoryOptions {
 	if len(opts) == 0 {
 		return secretsHistoryOptions{}
@@ -134,6 +128,3 @@ func parseSecretsHistoryOptions(opts json.RawMessage) secretsHistoryOptions {
 	_ = json.Unmarshal(opts, &o)
 	return o
 }
-
-// _ keeps strings import busy if future iterations need it.
-var _ = strings.TrimSpace

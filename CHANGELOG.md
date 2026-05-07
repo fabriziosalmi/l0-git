@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-05-07
+
+### Fixed
+
+- `TestUnexpectedExecutableBit_FlagsTextFiles` failed on the Windows
+  CI runner because `os.Chmod(0o755)` is a no-op on Windows
+  filesystems and git can't pick up an executable bit the filesystem
+  doesn't carry. The test helper now drives the mode via
+  `git update-index --chmod=+x`, which works portably across the
+  Linux / macOS / Windows matrix.
+
 ## [0.1.3] - 2026-05-07
 
 ### Added
