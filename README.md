@@ -3,7 +3,7 @@
 [![ci](https://github.com/fabriziosalmi/l0-git/actions/workflows/ci.yml/badge.svg)](https://github.com/fabriziosalmi/l0-git/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/fabriziosalmi/l0-git?sort=semver)](https://github.com/fabriziosalmi/l0-git/releases)
 [![go.mod](https://img.shields.io/github/go-mod/go-version/fabriziosalmi/l0-git?filename=server%2Fgo.mod)](server/go.mod)
-[![license](https://img.shields.io/github/license/fabriziosalmi/l0-git)](LICENSE)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 Deterministic project-hygiene quality gates for the open workspace. A single
 Go binary speaks the [Model Context Protocol](https://modelcontextprotocol.io/)
