@@ -169,6 +169,15 @@ func (s *Store) GetByKey(ctx context.Context, project, gateID, filePath string) 
 	return scanFinding(row)
 }
 
+func (s *Store) GetByID(ctx context.Context, id int64) (*Finding, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT id, project, gate_id, severity, title, message, file_path, tags, status, created_at, updated_at
+		FROM findings
+		WHERE id = ?
+	`, id)
+	return scanFinding(row)
+}
+
 type scannable interface {
 	Scan(dest ...any) error
 }

@@ -12,7 +12,7 @@ import (
 
 func runCLI(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: lgit <check|list|stats|gates|ignore|resolve|delete|clear|path|version> [args...]")
+		return fmt.Errorf("usage: lgit <check|list|stats|gates|fix|ignore|delete|clear|path|version> [args...]")
 	}
 
 	cmd, rest := args[0], args[1:]
@@ -115,9 +115,49 @@ func runCLI(args []string) error {
 			return err
 		}
 		return writeJSON(os.Stdout, s)
+	case "fix":
+		// lgit fix <id> [--json]
+		// Prints a remediation recipe for the finding. Default output is
+		// human-readable plain text (pipes well to less / pbcopy);
+		// --json emits the structured Remediation for tooling.
+		// Never executes commands — that's the user's call.
+		return runFixCommand(ctx, store, rest)
 	default:
 		return fmt.Errorf("unknown command: %s", cmd)
 	}
+}
+
+// runFixCommand is the lgit fix <id> implementation — extracted so it
+// reads top-down without inflating the main switch.
+func runFixCommand(ctx context.Context, store *Store, rest []string) error {
+	if len(rest) < 1 {
+		return fmt.Errorf("usage: lgit fix <id> [--json]")
+	}
+	id, err := strconv.ParseInt(rest[0], 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid id: %w", err)
+	}
+	asJSON := false
+	for _, a := range rest[1:] {
+		if k, _, _ := splitFlag(a); k == "json" {
+			asJSON = true
+		}
+	}
+	f, err := store.GetByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("finding #%d: %w", id, err)
+	}
+	rem := RemediationFor(*f)
+	if asJSON {
+		return writeJSON(os.Stdout, map[string]any{
+			"finding":     f,
+			"remediation": rem,
+		})
+	}
+	var sb strings.Builder
+	RenderRemediationText(&sb, *f, rem)
+	_, err = io.WriteString(os.Stdout, sb.String())
+	return err
 }
 
 func writeJSON(w io.Writer, v any) error {

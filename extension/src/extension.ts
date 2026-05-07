@@ -50,11 +50,15 @@ interface ViewState {
   query: string;
 }
 
+// Info findings are off by default — they're audit-trail / nice-to-have
+// (TODO comments, missing CONTRIBUTING.md, override_accepted, …) and
+// drown out errors and warnings when they share the same tree. Toggle
+// them on via the severity filter when you want the full picture.
 const DEFAULT_VIEW_STATE: ViewState = {
   groupBy: "severity",
   sortBy: "severity",
   status: "open",
-  severities: { error: true, warning: true, info: true },
+  severities: { error: true, warning: true, info: false },
   query: "",
 };
 
@@ -137,6 +141,8 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("l0-git.startServer", () => startMCP(context)),
     vscode.commands.registerCommand("l0-git.stopServer", () => stopMCP()),
     vscode.commands.registerCommand("l0-git.applyFix", (project: string, gateId: string) => applyFix(context, project, gateId)),
+    vscode.commands.registerCommand("l0-git.showRemediation", (item: FindingItem) => showRemediation(context, item)),
+    vscode.commands.registerCommand("l0-git.copyClaudePrompt", (item: FindingItem) => copyClaudePrompt(context, item)),
     vscode.commands.registerCommand("l0-git.setGroupBy", () => promptGroupBy()),
     vscode.commands.registerCommand("l0-git.setSortBy", () => promptSortBy()),
     vscode.commands.registerCommand("l0-git.setStatusFilter", () => promptStatusFilter()),
@@ -378,8 +384,13 @@ async function doRunChecksAndRefresh(context: vscode.ExtensionContext): Promise<
       vscode.window.showErrorMessage(`l0-git check failed for ${root}: ${err.message}`);
     }
   }
-  if (newlyOpen.length > 0 && vscode.workspace.getConfiguration("l0-git").get<boolean>("notifyOnNew")) {
-    notifyNewFindings(context, newlyOpen);
+  // Toasts are reserved for errors. Warning/info toasts on every workspace
+  // open trained users to dismiss without reading — defeating the point.
+  // Errors-only keeps the interruption budget for things that actually need
+  // a human now (leaked secret, merge conflict marker, …).
+  const newErrors = newlyOpen.filter((f) => f.severity === "error");
+  if (newErrors.length > 0 && vscode.workspace.getConfiguration("l0-git").get<boolean>("notifyOnNew")) {
+    notifyNewFindings(context, newErrors);
   }
   await syncDiagnostics(context, roots);
   provider.refresh();
@@ -670,13 +681,31 @@ class FindingsTreeProvider implements vscode.TreeDataProvider<TreeNode> {
       return [PlaceholderItem.make(`Error: ${err.message}`)];
     }
 
-    const filtered = findings.filter((f) => severityIncluded(f.severity, this.state.severities));
+    // override_accepted is audit-trail noise in the working surface — it
+    // exists so silent / unjustified overrides land in the DB and dashboard.
+    // Hide it from the tree unconditionally (the warning-bumped variant for
+    // missing-reason overrides also gets suppressed; query the dashboard
+    // or `lgit list -gate=override_accepted` to audit them).
+    const filtered = findings.filter(
+      (f) => f.gate_id !== "override_accepted" && severityIncluded(f.severity, this.state.severities),
+    );
     refreshTreeViewDescription(filtered.length, this.state);
 
     if (filtered.length === 0) {
-      const empty = anyFilterActive(this.state)
-        ? `No findings match the active filters — adjust or clear them`
-        : `No ${this.state.status === "open" ? "open " : this.state.status + " "}findings — clean slate ✓`;
+      // When the default-hidden info layer is the only thing keeping the
+      // tree non-empty, say so explicitly — otherwise the user thinks the
+      // project is clean while N info findings sit waiting.
+      const hiddenInfoCount = !this.state.severities.info
+        ? findings.filter((f) => f.severity === "info" && f.gate_id !== "override_accepted").length
+        : 0;
+      let empty: string;
+      if (hiddenInfoCount > 0) {
+        empty = `No actionable findings — ${hiddenInfoCount} info hidden (toggle severity to view)`;
+      } else if (anyFilterActive(this.state)) {
+        empty = `No findings match the active filters — adjust or clear them`;
+      } else {
+        empty = `No ${this.state.status === "open" ? "open " : this.state.status + " "}findings — clean slate ✓`;
+      }
       return [PlaceholderItem.make(empty)];
     }
 
@@ -1248,4 +1277,77 @@ async function applyFix(context: vscode.ExtensionContext, project: string, gateI
   // sees the diagnostic clear within a single tick.
   await runChecksAndRefresh(context);
   vscode.window.showInformationMessage(`l0-git: created ${stub.relPath}`);
+}
+
+// =============================================================================
+// remediation surface (`lgit fix <id>` integrations)
+// =============================================================================
+
+interface RemediationPayload {
+  finding: Finding;
+  remediation: {
+    summary: string;
+    confidence: "deterministic" | "guided";
+    recipe?: {
+      commands?: Array<{ run: string; note?: string }>;
+      file_edits?: Array<{ path: string; op: string; content: string; line?: number }>;
+      caveats?: string[];
+    };
+    claude_prompt: string;
+  };
+}
+
+// showRemediation runs `lgit fix <id>` and opens the human-readable output
+// in a plaintext doc — same surface as openFinding, but with the recipe
+// instead of just the message. Plain text (not markdown) so the literal
+// `--- prompt ---` block survives intact for copy-paste into Claude Code.
+async function showRemediation(context: vscode.ExtensionContext, item: FindingItem): Promise<void> {
+  if (!item || !item.finding) return;
+  const id = item.finding.id;
+  let body: string;
+  try {
+    body = await runLGIT(context, ["fix", String(id)]);
+  } catch (e: unknown) {
+    const err = e as Error;
+    if (err instanceof BinaryNotFoundError) return notifyBinaryMissing(err.message);
+    vscode.window.showErrorMessage(`l0-git: lgit fix ${id} failed: ${err.message}`);
+    return;
+  }
+  const doc = await vscode.workspace.openTextDocument({ content: body, language: "plaintext" });
+  await vscode.window.showTextDocument(doc, { preview: false });
+}
+
+// copyClaudePrompt grabs the structured remediation, copies the
+// claude_prompt to the system clipboard, and shows a one-line toast.
+// No subprocess, no auto-execution — the user pastes into Claude Code (or
+// any agent) themselves. This is the safest possible HITL channel.
+async function copyClaudePrompt(context: vscode.ExtensionContext, item: FindingItem): Promise<void> {
+  if (!item || !item.finding) return;
+  const id = item.finding.id;
+  let raw: string;
+  try {
+    raw = await runLGIT(context, ["fix", String(id), "--json"]);
+  } catch (e: unknown) {
+    const err = e as Error;
+    if (err instanceof BinaryNotFoundError) return notifyBinaryMissing(err.message);
+    vscode.window.showErrorMessage(`l0-git: lgit fix ${id} --json failed: ${err.message}`);
+    return;
+  }
+  let parsed: RemediationPayload;
+  try {
+    parsed = JSON.parse(raw) as RemediationPayload;
+  } catch (e: unknown) {
+    vscode.window.showErrorMessage(`l0-git: could not parse remediation JSON: ${(e as Error).message}`);
+    return;
+  }
+  const prompt = parsed.remediation?.claude_prompt;
+  if (!prompt) {
+    vscode.window.showWarningMessage(`l0-git: finding #${id} has no claude_prompt.`);
+    return;
+  }
+  await vscode.env.clipboard.writeText(prompt);
+  const conf = parsed.remediation.confidence === "deterministic" ? "deterministic recipe" : "guided remediation";
+  vscode.window.showInformationMessage(
+    `l0-git: copied Claude Code prompt for finding #${id} (${conf}) — paste it into your Claude Code session.`,
+  );
 }
