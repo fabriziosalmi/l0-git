@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -41,7 +42,7 @@ var secretPatterns = []secretPattern{
 // be wasted I/O and any match would be noise.
 const secretsMaxFileSize = 2 * 1024 * 1024
 
-func checkSecretsScan(ctx context.Context, root string) ([]Finding, error) {
+func checkSecretsScan(ctx context.Context, root string, opts json.RawMessage) ([]Finding, error) {
 	if !isGitRepo(root) {
 		return []Finding{{
 			Severity: SeverityInfo,
@@ -64,8 +65,12 @@ func checkSecretsScan(ctx context.Context, root string) ([]Finding, error) {
 		}}, nil
 	}
 
+	excludes := parseScanOptions(opts).ExcludePaths
 	out := []Finding{}
 	for _, rel := range files {
+		if pathExcluded(rel, excludes) {
+			continue
+		}
 		// Tracked .env files are flagged regardless of content (the file
 		// itself is the smell). .env.example / .env.template / .env.sample
 		// are intentional and don't count.
@@ -147,6 +152,50 @@ func gitLsFiles(ctx context.Context, root string) ([]string, error) {
 		}
 	}
 	return files, nil
+}
+
+// gitFileEntry describes one entry from `git ls-files -s -z`. Mode is the
+// 6-digit octal git mode (100644 / 100755 / 120000 / 160000 / 040000),
+// not a unix file mode — git only stores a coarse subset.
+type gitFileEntry struct {
+	Mode string
+	Hash string
+	Path string
+}
+
+// gitLsFilesWithMode runs `git ls-files -s -z` and returns parsed entries.
+// Format: "<mode> <hash> <stage>\t<path>\0". The stage is always 0 in a
+// non-merge state; we drop it.
+func gitLsFilesWithMode(ctx context.Context, root string) ([]gitFileEntry, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", root, "ls-files", "-s", "-z")
+	stdout, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	parts := bytes.Split(stdout, []byte{0})
+	out := make([]gitFileEntry, 0, len(parts))
+	for _, p := range parts {
+		if len(p) == 0 {
+			continue
+		}
+		// Find the tab that separates the metadata triple from the path.
+		tab := bytes.IndexByte(p, '\t')
+		if tab < 0 {
+			continue
+		}
+		meta := string(p[:tab])
+		path := string(p[tab+1:])
+		fields := bytes.Fields([]byte(meta))
+		if len(fields) < 3 {
+			continue
+		}
+		out = append(out, gitFileEntry{
+			Mode: string(fields[0]),
+			Hash: string(fields[1]),
+			Path: path,
+		})
+	}
+	return out, nil
 }
 
 // isBinary uses the same heuristic git itself does: any NUL byte in the

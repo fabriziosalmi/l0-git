@@ -35,6 +35,7 @@ func fullProject(t *testing.T) string {
 		t.Fatal(err)
 	}
 	mustWrite(t, filepath.Join(root, ".github", "ISSUE_TEMPLATE", "bug.md"), "# bug")
+	mustWrite(t, filepath.Join(root, "CODE_OF_CONDUCT.md"), "# CoC")
 	// A test file so tests_present passes.
 	mustWrite(t, filepath.Join(root, "thing_test.go"), "package x")
 	// secrets_scan needs a git repo to enumerate tracked files; with no
@@ -54,6 +55,9 @@ func gitInit(t *testing.T, dir string) {
 
 func mustWrite(t *testing.T, path, content string) {
 	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -81,15 +85,32 @@ func TestRunChecks_EmptyDir(t *testing.T) {
 	want := []string{
 		"changelog_present",
 		"ci_workflow_present",
+		"code_of_conduct_present",
+		"compose_lint",              // skipped (not git)
+		"connection_strings",        // skipped (not git)
 		"contributing_present",
+		"css_lint",                  // skipped (not git)
+		"dead_placeholders",         // skipped (not git)
+		"dockerfile_lint",           // skipped (not git)
+		"filename_quality",          // skipped (not git)
 		"gitignore_present",
+		"html_lint",                 // skipped (not git)
+		"ide_artifact_tracked",      // skipped (not git)
 		"issue_template_present",
+		"large_file_tracked",        // skipped (not git)
 		"license_present",
+		"markdown_lint",             // skipped (not git)
+		"merge_conflict_markers",    // skipped (not git)
+		"network_scan",              // skipped (not git)
 		"pr_template_present",
 		"readme_present",
-		"secrets_scan", // emits an info finding for non-git dirs
+		"secrets_scan",              // skipped (not git)
 		"security_present",
 		"tests_present",
+		"unexpected_executable_bit", // skipped (not git)
+		"vendored_dir_tracked",      // skipped (not git)
+		// gitignore_coverage / codeowners_present / env_example_uncommented
+		// stay silent on stack-less empty dirs.
 	}
 	got := gateIDs(res.Findings)
 	if !equalStringSets(got, want) {
@@ -140,7 +161,7 @@ func TestRunChecks_ConfigIgnore(t *testing.T) {
 	if _, err := RunChecks(ctx, store, root, ""); err != nil {
 		t.Fatal(err)
 	}
-	open, _ := store.List(ctx, root, StatusOpen, 100)
+	open, _ := store.List(ctx, FindingFilter{Project: root, Status: StatusOpen, Limit: 100})
 	hasReadme := false
 	for _, f := range open {
 		if f.GateID == "readme_present" {
@@ -166,7 +187,7 @@ func TestRunChecks_ConfigIgnore(t *testing.T) {
 	if !contains(res.GatesIgnored, "readme_present") {
 		t.Fatalf("gates_ignored: %v", res.GatesIgnored)
 	}
-	open, _ = store.List(ctx, root, StatusOpen, 100)
+	open, _ = store.List(ctx, FindingFilter{Project: root, Status: StatusOpen, Limit: 100})
 	for _, f := range open {
 		if f.GateID == "readme_present" {
 			t.Fatalf("ignored gate left an open finding behind: %+v", f)

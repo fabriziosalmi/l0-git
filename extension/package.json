@@ -79,13 +79,55 @@
       {
         "command": "l0-git.applyFix",
         "title": "l0-git: Generate stub for gate"
+      },
+      {
+        "command": "l0-git.setGroupBy",
+        "title": "l0-git: Group findings by…",
+        "icon": "$(symbol-namespace)"
+      },
+      {
+        "command": "l0-git.setSortBy",
+        "title": "l0-git: Sort findings by…",
+        "icon": "$(sort-precedence)"
+      },
+      {
+        "command": "l0-git.setStatusFilter",
+        "title": "l0-git: Set status filter…",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "l0-git.toggleSeverity",
+        "title": "l0-git: Toggle severities shown…",
+        "icon": "$(filter-filled)"
+      },
+      {
+        "command": "l0-git.search",
+        "title": "l0-git: Search findings…",
+        "icon": "$(search)"
+      },
+      {
+        "command": "l0-git.clearFilters",
+        "title": "l0-git: Clear all view filters",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "l0-git.showOverview",
+        "title": "l0-git: Open Overview dashboard",
+        "icon": "$(graph)"
       }
     ],
     "menus": {
       "view/title": [
-        { "command": "l0-git.runChecks", "when": "view == l0-git.findings", "group": "navigation@1" },
-        { "command": "l0-git.refresh", "when": "view == l0-git.findings", "group": "navigation@2" },
-        { "command": "l0-git.clearProject", "when": "view == l0-git.findings", "group": "navigation@3" }
+        { "command": "l0-git.runChecks",        "when": "view == l0-git.findings", "group": "navigation@1" },
+        { "command": "l0-git.search",           "when": "view == l0-git.findings", "group": "navigation@2" },
+        { "command": "l0-git.setGroupBy",       "when": "view == l0-git.findings", "group": "navigation@3" },
+        { "command": "l0-git.setSortBy",        "when": "view == l0-git.findings", "group": "navigation@4" },
+        { "command": "l0-git.setStatusFilter",  "when": "view == l0-git.findings", "group": "navigation@5" },
+        { "command": "l0-git.toggleSeverity",   "when": "view == l0-git.findings", "group": "navigation@6" },
+        { "command": "l0-git.showOverview",     "when": "view == l0-git.findings", "group": "navigation@7" },
+        { "command": "l0-git.refresh",          "when": "view == l0-git.findings", "group": "1_more@1" },
+        { "command": "l0-git.clearFilters",     "when": "view == l0-git.findings", "group": "1_more@2" },
+        { "command": "l0-git.clearProject",     "when": "view == l0-git.findings", "group": "1_more@3" }
       ],
       "view/item/context": [
         { "command": "l0-git.ignoreFinding", "when": "view == l0-git.findings && viewItem == finding", "group": "inline@1" },
@@ -119,6 +161,11 @@
           "type": "boolean",
           "default": false,
           "description": "If true, the extension spawns the MCP stdio server in the background on activation. Usually unnecessary — Claude Code starts the server itself."
+        },
+        "l0-git.showBlame": {
+          "type": "boolean",
+          "default": false,
+          "description": "Annotate every finding row with `git blame` info (commit · author · relative date). Adds one git invocation per affected file on every refresh — fine for typical repos, leave off on very large ones."
         }
       }
     }

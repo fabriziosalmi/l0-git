@@ -135,13 +135,19 @@ func toolDefs() []map[string]any {
 		},
 		{
 			"name":        "findings_list",
-			"description": "List findings, optionally filtered by project and status (open|resolved|ignored|all).",
+			"description": "List findings with rich filtering. All fields optional.",
 			"inputSchema": map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"project": map[string]any{"type": "string", "description": "Optional project root filter."},
-					"status":  map[string]any{"type": "string", "description": "Status filter: open|resolved|ignored|all (default: open)."},
-					"limit":   map[string]any{"type": "integer", "description": "Max results (default 200)."},
+					"project":  map[string]any{"type": "string", "description": "Project root filter (absolute path)."},
+					"status":   map[string]any{"type": "string", "description": "open | ignored | resolved | all (default: open)."},
+					"severity": map[string]any{"type": "string", "description": "error | warning | info."},
+					"gate":     map[string]any{"type": "string", "description": "Restrict to a single gate_id."},
+					"tag":      map[string]any{"type": "string", "description": "Restrict to findings carrying this tag (CSV-aware)."},
+					"query":    map[string]any{"type": "string", "description": "Substring search across title/message/file_path/gate_id."},
+					"sort":     map[string]any{"type": "string", "description": "updated | created | severity | gate | file (default: updated)."},
+					"limit":    map[string]any{"type": "integer", "description": "Max results (default 500)."},
+					"offset":   map[string]any{"type": "integer", "description": "Skip N rows for pagination."},
 				},
 			},
 		},
@@ -170,6 +176,16 @@ func toolDefs() []map[string]any {
 				"type":       "object",
 				"properties": map[string]any{"project": map[string]any{"type": "string"}},
 				"required":   []string{"project"},
+			},
+		},
+		{
+			"name":        "findings_stats",
+			"description": "Aggregate counts for the Overview dashboard: by_severity, by_status, by_gate (top 50, open only), top_files (top 10, open only), by_tag (open only), and a 7-day trend over created_at.",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project": map[string]any{"type": "string", "description": "Optional project filter; omit for global stats."},
+				},
 			},
 		},
 	}
@@ -206,9 +222,15 @@ type checkArgs struct {
 }
 
 type listArgs struct {
-	Project string `json:"project"`
-	Status  string `json:"status"`
-	Limit   int    `json:"limit"`
+	Project  string `json:"project"`
+	Status   string `json:"status"`
+	Severity string `json:"severity"`
+	Gate     string `json:"gate"`
+	Tag      string `json:"tag"`
+	Query    string `json:"query"`
+	Sort     string `json:"sort"`
+	Limit    int    `json:"limit"`
+	Offset   int    `json:"offset"`
 }
 
 type idArg struct {
@@ -232,7 +254,7 @@ func (s *mcpServer) dispatchTool(name string, args json.RawMessage) (any, error)
 		}
 		return RunChecks(ctx, s.store, a.Project, a.GateID)
 	case "gates_list":
-		return gateRegistry(), nil
+		return gateRegistryMarshallable(), nil
 	case "findings_list":
 		var a listArgs
 		_ = json.Unmarshal(args, &a)
@@ -243,7 +265,17 @@ func (s *mcpServer) dispatchTool(name string, args json.RawMessage) (any, error)
 		if status == "all" {
 			status = ""
 		}
-		return s.store.List(ctx, a.Project, status, a.Limit)
+		return s.store.List(ctx, FindingFilter{
+			Project:  a.Project,
+			Status:   status,
+			Severity: a.Severity,
+			GateID:   a.Gate,
+			Tag:      a.Tag,
+			Query:    a.Query,
+			Sort:     a.Sort,
+			Offset:   a.Offset,
+			Limit:    a.Limit,
+		})
 	case "findings_ignore":
 		var a idArg
 		if err := json.Unmarshal(args, &a); err != nil {
@@ -264,6 +296,10 @@ func (s *mcpServer) dispatchTool(name string, args json.RawMessage) (any, error)
 			return nil, err
 		}
 		return map[string]any{"deleted": ok}, nil
+	case "findings_stats":
+		var a projectArg
+		_ = json.Unmarshal(args, &a)
+		return s.store.Stats(ctx, a.Project)
 	case "findings_clear":
 		var a projectArg
 		if err := json.Unmarshal(args, &a); err != nil {

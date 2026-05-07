@@ -20,6 +20,9 @@ type ProjectConfig struct {
 	// Severity overrides the default (and any per-finding) severity for
 	// listed gate IDs. Values must be one of "error", "warning", "info".
 	Severity map[string]string `json:"severity,omitempty"`
+	// GateOptions hands a JSON sub-tree to each gate's Check function.
+	// The schema is gate-specific; see each gate's docstring.
+	GateOptions map[string]json.RawMessage `json:"gate_options,omitempty"`
 }
 
 const projectConfigFilename = ".l0git.json"
@@ -80,5 +83,25 @@ func (c *ProjectConfig) severityFor(gateID, fallback string) string {
 		return s
 	}
 	return fallback
+}
+
+// severityOverride returns the configured severity (and ok=true) when the
+// project explicitly set one for gateID; otherwise ok=false. Used by the
+// runner to distinguish "user wants this severity" from "use the default".
+func (c *ProjectConfig) severityOverride(gateID string) (string, bool) {
+	if c == nil {
+		return "", false
+	}
+	s, ok := c.Severity[gateID]
+	return s, ok
+}
+
+// optionsFor returns the gate-specific JSON sub-tree from gate_options, or
+// nil if the user didn't configure anything for this gate.
+func (c *ProjectConfig) optionsFor(gateID string) json.RawMessage {
+	if c == nil {
+		return nil
+	}
+	return c.GateOptions[gateID]
 }
 

@@ -295,7 +295,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+    https://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -304,7 +304,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 # === The full Apache-2.0 license text should replace this block. ===
-# Source: https://www.apache.org/licenses/LICENSE-2.0.txt
+# Source: the Apache Software Foundation publishes the canonical text
+# at apache.org/licenses/LICENSE-2.0.txt
 `;
 }
 

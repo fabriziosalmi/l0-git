@@ -64,7 +64,7 @@ func TestSecretsScan_PatternsFire(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			root := initRepoWithFiles(t, map[string]string{"leaky.txt": tc.content + "\n"})
-			fs, err := checkSecretsScan(ctx, root)
+			fs, err := checkSecretsScan(ctx, root, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -82,7 +82,7 @@ func TestSecretsScan_NoFalsePositives(t *testing.T) {
 		"README.md": "# Hello\n\nThis project is an example. AKIA short. ghp_short.\n",
 		"main.go":   "package main\n\nfunc main() {}\n",
 	})
-	fs, err := checkSecretsScan(context.Background(), root)
+	fs, err := checkSecretsScan(context.Background(), root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestSecretsScan_TrackedEnvFile(t *testing.T) {
 		".env":         "DATABASE_URL=postgres://x\n",
 		".env.example": "DATABASE_URL=postgres://x\n",
 	})
-	fs, err := checkSecretsScan(context.Background(), root)
+	fs, err := checkSecretsScan(context.Background(), root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestSecretsScan_GitignoredFileSkipped(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "secret.txt"), []byte("AKIA"+strings.Repeat("A", 16)), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	fs, err := checkSecretsScan(context.Background(), root)
+	fs, err := checkSecretsScan(context.Background(), root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestSecretsScan_GitignoredFileSkipped(t *testing.T) {
 // TestSecretsScan_NotGitRepo emits one info-level skip finding and no others.
 func TestSecretsScan_NotGitRepo(t *testing.T) {
 	root := t.TempDir()
-	fs, err := checkSecretsScan(context.Background(), root)
+	fs, err := checkSecretsScan(context.Background(), root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestSecretsScan_BinarySkipped(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
 		"blob.bin": "AKIA" + strings.Repeat("A", 16) + "\x00more",
 	})
-	fs, err := checkSecretsScan(context.Background(), root)
+	fs, err := checkSecretsScan(context.Background(), root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +179,7 @@ func TestSecretsScan_LargeFileSkipped(t *testing.T) {
 	runGit(t, root, "config", "user.name", "t")
 	runGit(t, root, "add", "-A")
 	runGit(t, root, "commit", "-q", "-m", "big")
-	fs, err := checkSecretsScan(context.Background(), root)
+	fs, err := checkSecretsScan(context.Background(), root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,6 +187,29 @@ func TestSecretsScan_LargeFileSkipped(t *testing.T) {
 		if strings.HasPrefix(f.FilePath, "big.txt") {
 			t.Fatalf("oversized file was scanned: %+v", f)
 		}
+	}
+}
+
+// gate_options.secrets_scan.exclude_paths must skip files whose relative
+// path matches a glob pattern, leaving genuine matches everywhere else.
+func TestSecretsScan_ExcludePaths(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"src/leaky.txt":  "AKIA" + strings.Repeat("A", 16) + "\n",
+		"test/leaky.txt": "AKIA" + strings.Repeat("B", 16) + "\n",
+	})
+	opts := []byte(`{"exclude_paths": ["test/*"]}`)
+	fs, err := checkSecretsScan(context.Background(), root, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fs {
+		if strings.HasPrefix(f.FilePath, "test/") {
+			t.Errorf("excluded path was scanned: %+v", f)
+		}
+	}
+	// And the unexcluded file is still flagged.
+	if !findingsContainPattern(fs, "aws_access_key") {
+		t.Errorf("expected aws_access_key from src/, got: %+v", fs)
 	}
 }
 

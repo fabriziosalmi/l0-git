@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -85,7 +86,7 @@ var testDirNames = map[string]bool{
 	"test_suite": true,
 }
 
-func checkTestsPresent(_ context.Context, root string) ([]Finding, error) {
+func checkTestsPresent(_ context.Context, root string, _ json.RawMessage) ([]Finding, error) {
 	hasMarker := hasProjectMarker(root)
 	found, err := walkForTests(root)
 	if err != nil {

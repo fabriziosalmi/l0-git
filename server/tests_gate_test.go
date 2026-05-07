@@ -8,7 +8,7 @@ import (
 )
 
 func TestTestsPresent_Empty(t *testing.T) {
-	fs, err := checkTestsPresent(context.Background(), t.TempDir())
+	fs, err := checkTestsPresent(context.Background(), t.TempDir(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,7 +24,7 @@ func TestTestsPresent_WithMarkerNoTests(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, filepath.Join(root, "go.mod"), "module x\n")
 	mustWrite(t, filepath.Join(root, "main.go"), "package main\nfunc main(){}\n")
-	fs, err := checkTestsPresent(context.Background(), root)
+	fs, err := checkTestsPresent(context.Background(), root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestTestsPresent_FileVariants(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			root := t.TempDir()
 			mustWrite(t, filepath.Join(root, c.filename), "x")
-			fs, err := checkTestsPresent(context.Background(), root)
+			fs, err := checkTestsPresent(context.Background(), root, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -79,7 +79,7 @@ func TestTestsPresent_DirectoryVariants(t *testing.T) {
 				t.Fatal(err)
 			}
 			mustWrite(t, filepath.Join(root, dir, "anything.txt"), "x")
-			fs, err := checkTestsPresent(context.Background(), root)
+			fs, err := checkTestsPresent(context.Background(), root, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -97,7 +97,7 @@ func TestTestsPresent_EmptyTestDir(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "tests"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	fs, err := checkTestsPresent(context.Background(), root)
+	fs, err := checkTestsPresent(context.Background(), root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestTestsPresent_SkipsVendoredDirs(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustWrite(t, filepath.Join(root, "node_modules", "foo", "thing.test.ts"), "x")
-	fs, err := checkTestsPresent(context.Background(), root)
+	fs, err := checkTestsPresent(context.Background(), root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

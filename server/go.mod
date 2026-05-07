@@ -2,7 +2,12 @@ module github.com/fabriziosalmi/l0-git
 
 go 1.22
 
-require modernc.org/sqlite v1.34.1
+require (
+	github.com/yuin/goldmark v1.8.2
+	golang.org/x/net v0.27.0
+	gopkg.in/yaml.v3 v3.0.1
+	modernc.org/sqlite v1.34.1
+)
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect

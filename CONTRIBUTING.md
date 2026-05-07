@@ -14,10 +14,12 @@ Thanks for your interest. l0-git is intentionally small — keep contributions i
 ```sh
 cd server
 go build -o lgit .
-./lgit gates                       # list registered gates
-./lgit check /path/to/project      # run all gates, persist findings
-./lgit list /path/to/project       # show open findings
-./lgit mcp                         # MCP stdio mode (used by Claude Code, etc.)
+./lgit gates                                 # list registered gates
+./lgit check /path/to/project                # run all gates, persist findings
+./lgit list -project=/path/to/project        # show open findings (flag-based)
+./lgit list -project=/path/to/project -severity=warning -sort=severity
+./lgit stats -project=/path/to/project       # JSON aggregates for the dashboard
+./lgit mcp                                   # MCP stdio mode (used by Claude Code, etc.)
 ```
 
 The DB lives at `~/.l0-git/findings.db` by default. Override with `LGIT_DB=/path/to/file.db`.
@@ -34,12 +36,34 @@ Open `extension/` in VSCode and press `F5` to launch the Extension Development H
 
 ## Adding a new gate
 
-1. Append a `Gate{}` entry to `gateRegistry()` in `server/gates.go`.
-2. Implement its `Check` function (returns `[]Finding` for what's wrong, `nil` for clean). For "file at root" rules use the `presenceGate` helper.
-3. If a finding has a meaningful file path, set `FilePath` so it ends up in the right Problems-pane group. Project-wide rules leave it empty.
-4. Add a smoke test if the rule is non-trivial.
+1. Append a `Gate{}` entry to `gateRegistry()` in `server/gates.go` with
+   ID, title, description, default severity, comma-separated `Tags`, and
+   the `Check` function reference.
+2. Implement `Check(ctx, projectRoot, opts json.RawMessage) ([]Finding, error)`
+   in a new file (e.g. `server/<gate_id>_gate.go`). Return `nil` for
+   clean, a `[]Finding` for violations. For "file at root" rules use the
+   `presenceGate` helper; for tracked-file scans use `gitLsFiles`; for
+   git history walks use `enumerateHistoryBlobs`.
+3. Set `Finding.FilePath` to a meaningful value:
+   - `"<rel>:<line>:<rule_id>"` for scan-style gates (one finding per
+     match per file per line); the unique constraint then dedupes
+     correctly across re-runs.
+   - just `"<rel>"` for file-level findings.
+   - empty for project-level findings.
+   - `"history:<short_sha>:<line>:<rule_id>"` for history gates.
+4. If the gate has tunables (thresholds, exclude lists, opt-in flag),
+   define a typed options struct embedding `scanOptions`, parse it from
+   the `opts` parameter, and document the schema in the README.
+5. If the gate emits a tiered set of severities (like `secrets_scan`),
+   set each `Finding.Severity` directly — the runner respects it unless
+   the user pins the gate's severity in `.l0git.json`.
+6. Add a test file `server/<gate_id>_gate_test.go`. Table-driven where
+   it fits (positive + negative cases). For history gates,
+   `commitAndRemove` in `git_history_test.go` is a useful pattern.
+7. Run `make test` — both vet and `-race` must stay clean.
 
-That's it — both the CLI and the MCP server pick up new gates automatically.
+The CLI, the MCP server, and the extension's tree all pick up new gates
+automatically via `gateRegistry()`.
 
 ## Pull requests
 
@@ -53,8 +77,13 @@ That's it — both the CLI and the MCP server pick up new gates automatically.
 
 ## Code style
 
-- Go: standard `gofmt`. No frameworks; stdlib + `modernc.org/sqlite` only.
-- TypeScript: `strict` mode (and the additional checks in `extension/tsconfig.json`). No bundler — `tsc` only.
+- Go: standard `gofmt`. No frameworks. Direct deps are deliberately small:
+  `modernc.org/sqlite` (pure-Go SQLite, no CGO), `golang.org/x/net/html`
+  (HTML tokenizer), `gopkg.in/yaml.v3` (YAML AST for compose linting),
+  `github.com/yuin/goldmark` (Markdown AST for `markdown_lint`). New deps
+  need a justification and ideally MIT/BSD/Apache-2.0 licence.
+- TypeScript: `strict` mode (and the additional checks in
+  `extension/tsconfig.json`). No bundler — `tsc` only.
 
 ## Reporting bugs
 

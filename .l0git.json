@@ -1,0 +1,10 @@
+{
+  "gate_options": {
+    "secrets_scan": {
+      "exclude_paths": ["server/secrets_test.go"]
+    },
+    "connection_strings": {
+      "exclude_paths": ["server/secrets_test.go"]
+    }
+  }
+}
