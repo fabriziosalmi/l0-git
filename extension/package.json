@@ -1,0 +1,136 @@
+{
+  "name": "l0-git",
+  "displayName": "l0-git",
+  "description": "Quality gates for the open project. Watches the workspace, runs rules, and surfaces findings in a sidebar view. Backed by a Go MCP server so Claude Code can read the same findings.",
+  "version": "0.1.0",
+  "publisher": "fabriziosalmi",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fabriziosalmi/l0-git.git"
+  },
+  "bugs": {
+    "url": "https://github.com/fabriziosalmi/l0-git/issues"
+  },
+  "homepage": "https://github.com/fabriziosalmi/l0-git#readme",
+  "engines": {
+    "vscode": "^1.85.0",
+    "node": ">=18"
+  },
+  "categories": ["Linters", "Other"],
+  "main": "./out/extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "l0-git",
+          "title": "l0-git",
+          "icon": "$(shield)"
+        }
+      ]
+    },
+    "views": {
+      "l0-git": [
+        {
+          "id": "l0-git.findings",
+          "name": "Findings"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "l0-git.refresh",
+        "title": "l0-git: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "l0-git.runChecks",
+        "title": "l0-git: Run gate checks",
+        "icon": "$(play)"
+      },
+      {
+        "command": "l0-git.openFinding",
+        "title": "l0-git: Open finding"
+      },
+      {
+        "command": "l0-git.ignoreFinding",
+        "title": "l0-git: Ignore finding",
+        "icon": "$(eye-closed)"
+      },
+      {
+        "command": "l0-git.deleteFinding",
+        "title": "l0-git: Delete finding",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "l0-git.clearProject",
+        "title": "l0-git: Clear all findings for this project",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "l0-git.startServer",
+        "title": "l0-git: Start MCP server (manual)"
+      },
+      {
+        "command": "l0-git.stopServer",
+        "title": "l0-git: Stop MCP server"
+      },
+      {
+        "command": "l0-git.applyFix",
+        "title": "l0-git: Generate stub for gate"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        { "command": "l0-git.runChecks", "when": "view == l0-git.findings", "group": "navigation@1" },
+        { "command": "l0-git.refresh", "when": "view == l0-git.findings", "group": "navigation@2" },
+        { "command": "l0-git.clearProject", "when": "view == l0-git.findings", "group": "navigation@3" }
+      ],
+      "view/item/context": [
+        { "command": "l0-git.ignoreFinding", "when": "view == l0-git.findings && viewItem == finding", "group": "inline@1" },
+        { "command": "l0-git.deleteFinding", "when": "view == l0-git.findings && viewItem == finding", "group": "inline@2" }
+      ]
+    },
+    "configuration": {
+      "title": "l0-git",
+      "properties": {
+        "l0-git.binaryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the lgit binary. If empty, the extension uses the bundled binary at ../server/lgit relative to the extension root, or 'lgit' on PATH."
+        },
+        "l0-git.dbPath": {
+          "type": "string",
+          "default": "",
+          "description": "Override SQLite DB path (sets LGIT_DB env var). If empty, uses ~/.l0-git/findings.db."
+        },
+        "l0-git.notifyOnNew": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a notification when a new finding appears."
+        },
+        "l0-git.runOnStartup": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run gate checks automatically when the workspace opens."
+        },
+        "l0-git.autoStartMCP": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, the extension spawns the MCP stdio server in the background on activation. Usually unnecessary — Claude Code starts the server itself."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}
