@@ -21,7 +21,7 @@ project never blocks on probabilistic signals.
 - **Pure Go** — `modernc.org/sqlite`, `golang.org/x/net/html`, `gopkg.in/yaml.v3`,
   `github.com/yuin/goldmark`. No CGO, no Python, no rule engine, no YAML DSL.
 - **One binary, two modes**: `lgit mcp` (stdio MCP server) and `lgit <subcmd>` CLI.
-- **33 built-in gates** across project hygiene, security (incl. history scanning),
+- **34 built-in gates** across project hygiene, security (incl. history scanning),
   git hygiene, accessibility, frontend quality, containers, governance,
   documentation, release hygiene.
 - **`.l0git.json`** lets a project ignore gates, override severity, or pass
@@ -42,27 +42,28 @@ server/      Go MCP server + CLI (the `lgit` binary)
 extension/   VSCode extension (TreeView + Overview + bundled binaries)
 ```
 
-## Built-in gates (33)
+## Built-in gates (34)
 
 Grouped by theme. Severity is the *default* — every gate's severity can be
 overridden per-project via `.l0git.json`. Tags are CSV strings used for
 filtering in the UI and the dashboard.
 
-### Project hygiene (presence-style, 11)
+### Project hygiene + governance (presence-style, 12)
 
-| Gate ID                  | Severity | What it checks                                                       |
-|--------------------------|----------|----------------------------------------------------------------------|
-| `readme_present`         | warning  | `README` / `README.*` at the project root                            |
-| `license_present`        | warning  | `LICENSE` / `COPYING` / SPDX-named at root                           |
-| `contributing_present`   | info     | `CONTRIBUTING.md` at root                                            |
-| `security_present`       | info     | `SECURITY.md` at root                                                |
-| `changelog_present`      | info     | `CHANGELOG.md` / `CHANGES` / `HISTORY` at root                       |
-| `gitignore_present`      | warning  | `.gitignore` at root                                                 |
-| `ci_workflow_present`    | warning  | Any workflow under `.github/workflows/`                              |
-| `pr_template_present`    | info     | `.github/PULL_REQUEST_TEMPLATE.md`                                   |
-| `issue_template_present` | info     | At least one file in `.github/ISSUE_TEMPLATE/`                       |
-| `code_of_conduct_present`| info     | `CODE_OF_CONDUCT.md` at root, `.github/`, or `docs/`                 |
-| `codeowners_present`     | info     | `CODEOWNERS` at root, `.github/`, or `docs/` — silent on docs-only repos |
+| Gate ID                       | Severity | What it checks                                                       |
+|-------------------------------|----------|----------------------------------------------------------------------|
+| `readme_present`              | warning  | `README` / `README.*` at the project root                            |
+| `license_present`             | warning  | `LICENSE` / `COPYING` / SPDX-named at root                           |
+| `contributing_present`        | info     | `CONTRIBUTING.md` at root                                            |
+| `security_present`            | info     | `SECURITY.md` at root                                                |
+| `changelog_present`           | info     | `CHANGELOG.md` / `CHANGES` / `HISTORY` at root                       |
+| `gitignore_present`           | warning  | `.gitignore` at root                                                 |
+| `ci_workflow_present`         | warning  | Any workflow under `.github/workflows/`                              |
+| `pr_template_present`         | info     | `.github/PULL_REQUEST_TEMPLATE.md`                                   |
+| `issue_template_present`      | info     | At least one file in `.github/ISSUE_TEMPLATE/`                       |
+| `code_of_conduct_present`     | info     | `CODE_OF_CONDUCT.md` at root, `.github/`, or `docs/`                 |
+| `codeowners_present`          | info     | `CODEOWNERS` at root, `.github/`, or `docs/` — silent on docs-only repos |
+| `branch_protection_declared`  | info     | **Opt-in.** Verifies `.github/settings.yml` (Probot Settings) declares `branches: [{protection: …}]`. Can't read the server-side GitHub state — that needs an auth'd API call, out of scope |
 
 ### Quality + release hygiene (3)
 
@@ -243,9 +244,10 @@ gate so the finding clears immediately:
 | `security_present`      | `SECURITY.md` reporting policy                                                                              |
 | `changelog_present`     | Keep-a-Changelog-style `CHANGELOG.md`                                                                       |
 | `gitignore_present`     | `.gitignore` with common OS / dependency / DB patterns                                                      |
-| `pr_template_present`   | `.github/PULL_REQUEST_TEMPLATE.md`                                                                          |
-| `issue_template_present`| `.github/ISSUE_TEMPLATE/bug_report.md`                                                                      |
-| `ci_workflow_present`   | Minimal `.github/workflows/ci.yml` placeholder                                                              |
+| `pr_template_present`        | `.github/PULL_REQUEST_TEMPLATE.md`                                                                     |
+| `issue_template_present`     | `.github/ISSUE_TEMPLATE/bug_report.md`                                                                 |
+| `ci_workflow_present`        | Minimal `.github/workflows/ci.yml` placeholder                                                         |
+| `branch_protection_declared` | `.github/settings.yml` Probot Settings scaffold — PR review required, no force-push, no deletions     |
 
 The extension watches every file the gates use as input (~30 patterns
 covering README/LICENSE/CHANGELOG, `.gitignore`, `.gitattributes`,

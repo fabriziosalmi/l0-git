@@ -1,6 +1,8 @@
 # Go
 server/lgit
 server/lgit.exe
+server/l0-git
+server/l0-git.exe
 *.test
 *.out
 

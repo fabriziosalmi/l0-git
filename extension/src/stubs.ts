@@ -30,6 +30,8 @@ export function stubFor(gateId: string, projectAbsPath: string): Stub | null {
       return { relPath: ".github/ISSUE_TEMPLATE/bug_report.md", content: bugTemplateStub() };
     case "ci_workflow_present":
       return { relPath: ".github/workflows/ci.yml", content: ciStub() };
+    case "branch_protection_declared":
+      return { relPath: ".github/settings.yml", content: probotSettingsStub() };
     default:
       return null;
   }
@@ -233,6 +235,47 @@ A clear, one-sentence description of the problem.
 \`\`\`
 <logs here>
 \`\`\`
+`;
+}
+
+function probotSettingsStub(): string {
+  return `# Probot Settings (https://github.com/apps/settings)
+# Install the "Settings" GitHub App on this repo, then any change to
+# this file becomes the live branch-protection state. l0-git uses the
+# presence of a \`branches:\` entry with \`protection:\` to verify
+# that protection is declared as code; the actual server-side rules
+# remain managed by GitHub once the app applies this file.
+
+repository:
+  # Optional: lock the repo's default settings as code. Uncomment to
+  # take ownership of these — otherwise the live values stay untouched.
+  # name: my-repo
+  # description: Short description.
+  # has_issues: true
+  # has_projects: false
+  # has_wiki: false
+  # default_branch: main
+  # allow_squash_merge: true
+  # allow_merge_commit: false
+  # allow_rebase_merge: true
+  # delete_branch_on_merge: true
+
+branches:
+  - name: main
+    protection:
+      required_pull_request_reviews:
+        required_approving_review_count: 1
+        dismiss_stale_reviews: true
+        require_code_owner_reviews: false
+      required_status_checks:
+        strict: true
+        # List required CI job names (must match \`jobs.<name>\` in your workflows).
+        contexts: []
+      enforce_admins: false
+      required_linear_history: false
+      allow_force_pushes: false
+      allow_deletions: false
+      restrictions: null
 `;
 }
 

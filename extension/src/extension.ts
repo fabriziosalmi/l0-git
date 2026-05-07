@@ -95,6 +95,7 @@ const fixableGates = new Set<string>([
   "pr_template_present",
   "issue_template_present",
   "ci_workflow_present",
+  "branch_protection_declared",
 ]);
 
 export function activate(context: vscode.ExtensionContext) {

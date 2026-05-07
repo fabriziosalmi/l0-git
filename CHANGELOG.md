@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- `branch_protection_declared` gate (severity `info`, opt-in via
+  `gate_options.branch_protection_declared.enabled = true`). Verifies
+  the project tracks branch-protection rules as code via Probot Settings
+  (`.github/settings.yml` with `branches: [{protection: …}]`). Cannot
+  see the actual server-side state — that needs a network call with
+  auth, which is out of scope. Companion CodeAction quick-fix scaffolds
+  a `.github/settings.yml` with sensible defaults (PR review required,
+  no force-push, no deletions).
+
+## [0.1.1] - 2026-05-07
+
 ### Added — gates (33 total, was 9)
 
 **Project hygiene** — `code_of_conduct_present`, `codeowners_present` (silent

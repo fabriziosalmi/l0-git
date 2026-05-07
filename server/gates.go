@@ -297,6 +297,14 @@ func gateRegistry() []Gate {
 			Tags:        "git-hygiene,history",
 			Check:       checkLargeBlobInHistory,
 		},
+		{
+			ID:          "branch_protection_declared",
+			Title:       "Branch protection not declared as code",
+			Description: "Verifies the repo tracks branch-protection rules as code via .github/settings.yml (Probot Settings format). Cannot verify the actual GitHub server-side state — that's reachable only via the REST API with auth. Opt-in (gate_options.branch_protection_declared.enabled = true) so users who manage protection via the UI don't get a false signal.",
+			Severity:    SeverityInfo,
+			Tags:        "governance,security",
+			Check:       checkBranchProtectionDeclared,
+		},
 	}
 }
 
