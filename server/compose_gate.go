@@ -91,7 +91,7 @@ func checkComposeLint(ctx context.Context, root string, opts json.RawMessage) ([
 
 	composes := []string{}
 	for _, rel := range files {
-		if pathExcluded(rel, options.ExcludePaths) {
+		if options.shouldSkip(rel) {
 			continue
 		}
 		if isComposeBasename(filepath.Base(rel)) {

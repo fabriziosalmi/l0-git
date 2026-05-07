@@ -65,7 +65,7 @@ func checkDeadPlaceholders(ctx context.Context, root string, opts json.RawMessag
 
 	out := []Finding{}
 	for _, rel := range files {
-		if pathExcluded(rel, options.ExcludePaths) {
+		if options.shouldSkip(rel) {
 			continue
 		}
 		abs := filepath.Join(root, rel)

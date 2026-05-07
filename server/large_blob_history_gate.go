@@ -49,7 +49,7 @@ func checkLargeBlobInHistory(ctx context.Context, root string, opts json.RawMess
 
 	out := []Finding{}
 	for _, b := range blobs {
-		if pathExcluded(b.Path, options.ExcludePaths) {
+		if options.shouldSkip(b.Path) {
 			continue
 		}
 		if b.Size <= threshold {

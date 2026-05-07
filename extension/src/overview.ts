@@ -131,7 +131,7 @@ function renderOverview(webview: vscode.Webview, s: Stats): string {
     "img-src data:",
   ].join("; ");
 
-  const severityBars = renderSeverityBars(s.by_severity, s.total);
+  const severityBars = renderSeverityBars(s.by_severity);
   const statusChips = renderStatusChips(s.by_status);
   const gateRows = renderGateRows(s.by_gate.slice(0, 8));
   const fileRows = renderFileRows(s.top_files.slice(0, 8));
@@ -185,6 +185,8 @@ button.secondary:hover { background: var(--vscode-button-secondaryHoverBackgroun
 @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
 .card { border: 1px solid var(--border); border-radius: 4px; padding: 14px 16px; }
 .card h2 { font-size: 0.9em; font-weight: 600; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.card-hint { font-size: 0.8em; color: var(--muted); margin: -4px 0 10px 0; line-height: 1.4; }
+.card-hint code { background: var(--bar-bg); padding: 0 4px; border-radius: 2px; font-size: 0.95em; }
 .totals { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
 .totals .total { font-size: 2.4em; font-weight: 600; line-height: 1; }
 .totals .total-label { color: var(--muted); font-size: 0.9em; }
@@ -270,12 +272,14 @@ button.secondary:hover { background: var(--vscode-button-secondaryHoverBackgroun
 
   <div class="card full-row">
     <h2>Tags (open)</h2>
+    <div class="card-hint">A finding can carry multiple tags — counts add up to more than the open total when gates are tagged in multiple themes (e.g. <code>security,network</code>).</div>
     ${tagChips || `<div class="empty">No tagged open findings.</div>`}
   </div>
 
   <div class="card full-row">
     <h2>Last 7 days (created_at)</h2>
     ${sparkline}
+    ${sparklineHint(s.last_7_days)}
   </div>
 
 </div>
@@ -302,18 +306,21 @@ document.querySelectorAll("[data-file]").forEach(el => {
 // fragment renderers
 // =============================================================================
 
-function renderSeverityBars(sev: Record<string, number>, total: number): string {
+function renderSeverityBars(sev: Record<string, number>): string {
   const order: Array<keyof Record<string, number>> = ["error", "warning", "info"];
-  const max = Math.max(1, ...order.map((k) => sev[k as string] || 0));
+  // Bars + percentages are both relative to the OPEN total (sum of the
+  // open-only by_severity counts) so percentages always sum to 100%.
+  // Using s.total here would mix scopes — bars are open-only but the
+  // denominator would include resolved/ignored.
+  const openTotal = order.reduce((acc, k) => acc + (sev[k as string] || 0), 0);
   return order
     .map((key) => {
       const n = sev[key as string] || 0;
-      const pct = max > 0 ? Math.round((n / max) * 100) : 0;
-      const totalPct = total > 0 ? Math.round((n / total) * 100) : 0;
+      const pct = openTotal > 0 ? Math.round((n / openTotal) * 100) : 0;
       return `<div class="sev-row sev-${key}">
         <div class="sev-label">${cap(String(key))}</div>
         <div class="sev-bar"><div class="sev-bar-fill" style="width:${pct}%"></div></div>
-        <div class="sev-count">${n}${total > 0 ? `<span style="opacity:0.6"> · ${totalPct}%</span>` : ""}</div>
+        <div class="sev-count">${n}${openTotal > 0 ? `<span style="opacity:0.6"> · ${pct}%</span>` : ""}</div>
       </div>`;
     })
     .join("");
@@ -365,6 +372,18 @@ function renderTagChips(rows: KeyCount[]): string {
         `<span class="chip" data-tag="${escapeAttr(r.key)}" title="Search findings tagged ${escapeAttr(r.key)}">${escapeHtml(r.key)}<span class="chip-count">${r.count}</span></span>`,
     )
     .join("")}</div>`;
+}
+
+// sparklineHint shows a small caption under the 7-day chart when most
+// days are flat at zero — typical of fresh DBs / newly-installed
+// projects, where the chart is otherwise visually misleading.
+function sparklineHint(days: DayCount[]): string {
+  if (!days || days.length === 0) return "";
+  const nonZero = days.filter((d) => d.count > 0).length;
+  if (nonZero <= 1 && days.length >= 7) {
+    return `<div class="card-hint">Trend will fill in as the database accumulates a week of history.</div>`;
+  }
+  return "";
 }
 
 function renderSparkline(days: DayCount[]): string {

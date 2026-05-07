@@ -43,10 +43,10 @@ func checkMergeConflictMarkers(ctx context.Context, root string, opts json.RawMe
 		}}, nil
 	}
 
-	excludes := parseScanOptions(opts).ExcludePaths
+	scan := parseScanOptions(opts)
 	out := []Finding{}
 	for _, rel := range files {
-		if pathExcluded(rel, excludes) {
+		if scan.shouldSkip(rel) {
 			continue
 		}
 		abs := filepath.Join(root, rel)
@@ -141,14 +141,10 @@ type largeFileOptions struct {
 // stored out-of-band by design.
 func checkLargeFileTracked(ctx context.Context, root string, opts json.RawMessage) ([]Finding, error) {
 	thresholdMB := 5
-	excludes := []string{}
+	parsed := largeFileOptions{}
 	if len(opts) > 0 {
-		var parsed largeFileOptions
-		if err := json.Unmarshal(opts, &parsed); err == nil {
-			if parsed.ThresholdMB >= 1 {
-				thresholdMB = parsed.ThresholdMB
-			}
-			excludes = parsed.ExcludePaths
+		if err := json.Unmarshal(opts, &parsed); err == nil && parsed.ThresholdMB >= 1 {
+			thresholdMB = parsed.ThresholdMB
 		}
 	}
 	thresholdBytes := int64(thresholdMB) * 1024 * 1024
@@ -170,7 +166,7 @@ func checkLargeFileTracked(ctx context.Context, root string, opts json.RawMessag
 
 	out := []Finding{}
 	for _, rel := range files {
-		if pathExcluded(rel, excludes) {
+		if parsed.shouldSkip(rel) {
 			continue
 		}
 		if matchesLFSPatterns(rel, lfsPatterns) {

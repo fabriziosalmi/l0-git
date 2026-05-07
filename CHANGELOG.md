@@ -6,6 +6,40 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-05-07
+
+### Added
+
+- `scanOptions.skip_default_fixture_paths` — opt-in flag (default
+  `false`) on every content-scan gate. When enabled, files matching
+  `*_test.go` / `test_*.py` / `*_test.py` / `*.test.{ts,tsx,js,jsx}` /
+  `*.spec.{ts,tsx,js,jsx}` / `*_test.rs` / `*Test.{java,kt}` /
+  `*_spec.rb` / `conftest.py`, plus paths traversing
+  `test/`, `tests/`, `__tests__/`, `spec/`, `testdata/`, `fixtures/`,
+  `__fixtures__/` are skipped. Removes the dogfood noise where test
+  fixtures legitimately contain trigger material (mock secrets,
+  fake URLs, fake IPs).
+
+### Changed
+
+- Overview dashboard: TAGS card explicitly explains that a finding
+  contributes to every tag it carries (counts can sum to more than
+  the open total).
+- Sparkline shows a "trend will fill in over the next 7 days" hint
+  when ≤ 1 day has data — typical of fresh databases.
+- `.l0git.json` of l0-git itself now enables
+  `skip_default_fixture_paths` for the 8 content-scan gates, dropping
+  self-flagged fixtures from 79 → 40 findings.
+
+### Fixed
+
+- "By severity (open)" percentages used `s.total` (across all
+  statuses) as denominator, so values summed to less than 100% when
+  resolved/ignored findings existed. Now relative to the open total
+  (`sum(by_severity)`), so percentages always close to 100%.
+
+## [0.1.2] - 2026-05-07
+
 ### Added
 
 - `branch_protection_declared` gate (severity `info`, opt-in via

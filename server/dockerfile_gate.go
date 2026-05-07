@@ -249,7 +249,7 @@ func checkDockerfileLint(ctx context.Context, root string, opts json.RawMessage)
 
 	dockerfiles := []string{}
 	for _, rel := range files {
-		if pathExcluded(rel, options.ExcludePaths) {
+		if options.shouldSkip(rel) {
 			continue
 		}
 		if isDockerfileBasename(filepath.Base(rel)) {

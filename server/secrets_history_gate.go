@@ -61,7 +61,7 @@ func checkSecretsScanHistory(ctx context.Context, root string, opts json.RawMess
 		if scanned >= maxBlobs {
 			break
 		}
-		if pathExcluded(b.Path, options.ExcludePaths) {
+		if options.shouldSkip(b.Path) {
 			continue
 		}
 		if b.Size > maxSize {

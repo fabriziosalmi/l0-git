@@ -65,10 +65,10 @@ func checkSecretsScan(ctx context.Context, root string, opts json.RawMessage) ([
 		}}, nil
 	}
 
-	excludes := parseScanOptions(opts).ExcludePaths
+	scan := parseScanOptions(opts)
 	out := []Finding{}
 	for _, rel := range files {
-		if pathExcluded(rel, excludes) {
+		if scan.shouldSkip(rel) {
 			continue
 		}
 		// Tracked .env files are flagged regardless of content (the file

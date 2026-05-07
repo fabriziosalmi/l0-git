@@ -66,11 +66,11 @@ func checkUnexpectedExecutableBit(ctx context.Context, root string, opts json.Ra
 			FilePath: ".git",
 		}}, nil
 	}
-	excludes := parseScanOptions(opts).ExcludePaths
+	scan := parseScanOptions(opts)
 
 	out := []Finding{}
 	for _, e := range entries {
-		if pathExcluded(e.Path, excludes) {
+		if scan.shouldSkip(e.Path) {
 			continue
 		}
 		if e.Mode != "100755" {
@@ -144,7 +144,7 @@ func checkVendoredDirTracked(ctx context.Context, root string, opts json.RawMess
 			FilePath: ".git",
 		}}, nil
 	}
-	excludes := parseScanOptions(opts).ExcludePaths
+	scan := parseScanOptions(opts)
 
 	// One finding per offending top-level directory, not per file —
 	// otherwise a stray node_modules with 50k files would bury the
@@ -152,7 +152,7 @@ func checkVendoredDirTracked(ctx context.Context, root string, opts json.RawMess
 	seen := map[string]bool{}
 	out := []Finding{}
 	for _, rel := range files {
-		if pathExcluded(rel, excludes) {
+		if scan.shouldSkip(rel) {
 			continue
 		}
 		// Match either at root or any depth — vendoring at any depth is bad.
@@ -242,11 +242,11 @@ func checkIdeArtifactTracked(ctx context.Context, root string, opts json.RawMess
 			FilePath: ".git",
 		}}, nil
 	}
-	excludes := parseScanOptions(opts).ExcludePaths
+	scan := parseScanOptions(opts)
 
 	out := []Finding{}
 	for _, rel := range files {
-		if pathExcluded(rel, excludes) {
+		if scan.shouldSkip(rel) {
 			continue
 		}
 		base := filepath.Base(rel)
@@ -310,11 +310,11 @@ func checkFilenameQuality(ctx context.Context, root string, opts json.RawMessage
 			FilePath: ".git",
 		}}, nil
 	}
-	excludes := parseScanOptions(opts).ExcludePaths
+	scan := parseScanOptions(opts)
 
 	out := []Finding{}
 	for _, rel := range files {
-		if pathExcluded(rel, excludes) {
+		if scan.shouldSkip(rel) {
 			continue
 		}
 		base := filepath.Base(rel)
