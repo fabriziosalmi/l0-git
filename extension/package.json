@@ -2,7 +2,7 @@
   "name": "l0-git",
   "displayName": "l0-git",
   "description": "Quality gates for the open project. Watches the workspace, runs rules, and surfaces findings in a sidebar view. Backed by a Go MCP server so Claude Code can read the same findings.",
-  "version": "0.1.0",
+  "version": "0.1.6",
   "publisher": "fabriziosalmi",
   "license": "MIT",
   "repository": {

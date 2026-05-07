@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-05-07
+
 ### Added
 
 - **Remediation recipes.** New `lgit fix <id>` CLI prints a structured
