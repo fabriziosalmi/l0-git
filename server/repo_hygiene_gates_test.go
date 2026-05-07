@@ -9,8 +9,11 @@ import (
 	"testing"
 )
 
-// initRepoWithMode is like initRepoWithFiles but lets the test set a unix
-// mode on a specific file before commit so git stores it as 100755.
+// initRepoWithMode is like initRepoWithFiles but flips the git mode of
+// the listed files to 100755 via `git update-index --chmod=+x`. We use
+// the explicit git command rather than os.Chmod because Windows
+// filesystems don't carry the unix executable bit, and the test needs
+// to work on the CI matrix.
 func initRepoWithMode(t *testing.T, files map[string]string, executable []string) string {
 	t.Helper()
 	root := t.TempDir()
@@ -24,14 +27,13 @@ func initRepoWithMode(t *testing.T, files map[string]string, executable []string
 			t.Fatal(err)
 		}
 	}
-	for _, rel := range executable {
-		if err := os.Chmod(filepath.Join(root, rel), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
 	runGit(t, root, "config", "user.email", "t@t")
 	runGit(t, root, "config", "user.name", "t")
 	runGit(t, root, "add", "-A")
+	for _, rel := range executable {
+		// Forces git mode 100755 portably across Linux/macOS/Windows.
+		runGit(t, root, "update-index", "--chmod=+x", rel)
+	}
 	runGit(t, root, "commit", "-q", "-m", "x")
 	return root
 }
