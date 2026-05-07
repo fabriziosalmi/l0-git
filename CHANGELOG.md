@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Remediation recipes.** New `lgit fix <id>` CLI prints a structured
+  fix for any finding: summary, exact shell commands, file edits with
+  caveats, a verification step, and a Claude-Code-ready prompt block.
+  `--json` emits the same payload as `Remediation { summary, confidence,
+  recipe?, claude_prompt }` for tooling. Never executes — print only.
+  Eight gates ship deterministic recipes today (`vendored_dir_tracked`,
+  `ide_artifact_tracked`, `gitignore_coverage`,
+  `unexpected_executable_bit`, `env_example_uncommented`,
+  `merge_conflict_markers`, `large_blob_in_history`,
+  `secrets_scan_history`); the rest fall back to `confidence: guided`
+  with only the prompt populated.
+- **`findings_remediate` MCP tool.** Same payload as `lgit fix --json`,
+  callable from Claude Code. Pairs with the agent's own Bash/Edit tools
+  so HITL is preserved at the apply step.
+- **Sidebar inline actions.** Every finding row now has "Show fix
+  recipe" (opens `lgit fix <id>` output in a doc) and "Ask Claude Code
+  to fix" (copies the prompt to the clipboard) next to the existing
+  ignore / delete buttons.
+
 ### Changed
 
 - **Sidebar defaults rebalanced for signal-to-noise.** New installs hide

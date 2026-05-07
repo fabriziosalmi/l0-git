@@ -188,6 +188,15 @@ func toolDefs() []map[string]any {
 				},
 			},
 		},
+		{
+			"name":        "findings_remediate",
+			"description": "Return a structured remediation for a single finding. Always includes a self-contained `claude_prompt` you can act on; for ~8 gates with deterministic fixes (vendored_dir_tracked, ide_artifact_tracked, gitignore_coverage, unexpected_executable_bit, env_example_uncommented, merge_conflict_markers, large_blob_in_history, secrets_scan_history) it also includes a `recipe` with exact shell commands and file edits. Apply the recipe via your own tools (Bash/Edit) — this tool only describes the fix, never executes it.",
+			"inputSchema": map[string]any{
+				"type":       "object",
+				"properties": map[string]any{"id": map[string]any{"type": "integer", "description": "Finding id from findings_list."}},
+				"required":   []string{"id"},
+			},
+		},
 	}
 }
 
@@ -313,6 +322,16 @@ func (s *mcpServer) dispatchTool(name string, args json.RawMessage) (any, error)
 			return nil, err
 		}
 		return map[string]any{"deleted": n}, nil
+	case "findings_remediate":
+		var a idArg
+		if err := json.Unmarshal(args, &a); err != nil {
+			return nil, fmt.Errorf("invalid arguments: %w", err)
+		}
+		f, err := s.store.GetByID(ctx, a.ID)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"finding": f, "remediation": RemediationFor(*f)}, nil
 	default:
 		return nil, fmt.Errorf("unknown tool: %s", name)
 	}

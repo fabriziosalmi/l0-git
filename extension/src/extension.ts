@@ -141,6 +141,8 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("l0-git.startServer", () => startMCP(context)),
     vscode.commands.registerCommand("l0-git.stopServer", () => stopMCP()),
     vscode.commands.registerCommand("l0-git.applyFix", (project: string, gateId: string) => applyFix(context, project, gateId)),
+    vscode.commands.registerCommand("l0-git.showRemediation", (item: FindingItem) => showRemediation(context, item)),
+    vscode.commands.registerCommand("l0-git.copyClaudePrompt", (item: FindingItem) => copyClaudePrompt(context, item)),
     vscode.commands.registerCommand("l0-git.setGroupBy", () => promptGroupBy()),
     vscode.commands.registerCommand("l0-git.setSortBy", () => promptSortBy()),
     vscode.commands.registerCommand("l0-git.setStatusFilter", () => promptStatusFilter()),
@@ -1275,4 +1277,77 @@ async function applyFix(context: vscode.ExtensionContext, project: string, gateI
   // sees the diagnostic clear within a single tick.
   await runChecksAndRefresh(context);
   vscode.window.showInformationMessage(`l0-git: created ${stub.relPath}`);
+}
+
+// =============================================================================
+// remediation surface (`lgit fix <id>` integrations)
+// =============================================================================
+
+interface RemediationPayload {
+  finding: Finding;
+  remediation: {
+    summary: string;
+    confidence: "deterministic" | "guided";
+    recipe?: {
+      commands?: Array<{ run: string; note?: string }>;
+      file_edits?: Array<{ path: string; op: string; content: string; line?: number }>;
+      caveats?: string[];
+    };
+    claude_prompt: string;
+  };
+}
+
+// showRemediation runs `lgit fix <id>` and opens the human-readable output
+// in a plaintext doc — same surface as openFinding, but with the recipe
+// instead of just the message. Plain text (not markdown) so the literal
+// `--- prompt ---` block survives intact for copy-paste into Claude Code.
+async function showRemediation(context: vscode.ExtensionContext, item: FindingItem): Promise<void> {
+  if (!item || !item.finding) return;
+  const id = item.finding.id;
+  let body: string;
+  try {
+    body = await runLGIT(context, ["fix", String(id)]);
+  } catch (e: unknown) {
+    const err = e as Error;
+    if (err instanceof BinaryNotFoundError) return notifyBinaryMissing(err.message);
+    vscode.window.showErrorMessage(`l0-git: lgit fix ${id} failed: ${err.message}`);
+    return;
+  }
+  const doc = await vscode.workspace.openTextDocument({ content: body, language: "plaintext" });
+  await vscode.window.showTextDocument(doc, { preview: false });
+}
+
+// copyClaudePrompt grabs the structured remediation, copies the
+// claude_prompt to the system clipboard, and shows a one-line toast.
+// No subprocess, no auto-execution — the user pastes into Claude Code (or
+// any agent) themselves. This is the safest possible HITL channel.
+async function copyClaudePrompt(context: vscode.ExtensionContext, item: FindingItem): Promise<void> {
+  if (!item || !item.finding) return;
+  const id = item.finding.id;
+  let raw: string;
+  try {
+    raw = await runLGIT(context, ["fix", String(id), "--json"]);
+  } catch (e: unknown) {
+    const err = e as Error;
+    if (err instanceof BinaryNotFoundError) return notifyBinaryMissing(err.message);
+    vscode.window.showErrorMessage(`l0-git: lgit fix ${id} --json failed: ${err.message}`);
+    return;
+  }
+  let parsed: RemediationPayload;
+  try {
+    parsed = JSON.parse(raw) as RemediationPayload;
+  } catch (e: unknown) {
+    vscode.window.showErrorMessage(`l0-git: could not parse remediation JSON: ${(e as Error).message}`);
+    return;
+  }
+  const prompt = parsed.remediation?.claude_prompt;
+  if (!prompt) {
+    vscode.window.showWarningMessage(`l0-git: finding #${id} has no claude_prompt.`);
+    return;
+  }
+  await vscode.env.clipboard.writeText(prompt);
+  const conf = parsed.remediation.confidence === "deterministic" ? "deterministic recipe" : "guided remediation";
+  vscode.window.showInformationMessage(
+    `l0-git: copied Claude Code prompt for finding #${id} (${conf}) — paste it into your Claude Code session.`,
+  );
 }

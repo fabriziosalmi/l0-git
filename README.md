@@ -274,6 +274,27 @@ covering README/LICENSE/CHANGELOG, `.gitignore`, `.gitattributes`,
 a file (manually or via the quick fix) re-runs the gates without you
 having to trigger anything.
 
+### Remediation recipes
+
+Every finding row in the sidebar has two inline actions next to ignore /
+delete:
+
+| Icon                     | Command                       | What it does                                                                                |
+|--------------------------|-------------------------------|---------------------------------------------------------------------------------------------|
+| `$(book)`                | `l0-git.showRemediation`      | Open a plain-text doc with `lgit fix <id>` output: summary, exact commands, file edits, caveats, verification step, and a Claude Code prompt block at the bottom. |
+| `$(comment-discussion)`  | `l0-git.copyClaudePrompt`     | Copy the structured Claude Code prompt to the clipboard. Paste into your Claude Code session and let the agent apply the fix using its own Bash/Edit tools (HITL: every write requires a permission prompt). |
+
+Recipes are **deterministic** for 8 gates (`vendored_dir_tracked`,
+`ide_artifact_tracked`, `gitignore_coverage`,
+`unexpected_executable_bit`, `env_example_uncommented`,
+`merge_conflict_markers`, `large_blob_in_history`,
+`secrets_scan_history`) — exact shell commands and file edits, safe to
+copy-paste. For the remaining gates the recipe is `null` and the prompt
+frames the ask for an LLM agent (rotate the credential first, pick a
+specific image tag, etc.). The extension never executes commands itself
+— `lgit fix` only prints, the user (or Claude Code, with its own
+permission model) does the apply.
+
 ### History scanning (opt-in)
 
 Working-tree gates miss secrets and large blobs that were committed and
@@ -336,17 +357,18 @@ Or edit `~/.claude.json` manually:
 }
 ```
 
-### Available MCP tools (7)
+### Available MCP tools (8)
 
-| Tool              | Args                                                                          | What it does                                                            |
-|-------------------|-------------------------------------------------------------------------------|-------------------------------------------------------------------------|
-| `gates_check`     | `project`, `gate_id?`                                                         | Run all gates (or one) against a project root, persist results          |
-| `gates_list`      | —                                                                             | Inspect the registered gate set (id, title, description, severity, tags) |
-| `findings_list`   | `project?`, `status?`, `severity?`, `gate?`, `tag?`, `query?`, `sort?`, `limit?`, `offset?` | Rich filter + sort + pagination over the findings store      |
-| `findings_stats`  | `project?`                                                                    | Aggregate stats: by_severity (open), by_status, by_gate, top_files, by_tag, last_7_days trend |
-| `findings_ignore` | `id`                                                                          | Mark a finding ignored so future runs don't resurface it                |
-| `findings_delete` | `id`                                                                          | Drop a finding                                                          |
-| `findings_clear`  | `project`                                                                     | Wipe all findings for a project                                         |
+| Tool                  | Args                                                                          | What it does                                                            |
+|-----------------------|-------------------------------------------------------------------------------|-------------------------------------------------------------------------|
+| `gates_check`         | `project`, `gate_id?`                                                         | Run all gates (or one) against a project root, persist results          |
+| `gates_list`          | —                                                                             | Inspect the registered gate set (id, title, description, severity, tags) |
+| `findings_list`       | `project?`, `status?`, `severity?`, `gate?`, `tag?`, `query?`, `sort?`, `limit?`, `offset?` | Rich filter + sort + pagination over the findings store      |
+| `findings_stats`      | `project?`                                                                    | Aggregate stats: by_severity (open), by_status, by_gate, top_files, by_tag, last_7_days trend |
+| `findings_ignore`     | `id`                                                                          | Mark a finding ignored so future runs don't resurface it                |
+| `findings_delete`     | `id`                                                                          | Drop a finding                                                          |
+| `findings_clear`      | `project`                                                                     | Wipe all findings for a project                                         |
+| `findings_remediate`  | `id`                                                                          | Return the structured remediation: `summary`, `confidence` (`deterministic`/`guided`), an optional `recipe` (exact commands + file edits + caveats), and a `claude_prompt` framing the fix for an LLM. Never executes — apply via your own Bash/Edit tools. |
 
 ## CLI reference
 
@@ -356,12 +378,18 @@ lgit list  [-project=…] [-status=…] [-severity=…] [-gate=…] [-tag=…]
            [-query=…] [-sort=…] [-limit=N] [-offset=N]
 lgit stats [-project=…]          # JSON aggregates for the dashboard
 lgit gates                       # list registered gates with metadata
+lgit fix   <id> [--json]         # print remediation recipe (text default; --json for tooling)
 lgit ignore <id>
 lgit delete <id>
 lgit clear  <project>            # delete every finding for a project
 lgit path                        # prints the SQLite DB path
 lgit version
 ```
+
+`lgit fix` is print-only — it never executes the commands or writes the
+file edits. Review the output, then run the commands yourself or hand
+the prompt block at the bottom to Claude Code via the
+`findings_remediate` MCP tool.
 
 The DB lives at `~/.l0-git/findings.db`. Override with `LGIT_DB=/path/to.db`.
 
