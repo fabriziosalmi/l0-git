@@ -370,3 +370,20 @@ func TestGitLsFilesWithMode_ReturnsMode(t *testing.T) {
 	}
 }
 
+
+// vendor/ in a Ruby project with Gemfile + vendor/bundle/ is legitimate.
+func TestVendoredDirTracked_SilentForRubyBundlerDeployment(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"Gemfile":                       "source 'https://rubygems.org'\ngem 'sinatra'\n",
+		"vendor/bundle/ruby/gems/x.rb":  "# gem\n",
+	})
+	fs, err := checkVendoredDirTracked(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fs {
+		if strings.HasPrefix(f.FilePath, "vendor") {
+			t.Errorf("Ruby bundler vendor must be exempt, got: %+v", f)
+		}
+	}
+}

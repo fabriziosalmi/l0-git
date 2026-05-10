@@ -205,7 +205,10 @@ func evaluateCssFile(rel, src string, disabled map[string]bool) []Finding {
 		}
 
 		// justified_text: text-align: justify on any selector.
-		if !disabled["justified_text"] {
+		// @media print is explicitly exempt — justified text is standard
+		// typographic practice in print layouts where hyphenation is
+		// controlled by the printer/renderer.
+		if !disabled["justified_text"] && !isPrintMediaQuery(b.selector) {
 			if line, hit := findDeclaration(b, "text-align", "justify"); hit {
 				out = append(out, cssFinding(rel, line, cssRules["justified_text"], "text-align: justify", overrides))
 			}
@@ -254,15 +257,47 @@ func selectorContains(selector, needle string) bool {
 	return strings.Contains(strings.ToLower(selector), strings.ToLower(needle))
 }
 
-// selectorIsBodyText is conservative: only fires when the selector list
-// contains a "body-copy" element selector unaccompanied by class/id
-// modifiers that might indicate a stylistic exception.
+// isPrintMediaQuery returns true when the selector is (or contains) a
+// @media print block — justified text is conventional in print contexts.
+func isPrintMediaQuery(selector string) bool {
+	s := strings.ToLower(strings.TrimSpace(selector))
+	return strings.Contains(s, "@media") && strings.Contains(s, "print")
+}
+
+// bodyTextElements are element selectors that represent flowing document
+// body text — used by selectorIsBodyText.
+var bodyTextElements = map[string]bool{
+	"body": true, "html": true, "p": true, "article": true, "main": true,
+}
+
+// bodyTextDescendants are two-token element combinations that still
+// represent body text even when written as compound selectors.
+var bodyTextDescendants = map[string]bool{
+	"body p": true, "main p": true, "article p": true,
+}
+
+// selectorIsBodyText returns true when any selector part in a
+// comma-separated list targets flowing body text. It handles:
+//   - simple element selectors (body, p, main, …)
+//   - element with modifiers (body.dark-theme, p:not(.lead), …)
+//   - simple descendant pairs (body p, main p, …)
 func selectorIsBodyText(selector string) bool {
 	for _, sel := range strings.Split(selector, ",") {
 		s := strings.TrimSpace(strings.ToLower(sel))
-		switch s {
-		case "body", "html", "html, body", "p", "article", "main",
-			"body p", "main p", "article p":
+		// Exact two-token descendant match first.
+		if bodyTextDescendants[s] {
+			return true
+		}
+		// Element selector, possibly with class/pseudo-class/attribute suffix.
+		// Extract the leading element name (stops at . : [ #).
+		elem := s
+		for i, c := range s {
+			if c == '.' || c == ':' || c == '[' || c == '#' || c == ' ' {
+				elem = s[:i]
+				break
+			}
+		}
+		if bodyTextElements[elem] {
 			return true
 		}
 	}

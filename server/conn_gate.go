@@ -142,6 +142,14 @@ func httpHostExempt(url string) bool {
 		strings.HasSuffix(host, ".invalid") || strings.HasSuffix(host, ".local") {
 		return true
 	}
+	// Single-label hostnames (no dot) are never reachable on the public
+	// internet — they resolve only in private DNS (Docker service names,
+	// Kubernetes cluster-internal names, /etc/hosts entries, …).
+	// Flagging http://kafka or http://db-primary as "cleartext HTTP" is
+	// pure noise in every containerised project.
+	if !strings.Contains(host, ".") {
+		return true
+	}
 	// Well-known specification / standard-body hosts whose URIs appear
 	// routinely in documentation, XML namespaces, and MIME type registries.
 	// These are never operational URLs — flagging them is pure noise.

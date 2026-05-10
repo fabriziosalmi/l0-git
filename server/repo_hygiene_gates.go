@@ -238,6 +238,11 @@ func buildLegitimateVendorSet(root string) map[string]bool {
 	if fileExists(root, "composer.json") && fileExists(root, "vendor", "autoload.php") {
 		ok["vendor/"] = true
 	}
+	// `bundle install --deployment` (Ruby/Bundler) commits gems into
+	// vendor/bundle/. The canonical signal is Gemfile + vendor/bundle/.
+	if fileExists(root, "Gemfile") && fileExists(root, "vendor", "bundle") {
+		ok["vendor/"] = true
+	}
 	return ok
 }
 
