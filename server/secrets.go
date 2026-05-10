@@ -140,6 +140,13 @@ func checkSecretsScan(ctx context.Context, root string, opts json.RawMessage) ([
 				if p.minEntropy > 0 && shannonEntropy(string(match)) < p.minEntropy {
 					continue
 				}
+				// Known-non-secret filter: skip values that are publicly
+				// documented defaults, template placeholders, test key prefixes,
+				// or canonical documentation examples — they carry zero
+				// information advantage for an attacker.
+				if isKnownNonSecret(string(match)) {
+					continue
+				}
 				out = append(out, Finding{
 					Severity: SeverityError,
 					Title:    p.title + " in tracked file",
