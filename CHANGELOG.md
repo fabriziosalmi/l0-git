@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-05-10
+
+### Added
+
+- **`secrets_scan` known-non-secret filter** (`server/known_non_secrets.go`). A post-entropy layer eliminates false positives whose matched value is publicly known and carries zero information advantage for an attacker. Four tiers applied in order:
+  - **Tier 1 — placeholder / template syntax**: `{{secret}}`, `${MY_KEY}`, `<TOKEN>`, `%SECRET%`, `[MY_TOKEN]`, `__VAR__`, `@VAR@`, `#{var}` and explicit instruction words (`changeme`, `replace_me`, `not_set`, `redacted`, `dummy`, `fake`, `mock`, …)
+  - **Tier 2 — well-known service defaults** (~200 entries, each traceable to an official vendor page): PostgreSQL, MySQL/MariaDB, MongoDB, Redis, RabbitMQ (`guest`), Elasticsearch, InfluxDB, CouchDB, Cassandra, Neo4j, MinIO (`minioadmin`), Grafana, Keycloak, SonarQube, Harbor (`Harbor12345`), GitLab legacy (`5iveL!fe`), Vault dev-server (`root`, `dev-root-token`), LocalStack, Kafka, Airflow, Superset, Metabase, n8n, Jenkins, Drone, Woodpecker, Portainer, Gitea, Azurite, JWT tutorial secrets, and ~100 more
+  - **Tier 3 — official test / sandbox key prefixes**: `sk_test_` / `pk_test_` / `rk_test_` / `whsec_test_` (Stripe), `sandbox-sq0isp-` / `sandbox-sq0atb-` (Square), `test_sk_` / `test_pk_` (Checkout.com), `sandbox_` (Braintree), `adyentest_` (Adyen)
+  - **Tier 4 — canonical documentation examples**: AWS `AKIAIOSFODNN7EXAMPLE` + secret key, Azurite well-known storage account key, jwt.io debugger token, GCP quickstart key, GitHub PAT examples, Slack token examples, Twilio test SIDs, SendGrid / npm / OpenAI / Anthropic / Stripe placeholder examples
+
 ## [0.1.8] - 2026-05-10
 
 ### Fixed (false-positive reduction — round 2, 5 gates)
