@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-05-10
+
+### Added
+
+- **Global `exclude_paths` in `.l0git.json`**: a top-level `exclude_paths` array now applies to every content-scanning gate without repeating the list under each `gate_options` entry. Gate-specific `exclude_paths` are still supported and are merged after the global ones. Example:
+
+  ```json
+  {
+    "exclude_paths": ["**/generated/**", "vendor/**"],
+    "gate_options": {
+      "secrets_scan": { "exclude_paths": ["**/fixtures/**"] }
+    }
+  }
+  ```
+
+  The injection happens in `optionsFor` — zero changes to gate function signatures.
+
 ## [0.1.11] - 2026-05-10
 
 ### Fixed

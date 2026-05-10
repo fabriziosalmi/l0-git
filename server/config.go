@@ -23,6 +23,15 @@ type ProjectConfig struct {
 	// GateOptions hands a JSON sub-tree to each gate's Check function.
 	// The schema is gate-specific; see each gate's docstring.
 	GateOptions map[string]json.RawMessage `json:"gate_options,omitempty"`
+	// ExcludePaths is a list of glob patterns (filepath.Match semantics)
+	// applied to every content-scanning gate before per-gate exclude_paths.
+	// Use this to exclude generated code, vendored snapshots, or build
+	// artefacts from all gates in one place instead of repeating the list
+	// under every gate_options entry.
+	//
+	// Example:
+	//   "exclude_paths": ["**/generated/**", "**/testdata/**"]
+	ExcludePaths []string `json:"exclude_paths,omitempty"`
 }
 
 const projectConfigFilename = ".l0git.json"
@@ -96,12 +105,36 @@ func (c *ProjectConfig) severityOverride(gateID string) (string, bool) {
 	return s, ok
 }
 
-// optionsFor returns the gate-specific JSON sub-tree from gate_options, or
-// nil if the user didn't configure anything for this gate.
+// optionsFor returns the gate-specific JSON sub-tree from gate_options merged
+// with any top-level exclude_paths. The global excludes are prepended to the
+// gate's own exclude_paths list so a single project-level pattern suppresses a
+// path across all content-scanning gates without repeating it everywhere.
 func (c *ProjectConfig) optionsFor(gateID string) json.RawMessage {
 	if c == nil {
 		return nil
 	}
-	return c.GateOptions[gateID]
+	raw := c.GateOptions[gateID]
+	if len(c.ExcludePaths) == 0 {
+		return raw
+	}
+	// Parse the gate's options JSON into a generic map so we can inject the
+	// global exclude_paths without knowing the gate-specific schema.
+	m := map[string]json.RawMessage{}
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &m) // best-effort; non-object gates are rare
+	}
+	// Merge: global first, gate-specific appended so per-gate patterns
+	// always win (they're evaluated last, but filepath.Match semantics
+	// means first-match wins — global patterns therefore take precedence,
+	// which is correct: a global exclusion can't be overridden by a gate).
+	var gateExcludes []string
+	if existing, ok := m["exclude_paths"]; ok {
+		_ = json.Unmarshal(existing, &gateExcludes)
+	}
+	merged := append(c.ExcludePaths, gateExcludes...) //nolint:gocritic // intentional prepend
+	b, _ := json.Marshal(merged)
+	m["exclude_paths"] = b
+	out, _ := json.Marshal(m)
+	return out
 }
 
