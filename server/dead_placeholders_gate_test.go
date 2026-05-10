@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -115,4 +116,26 @@ func TestDeadPlaceholders_LinePinning(t *testing.T) {
 		}
 	}
 	t.Fatalf("expected fixme finding")
+}
+
+// Files whose basename is a placeholder-registry (TODO.md, FIXME.md, …)
+// must be skipped — they ARE the register, not a file with unwanted markers.
+func TestDeadPlaceholders_RegistryFilesSkipped(t *testing.T) {
+	for _, name := range []string{"TODO.md", "FIXME.md", "TODO.txt", "TODO"} {
+		t.Run(name, func(t *testing.T) {
+			root := initRepoWithFiles(t, map[string]string{
+				name: "TODO: this is a planned feature\nFIXME: known bug\n",
+			})
+			fs, err := checkDeadPlaceholders(context.Background(), root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, f := range fs {
+				base := filepath.Base(f.FilePath[:strings.Index(f.FilePath, ":")])
+				if strings.EqualFold(base, name) {
+					t.Errorf("%s must be skipped, got: %+v", name, f)
+				}
+			}
+		})
+	}
 }

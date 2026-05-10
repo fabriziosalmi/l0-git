@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-05-10
+
+### Fixed (false-positive reduction — 14 gates)
+
+- **`nvmrc_missing`**: silent when `package.json` declares `engines.node` or `volta.node`; plain `.nvmrc` / `.node-version` files remain the canonical signal.
+- **`vendored_dir_tracked`**: `vendor/` is no longer flagged in Go projects that have `vendor/modules.txt` (idiomatic `-mod=vendor`); same exemption for PHP Composer (`vendor/autoload.php`).
+- **`secrets_scan` / `secrets_scan_history`**: added Shannon entropy floor (≥ 3.5 bits/char) on all variable-body patterns — mock data, placeholder strings, and doc examples that happen to match the regex are skipped. `skip_default_fixture_paths` now **defaults to `true`** (was `false`); set it to `false` explicitly to scan test fixtures.
+- **`network_scan`**: `docNets` extended with RFC 2544 benchmarking range (`198.18.0.0/15`), IANA MCAST-TEST-NET (`233.252.0.0/24`), and RFC 6598 CGNAT (`100.64.0.0/10`) — these no longer produce a warning.
+- **`connection_strings`**: `http://` URLs to standard-body hosts (`w3.org`, `ietf.org`, `xmlsoap.org`, `schemas.microsoft.com`, `purl.org`, `oasis-open.org`, …) are now exempt — XML namespaces and RFC references in source files no longer fire.
+- **`compose_lint`**: `docker_socket_mount` is demoted to `info` for well-known orchestrator/proxy images (Traefik, Portainer, Watchtower, Dozzle, cAdvisor, …). An inline `# l0git: ignore docker_socket_mount` silences both the warning and the info variant.
+- **`markdown_lint`**: `codeblock_invalid_payload` no longer fires for `jsonc`, `json5`, `hjson`, `json with comments` (pass-through — stdlib parser rejects their legal syntax). `ndjson` / `jsonl` are validated line-by-line.
+- **`unexpected_executable_bit`**: files under `bin/`, `scripts/`, `script/`, `tools/`, `tool/`, `cmd/`, `hack/`, `.bin/` are exempted — intentional executable wrappers in conventional locations no longer flag.
+- **`version_drift`**: root `package.json` is excluded from cross-manifest comparison when monorepo markers are present (`pnpm-workspace.yaml`, `lerna.json`, `nx.json`, `turbo.json`, or `workspaces` field).
+- **`tests_present`**: added `cypress/`, `playwright/`, `e2e/`, `integration/`, `features/` (Cucumber) to recognized test directory names; added fallback that checks `package.json` devDependencies for well-known test runners (Jest, Vitest, Cypress, Playwright, Mocha, …).
+- **`css_lint`**: `hidden_scrollbar` severity demoted from `warning` to `info` — the gate cannot determine cross-selector whether the element is actually scrollable, so a hard warning was disproportionate.
+- **`dead_placeholders`**: files whose basename is a placeholder tracking register (`TODO.md`, `FIXME.md`, `TODO.txt`, `TODO`, …) are now skipped entirely.
+- **`.l0git.json`**: removed now-redundant `skip_default_fixture_paths: true` entries (the default is `true`).
+
 ## [0.1.6] - 2026-05-07
 
 ### Added

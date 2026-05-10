@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"testing"
 )
 
@@ -51,9 +52,11 @@ func TestIsDefaultFixturePath(t *testing.T) {
 	}
 }
 
+func boolPtr(b bool) *bool { return &b }
+
 func TestScanOptions_ShouldSkip(t *testing.T) {
-	// ExcludePaths only — no fixture skip.
-	o := scanOptions{ExcludePaths: []string{"vendor/*"}}
+	// ExcludePaths only, fixture skip explicitly disabled.
+	o := scanOptions{ExcludePaths: []string{"vendor/*"}, SkipDefaultFixturePaths: boolPtr(false)}
 	if !o.shouldSkip("vendor/lib.go") {
 		t.Errorf("ExcludePaths should match")
 	}
@@ -61,8 +64,8 @@ func TestScanOptions_ShouldSkip(t *testing.T) {
 		t.Errorf("fixture path must NOT skip when SkipDefaultFixturePaths is false")
 	}
 
-	// SkipDefaultFixturePaths only.
-	o = scanOptions{SkipDefaultFixturePaths: true}
+	// SkipDefaultFixturePaths explicitly true.
+	o = scanOptions{SkipDefaultFixturePaths: boolPtr(true)}
 	if !o.shouldSkip("server/main_test.go") {
 		t.Errorf("fixture path must skip when SkipDefaultFixturePaths is true")
 	}
@@ -71,8 +74,26 @@ func TestScanOptions_ShouldSkip(t *testing.T) {
 	}
 
 	// Both: union semantics.
-	o = scanOptions{ExcludePaths: []string{"vendor/*"}, SkipDefaultFixturePaths: true}
+	o = scanOptions{ExcludePaths: []string{"vendor/*"}, SkipDefaultFixturePaths: boolPtr(true)}
 	if !o.shouldSkip("vendor/lib.go") || !o.shouldSkip("foo_test.go") {
 		t.Errorf("union semantics broken: %+v", o)
+	}
+
+	// parseScanOptions with empty opts defaults SkipDefaultFixturePaths to true.
+	parsed := parseScanOptions(nil)
+	if parsed.SkipDefaultFixturePaths == nil || !*parsed.SkipDefaultFixturePaths {
+		t.Errorf("parseScanOptions nil opts must default SkipDefaultFixturePaths to true")
+	}
+	if !parsed.shouldSkip("foo_test.go") {
+		t.Errorf("parsed default opts must skip fixture paths")
+	}
+
+	// parseScanOptions with explicit false respects the override.
+	parsedOff := parseScanOptions(json.RawMessage(`{"skip_default_fixture_paths":false}`))
+	if parsedOff.SkipDefaultFixturePaths == nil || *parsedOff.SkipDefaultFixturePaths {
+		t.Errorf("explicit false must be respected")
+	}
+	if parsedOff.shouldSkip("foo_test.go") {
+		t.Errorf("explicit false must not skip fixture paths")
 	}
 }

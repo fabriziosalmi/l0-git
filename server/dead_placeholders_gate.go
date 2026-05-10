@@ -68,6 +68,11 @@ func checkDeadPlaceholders(ctx context.Context, root string, opts json.RawMessag
 		if options.shouldSkip(rel) {
 			continue
 		}
+		// Files whose name IS the tracking register for placeholders — scanning
+		// them produces 100% noise (every line would match).
+		if isPlaceholderRegistryFile(rel) {
+			continue
+		}
 		abs := filepath.Join(root, rel)
 		info, err := os.Stat(abs)
 		if err != nil || info.IsDir() {
@@ -122,6 +127,29 @@ func scanForDeadPlaceholders(rel string, data []byte, disabled map[string]bool) 
 		emit(data[start:], line)
 	}
 	return out
+}
+
+// placeholderRegistryBasenames are filenames that ARE the tracking register
+// for placeholder items — scanning them is 100% noise.
+var placeholderRegistryBasenames = map[string]bool{
+	"todo.md":     true,
+	"todos.md":    true,
+	"fixme.md":    true,
+	"fixmes.md":   true,
+	"hack.md":     true,
+	"hacks.md":    true,
+	"notes.md":    true,
+	"todo.txt":    true,
+	"fixme.txt":   true,
+	"todo":        true,
+	"fixme":       true,
+}
+
+// isPlaceholderRegistryFile returns true when the file's basename (lowercased)
+// is a well-known placeholder tracking file.
+func isPlaceholderRegistryFile(rel string) bool {
+	base := strings.ToLower(filepath.Base(rel))
+	return placeholderRegistryBasenames[base]
 }
 
 func parseDeadPlaceholdersOptions(opts json.RawMessage) deadPlaceholdersOptions {

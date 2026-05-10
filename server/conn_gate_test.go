@@ -78,6 +78,35 @@ func TestConnectionStrings_HTTPLocalExempt(t *testing.T) {
 	}
 }
 
+// Standard-body and spec hosts must never trigger http_remote.
+func TestConnectionStrings_SpecHostsExempt(t *testing.T) {
+	exemptURLs := []string{
+		"http://www.w3.org/1999/xhtml",
+		"http://schemas.xmlsoap.org/soap/envelope/",
+		"http://schemas.microsoft.com/winfx/2006/xaml",
+		"http://purl.org/dc/elements/1.1/",
+		"http://www.ietf.org/rfc/rfc2616.txt",
+		"http://tools.ietf.org/html/rfc7231",
+		"http://xmlns.jcp.org/xml/ns/javaee",
+		"http://dublincore.org/elements/1.1/",
+		"http://docs.oasis-open.org/wss/2004/01/oasis-wss",
+	}
+	for _, url := range exemptURLs {
+		t.Run(url, func(t *testing.T) {
+			root := initRepoWithFiles(t, map[string]string{"schema.xml": url + "\n"})
+			fs, err := checkConnectionStrings(context.Background(), root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, f := range fs {
+				if strings.HasSuffix(f.FilePath, ":http_remote") {
+					t.Errorf("spec host %q must be exempt, got: %+v", url, f)
+				}
+			}
+		})
+	}
+}
+
 // creds_in_url claims its span first; the lower-severity rule that would
 // otherwise also match (db_uri / http_remote) must NOT emit a duplicate.
 func TestConnectionStrings_CredsInURLDeduplicates(t *testing.T) {

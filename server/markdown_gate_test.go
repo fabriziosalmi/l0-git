@@ -70,6 +70,43 @@ func TestMD_CodeblockOtherLanguagesUnchecked(t *testing.T) {
 	}
 }
 
+// JSON supersets and line-delimited JSON must pass through without a
+// codeblock_invalid_payload finding, even when the content would fail
+// strict json.Unmarshal (jsonc with comments, json5 with trailing commas).
+func TestMD_CodeblockJSONSupersets(t *testing.T) {
+	cases := []struct {
+		lang string
+		body string
+	}{
+		{"jsonc", "// comment\n{\"a\": 1}\n"},
+		{"json5", "{a: 1, /* comment */ b: 2,}\n"},
+		{"hjson", "{\n  # comment\n  a: 1\n}\n"},
+		{"ndjson", "{\"a\":1}\n{\"b\":2}\n"},
+		{"jsonl", "{\"x\":true}\n"},
+	}
+	for _, c := range cases {
+		t.Run(c.lang, func(t *testing.T) {
+			src := "```" + c.lang + "\n" + c.body + "```\n"
+			fs := runMDRules(t, src)
+			if findFindingByRule(fs, "codeblock_invalid_payload") != nil {
+				t.Errorf("%s block must not produce codeblock_invalid_payload: %+v", c.lang, fs)
+			}
+		})
+	}
+}
+
+// Valid ndjson must pass; invalid ndjson (bad line) must still fire.
+func TestMD_CodeblockNDJSONValidation(t *testing.T) {
+	valid := "```ndjson\n{\"a\":1}\n{\"b\":2}\n```\n"
+	if findFindingByRule(runMDRules(t, valid), "codeblock_invalid_payload") != nil {
+		t.Errorf("valid ndjson must not produce finding")
+	}
+	invalid := "```ndjson\n{\"a\":1}\nnot json\n```\n"
+	if findFindingByRule(runMDRules(t, invalid), "codeblock_invalid_payload") == nil {
+		t.Errorf("invalid ndjson line must produce codeblock_invalid_payload")
+	}
+}
+
 func TestMD_LinkLocalBroken(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, filepath.Join(root, "README.md"), "[Contribute](CONTRIBUTING.md)\n")

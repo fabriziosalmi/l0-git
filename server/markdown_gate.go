@@ -388,14 +388,34 @@ func fencedBlockBody(b *ast.FencedCodeBlock, source []byte) string {
 }
 
 // validatePayload returns "" when a code block parses cleanly under its
-// declared language, or a short error string when it doesn't. Only
-// json/yaml are inspected — every other language passes through.
+// declared language, or a short error string when it doesn't. Only strict
+// JSON and YAML are validated — JSON supersets (jsonc, json5, hjson) and
+// line-delimited variants (ndjson, jsonl) are passed through unchanged
+// because the Go stdlib parser rejects their legal syntax.
 func validatePayload(lang, body string) string {
 	switch strings.ToLower(lang) {
-	case "json", "jsonc":
+	case "json":
 		var v any
 		if err := json.Unmarshal([]byte(body), &v); err != nil {
 			return err.Error()
+		}
+	// JSON supersets: pass through — stdlib json.Unmarshal rejects
+	// comments, trailing commas, unquoted keys, etc.
+	case "jsonc", "json5", "hjson", "json with comments":
+		return ""
+	// Line-delimited JSON: each non-empty line is a JSON value.
+	// We validate line-by-line but treat partial/streaming payloads
+	// (last line may be incomplete) as pass-through.
+	case "ndjson", "jsonl", "ldjson":
+		for _, line := range strings.Split(strings.TrimSpace(body), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			var v any
+			if err := json.Unmarshal([]byte(line), &v); err != nil {
+				return err.Error()
+			}
 		}
 	case "yaml", "yml":
 		var v any

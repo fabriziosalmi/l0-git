@@ -84,6 +84,12 @@ var testDirNames = map[string]bool{
 	"spec":       true,
 	"__test__":   true,
 	"test_suite": true,
+	// E2E / integration test directories from common frameworks.
+	"cypress":    true,
+	"playwright": true,
+	"e2e":        true,
+	"integration": true,
+	"features":   true, // Cucumber / Gherkin
 }
 
 func checkTestsPresent(_ context.Context, root string, _ json.RawMessage) ([]Finding, error) {
@@ -93,6 +99,12 @@ func checkTestsPresent(_ context.Context, root string, _ json.RawMessage) ([]Fin
 		return nil, err
 	}
 	if found {
+		return nil, nil
+	}
+	// Fallback: check package.json devDependencies for well-known test runners.
+	// If a test runner is declared the project has tests even if no test file
+	// was found (they may live in an unusual path not covered by our walker).
+	if packageJSONHasTestRunner(root) {
 		return nil, nil
 	}
 	severity := SeverityInfo
@@ -156,4 +168,32 @@ func walkForTests(root string) (bool, error) {
 		return false, walkErr
 	}
 	return found, nil
+}
+
+// testRunnerPackages are npm package names (typically in devDependencies) that
+// indicate the project uses a test framework even if no test file was found by
+// the walker (e.g. tests in an unusual path or a separate workspace package).
+var testRunnerPackages = []string{
+	"jest", "@jest/core", "vitest", "mocha", "jasmine",
+	"karma", "ava", "tap", "tape", "qunit",
+	"@playwright/test", "playwright",
+	"cypress",
+	"@testing-library/react", "@testing-library/vue", "@testing-library/svelte",
+}
+
+// packageJSONHasTestRunner returns true when the root package.json declares a
+// well-known test runner in devDependencies or dependencies.
+func packageJSONHasTestRunner(root string) bool {
+	data, err := os.ReadFile(filepath.Join(root, "package.json"))
+	if err != nil {
+		return false
+	}
+	content := string(data)
+	for _, pkg := range testRunnerPackages {
+		// Exact JSON key match to avoid false substring hits.
+		if strings.Contains(content, `"`+pkg+`"`) {
+			return true
+		}
+	}
+	return false
 }

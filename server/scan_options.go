@@ -15,26 +15,29 @@ type scanOptions struct {
 	// any pattern is skipped before its content is read.
 	ExcludePaths []string `json:"exclude_paths,omitempty"`
 
-	// SkipDefaultFixturePaths, when true, makes the gate skip files in
+	// SkipDefaultFixturePaths controls whether the gate skips files in
 	// well-known test/fixture locations: *_test.go / test_*.py /
 	// *_test.py / *.test.{ts,tsx,js,jsx} / *.spec.{ts,tsx,js,jsx} /
 	// *_test.rs / *Test.{java,kt} / *_spec.rb / *_test.rb / conftest.py,
 	// plus any path traversing test/, tests/, __tests__/, spec/,
 	// testdata/, fixtures/, __fixtures__/.
 	//
-	// Default false — content scanners flag every tracked file by
-	// design. Turn this on when test fixtures legitimately contain
-	// trigger material (mock secrets, mock URLs, fake IPs) and you
-	// trust the test files not to ship real credentials.
-	SkipDefaultFixturePaths bool `json:"skip_default_fixture_paths,omitempty"`
+	// Default true — test fixtures legitimately contain mock secrets,
+	// fake IPs, and placeholder URLs. Set to false explicitly in
+	// .l0git.json gate_options to scan fixture files as well.
+	SkipDefaultFixturePaths *bool `json:"skip_default_fixture_paths,omitempty"`
 }
 
 func parseScanOptions(opts json.RawMessage) scanOptions {
-	if len(opts) == 0 {
-		return scanOptions{}
-	}
 	var s scanOptions
-	_ = json.Unmarshal(opts, &s) // best-effort; bad shape is treated as no-op
+	if len(opts) > 0 {
+		_ = json.Unmarshal(opts, &s) // best-effort; bad shape is treated as no-op
+	}
+	// Default skip_default_fixture_paths to true when not explicitly set.
+	if s.SkipDefaultFixturePaths == nil {
+		t := true
+		s.SkipDefaultFixturePaths = &t
+	}
 	return s
 }
 
@@ -44,7 +47,7 @@ func (s scanOptions) shouldSkip(rel string) bool {
 	if pathExcluded(rel, s.ExcludePaths) {
 		return true
 	}
-	if s.SkipDefaultFixturePaths && isDefaultFixturePath(rel) {
+	if s.SkipDefaultFixturePaths != nil && *s.SkipDefaultFixturePaths && isDefaultFixturePath(rel) {
 		return true
 	}
 	return false

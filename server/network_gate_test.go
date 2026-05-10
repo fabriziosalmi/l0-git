@@ -65,6 +65,35 @@ func TestNetworkScan_CIDRDoesNotDoubleFire(t *testing.T) {
 
 // Octet > 255 must not pass the parse step — protects against false hits
 // like "256.300.0.1".
+// Extended documentation ranges (TEST-NET-2, CGNAT, MCAST-TEST-NET) must
+// be classified as doc-range (info), not flagged as public (warning).
+func TestNetworkScan_ExtendedDocRanges(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+	}{
+		{"test_net_2_198.18", "addr = 198.18.0.1\n"},
+		{"test_net_2_198.19", "addr = 198.19.255.254\n"},
+		{"cgnat_100.64", "addr = 100.64.0.1\n"},
+		{"cgnat_100.127", "addr = 100.127.255.254\n"},
+		{"mcast_test_net", "addr = 233.252.0.42\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := initRepoWithFiles(t, map[string]string{"net.txt": tc.content})
+			fs, err := checkNetworkScan(context.Background(), root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, f := range fs {
+				if f.Severity == SeverityWarning {
+					t.Errorf("%s: doc-range IP must not be a warning; got: %+v", tc.name, f)
+				}
+			}
+		})
+	}
+}
+
 func TestNetworkScan_RejectsInvalidOctets(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{"net.txt": "bogus 999.999.999.999\n"})
 	fs, err := checkNetworkScan(context.Background(), root, nil)

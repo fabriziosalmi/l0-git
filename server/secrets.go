@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,24 +18,50 @@ import (
 // user must triage, so loose patterns (generic "high-entropy string") are
 // out of scope until we have an ignore-baseline mechanism.
 type secretPattern struct {
-	id    string
-	title string
-	re    *regexp.Regexp
+	id         string
+	title      string
+	re         *regexp.Regexp
+	minEntropy float64 // 0 = no entropy check; else Shannon bits/char floor
 }
 
 // secretPatterns is the active rule set. Adding a pattern means appending
 // here — the gate auto-picks it up.
+//
+// minEntropy = 3.5 on all variable-body patterns filters out placeholder /
+// mock / documentation strings (e.g. AKIAIOSFODNN7EXAMPLE, ghp_aaa…) while
+// leaving real credentials untouched. Private-key headers are structural
+// markers, not variable strings — no entropy check needed there.
 var secretPatterns = []secretPattern{
-	{id: "aws_access_key", title: "AWS access key ID", re: regexp.MustCompile(`AKIA[0-9A-Z]{16}`)},
-	{id: "github_pat_classic", title: "GitHub personal access token", re: regexp.MustCompile(`gh[psoru]_[A-Za-z0-9]{36}`)},
-	{id: "github_pat_fg", title: "GitHub fine-grained PAT", re: regexp.MustCompile(`github_pat_[A-Za-z0-9_]{82}`)},
-	{id: "openai_key", title: "OpenAI API key", re: regexp.MustCompile(`sk-[A-Za-z0-9]{48}`)},
-	{id: "anthropic_key", title: "Anthropic API key", re: regexp.MustCompile(`sk-ant-[A-Za-z0-9_\-]{40,}`)},
-	{id: "google_api_key", title: "Google API key", re: regexp.MustCompile(`AIza[0-9A-Za-z_\-]{35}`)},
-	{id: "slack_token", title: "Slack token", re: regexp.MustCompile(`xox[abprs]-[0-9A-Za-z\-]{10,}`)},
-	{id: "stripe_live", title: "Stripe live secret key", re: regexp.MustCompile(`sk_live_[0-9A-Za-z]{24,}`)},
-	{id: "jwt", title: "JWT-like token", re: regexp.MustCompile(`eyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}`)},
+	{id: "aws_access_key", title: "AWS access key ID", re: regexp.MustCompile(`AKIA[0-9A-Z]{16}`), minEntropy: 3.5},
+	{id: "github_pat_classic", title: "GitHub personal access token", re: regexp.MustCompile(`gh[psoru]_[A-Za-z0-9]{36}`), minEntropy: 3.5},
+	{id: "github_pat_fg", title: "GitHub fine-grained PAT", re: regexp.MustCompile(`github_pat_[A-Za-z0-9_]{82}`), minEntropy: 3.5},
+	{id: "openai_key", title: "OpenAI API key", re: regexp.MustCompile(`sk-[A-Za-z0-9]{48}`), minEntropy: 3.5},
+	{id: "anthropic_key", title: "Anthropic API key", re: regexp.MustCompile(`sk-ant-[A-Za-z0-9_\-]{40,}`), minEntropy: 3.5},
+	{id: "google_api_key", title: "Google API key", re: regexp.MustCompile(`AIza[0-9A-Za-z_\-]{35}`), minEntropy: 3.5},
+	{id: "slack_token", title: "Slack token", re: regexp.MustCompile(`xox[abprs]-[0-9A-Za-z\-]{10,}`), minEntropy: 3.5},
+	{id: "stripe_live", title: "Stripe live secret key", re: regexp.MustCompile(`sk_live_[0-9A-Za-z]{24,}`), minEntropy: 3.5},
+	{id: "jwt", title: "JWT-like token", re: regexp.MustCompile(`eyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}`), minEntropy: 3.5},
 	{id: "private_key_header", title: "Private key", re: regexp.MustCompile(`-----BEGIN [A-Z ]*PRIVATE KEY-----`)},
+}
+
+// shannonEntropy returns the Shannon entropy in bits per character of s.
+// Returns 0 for strings shorter than 2 characters.
+func shannonEntropy(s string) float64 {
+	if len(s) < 2 {
+		return 0
+	}
+	freq := make(map[rune]int, 64)
+	total := 0
+	for _, c := range s {
+		freq[c]++
+		total++
+	}
+	var h float64
+	for _, count := range freq {
+		p := float64(count) / float64(total)
+		h -= p * math.Log2(p)
+	}
+	return h
 }
 
 // Files larger than this are skipped — they're almost always artefacts
@@ -104,14 +131,21 @@ func checkSecretsScan(ctx context.Context, root string, opts json.RawMessage) ([
 		start := 0
 		emit := func(content []byte, lineNum int) {
 			for _, p := range secretPatterns {
-				if p.re.Match(content) {
-					out = append(out, Finding{
-						Severity: SeverityError,
-						Title:    p.title + " in tracked file",
-						Message:  fmt.Sprintf("Possible %s in %s:%d. Verify, rotate if real, then purge it from git history (e.g. with git-filter-repo).", p.title, rel, lineNum),
-						FilePath: fmt.Sprintf("%s:%d:%s", rel, lineNum, p.id),
-					})
+				match := p.re.Find(content)
+				if match == nil {
+					continue
 				}
+				// Entropy floor: skip low-entropy matches (mock data, doc examples,
+				// placeholder strings that happen to satisfy the pattern syntax).
+				if p.minEntropy > 0 && shannonEntropy(string(match)) < p.minEntropy {
+					continue
+				}
+				out = append(out, Finding{
+					Severity: SeverityError,
+					Title:    p.title + " in tracked file",
+					Message:  fmt.Sprintf("Possible %s in %s:%d. Verify, rotate if real, then purge it from git history (e.g. with git-filter-repo).", p.title, rel, lineNum),
+					FilePath: fmt.Sprintf("%s:%d:%s", rel, lineNum, p.id),
+				})
 			}
 		}
 		for i := 0; i < len(data); i++ {
