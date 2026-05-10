@@ -442,8 +442,14 @@ async function syncDiagnostics(context: vscode.ExtensionContext, roots: string[]
       // Diagnostics always reflect the full set of open findings,
       // independent of the user's tree view filters — the Problems
       // pane is the universal "what's broken" surface.
-      const out = await runLGIT(context, ["list", `-project=${root}`, "-status=open", "-limit=500"]);
+      const diagLimit = 2000;
+      const out = await runLGIT(context, ["list", `-project=${root}`, "-status=open", `-limit=${diagLimit}`]);
       findings = JSON.parse(out || "[]") as Finding[];
+      if (findings.length >= diagLimit) {
+        void vscode.window.showWarningMessage(
+          `l0-git: ${path.basename(root)} has ${diagLimit}+ open findings — diagnostics capped. Run 'lgit list' from the terminal for the full set.`,
+        );
+      }
     } catch (e: unknown) {
       outputChannel.appendLine(`diagnostics fetch failed for ${root}: ${(e as Error).message}`);
       continue;

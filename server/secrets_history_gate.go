@@ -55,8 +55,10 @@ func checkSecretsScanHistory(ctx context.Context, root string, opts json.RawMess
 
 	out := []Finding{}
 	scanned := 0
+	cappedAt := 0
 	for _, b := range blobs {
 		if scanned >= maxBlobs {
+			cappedAt = len(blobs)
 			break
 		}
 		if options.shouldSkip(b.Path) {
@@ -79,6 +81,14 @@ func checkSecretsScanHistory(ctx context.Context, root string, opts json.RawMess
 		}
 		scanned++
 		out = append(out, scanHistoryBlob(b, data)...)
+	}
+	if cappedAt > 0 {
+		out = append(out, Finding{
+			Severity: SeverityInfo,
+			Title:    "secrets_scan_history: scan capped",
+			Message:  fmt.Sprintf("History scan stopped after %d blobs (%d total unique blobs in this repo). Oldest commits were NOT scanned. Raise max_blobs in .l0git.json (secrets_scan_history gate option) to cover the full history.", scanned, cappedAt),
+			FilePath: ".git",
+		})
 	}
 	return out, nil
 }

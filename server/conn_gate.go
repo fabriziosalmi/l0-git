@@ -92,7 +92,7 @@ var connectionPatterns = []connectionPattern{
 		severity: SeverityInfo,
 		title:    "Database connection URI",
 		advice:   "Database URIs in source are usually fine when the host/credentials come from env, but worth checking.",
-		re:       regexp.MustCompile(`\b(?:mongodb(?:\+srv)?|postgres(?:ql)?|mysql|redis|amqp|kafka):\/\/[^\s"'<>]+`),
+		re:       regexp.MustCompile(`\b(?:mongodb(?:\+srv)?|postgres(?:ql)?|mysql|mariadb|redis|amqp|kafka|sqlserver|mssql|couchdb|cassandra|cql):\/\/[^\s"'<>]+`),
 	},
 	{
 		id:       "http_remote",

@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-05-10
+
+### Fixed
+
+- **`tests_present`**: added `.test.mjs` / `.test.cjs` / `.spec.mjs` / `.spec.cjs` (Vitest ESM/CJS), `*Test.cs` / `*Tests.cs` (C# / .NET), `*Test.php` / `*Tests.php` / `test*.php` (PHPUnit), `*Spec.kt` (Kotlin). Projects using these conventions no longer get a false-positive "No tests found" warning.
+- **`connection_strings` / `db_uri`**: regex extended to cover `sqlserver://`, `mssql://` (SQL Server), `mariadb://`, `couchdb://`, `cassandra://`, `cql://`. Previously these connection string schemes passed through undetected.
+- **`secrets_scan_history` cap transparency**: when history scanning stops at the `max_blobs` ceiling (default 5000) an `info` finding is now emitted — "History scan stopped after N blobs (M total) — oldest commits NOT scanned." Previously the truncation was completely silent, giving false confidence that the full history was clean.
+- **VSCode extension / diagnostics truncation**: the hardcoded `-limit=500` in `syncDiagnostics` has been raised to 2000. If the cap is still reached a warning toast is shown ("diagnostics capped — run `lgit list` from the terminal for the full set"). Previously the Problems pane silently showed fewer findings than existed.
+
 ## [0.1.10] - 2026-05-10
 
 ### Fixed (VSCode extension UI/UX — draconian round)

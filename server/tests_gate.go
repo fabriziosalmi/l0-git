@@ -58,18 +58,26 @@ func looksLikeTestFile(name string) bool {
 	case strings.HasSuffix(low, "_test.py") || strings.HasPrefix(low, "test_") && strings.HasSuffix(low, ".py"):
 		return true
 	case strings.HasSuffix(low, ".test.ts") || strings.HasSuffix(low, ".test.tsx") ||
-		strings.HasSuffix(low, ".test.js") || strings.HasSuffix(low, ".test.jsx"):
+		strings.HasSuffix(low, ".test.js") || strings.HasSuffix(low, ".test.jsx") ||
+		strings.HasSuffix(low, ".test.mjs") || strings.HasSuffix(low, ".test.cjs"):
 		return true
 	case strings.HasSuffix(low, ".spec.ts") || strings.HasSuffix(low, ".spec.tsx") ||
-		strings.HasSuffix(low, ".spec.js") || strings.HasSuffix(low, ".spec.jsx"):
+		strings.HasSuffix(low, ".spec.js") || strings.HasSuffix(low, ".spec.jsx") ||
+		strings.HasSuffix(low, ".spec.mjs") || strings.HasSuffix(low, ".spec.cjs"):
 		return true
 	case strings.HasSuffix(low, "_test.rs"):
 		return true
 	case strings.HasSuffix(low, "test.java") || strings.HasSuffix(low, "tests.java"):
 		return true
-	case strings.HasSuffix(low, "test.kt") || strings.HasSuffix(low, "tests.kt"):
+	case strings.HasSuffix(low, "test.kt") || strings.HasSuffix(low, "tests.kt") ||
+		strings.HasSuffix(low, "spec.kt"):
 		return true
 	case strings.HasSuffix(low, "_spec.rb") || strings.HasSuffix(low, "_test.rb"):
+		return true
+	case strings.HasSuffix(low, "test.cs") || strings.HasSuffix(low, "tests.cs"):
+		return true
+	case strings.HasSuffix(low, "test.php") || strings.HasSuffix(low, "tests.php") ||
+		strings.HasPrefix(low, "test") && strings.HasSuffix(low, ".php"):
 		return true
 	}
 	return false
@@ -114,7 +122,7 @@ func checkTestsPresent(_ context.Context, root string, _ json.RawMessage) ([]Fin
 	return []Finding{{
 		Severity: severity,
 		Title:    "No tests found",
-		Message:  "No test files detected anywhere under the project (looked for *_test.go, test_*.py / *_test.py, *.test.{ts,js}, *.spec.{ts,js}, *_test.rs, *Test.{java,kt}, *_spec.rb, conftest.py, and tests/ directories). Add at least one test to keep regressions out.",
+		Message:  "No test files detected anywhere under the project (looked for *_test.go, test_*.py / *_test.py, *.test.{ts,js,mjs,cjs}, *.spec.{ts,js,mjs,cjs}, *_test.rs, *Test.{java,kt}, *Spec.kt, *_spec.rb, *Test.{cs,php}, conftest.py, and tests/ directories). Add at least one test to keep regressions out.",
 	}}, nil
 }
 
