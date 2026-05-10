@@ -18,9 +18,6 @@ extension/*.vsix
 extension/.vscode-test/
 extension/bin/
 
-# Local dev scripts (not committed — run from repo root)
-scripts/update.sh
-
 # IDE / OS
 .DS_Store
 .idea/
