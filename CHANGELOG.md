@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-05-10
+
+### Fixed (VSCode extension UI/UX — draconian round)
+
+- **Loading indicator**: status bar now shows `$(loading~spin) l0-git: checking…` while gates are running, so the user always knows a scan is in progress instead of seeing a stale count.
+- **Go-to-line navigation**: clicking a finding in the tree now opens the file AND positions the cursor at the exact line the gate flagged. Scan-style gates encode `<file>:<line>:<rule_id>` in `file_path`; the line component was parsed but previously ignored for navigation.
+- **Binary path validation**: changing `l0-git.binaryPath` in settings now immediately checks whether the path exists on disk and shows a warning with an "Open settings" button if it doesn't — no more silent failures at run-time.
+- **Clear project — finding count**: the "Delete all l0-git findings for …?" confirmation dialog now includes the finding count (e.g., "12 findings") so the user knows what they're about to delete.
+- **MCP spawn safety**: `startMCP` validates binary existence before spawning, attaches an `error` event handler to catch ENOENT at spawn-time (prevents unhandled-rejection leaks on activation failure), and guards the `exit` callback against a stale reference when `stopMCP` replaces the process.
+- **File watchers for late-joined folders**: adding a workspace folder after activation now registers the full set of file-change watchers for that folder, so the sidebar responds to README/LICENSE/compose/… changes in folders opened after startup.
+
 ## [0.1.9] - 2026-05-10
 
 ### Added

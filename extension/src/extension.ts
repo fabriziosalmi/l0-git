@@ -155,13 +155,34 @@ export function activate(context: vscode.ExtensionContext) {
   // Re-render when settings change so binary/db overrides take effect.
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration("l0-git")) provider.refresh();
+      if (!e.affectsConfiguration("l0-git")) return;
+      if (e.affectsConfiguration("l0-git.binaryPath")) {
+        const cfg = vscode.workspace.getConfiguration("l0-git").get<string>("binaryPath");
+        if (cfg && cfg.trim() && !fs.existsSync(cfg.trim())) {
+          void vscode.window.showWarningMessage(
+            `l0-git: binary not found at '${cfg.trim()}'. Check the l0-git.binaryPath setting.`,
+            "Open settings",
+          ).then((choice) => {
+            if (choice === "Open settings") {
+              void vscode.commands.executeCommand("workbench.action.openSettings", "l0-git.binaryPath");
+            }
+          });
+        }
+      }
+      provider.refresh();
     }),
   );
 
-  // Re-run checks when the workspace folders change (folder added/removed).
+  // Re-run checks and register new file watchers when workspace folders change.
   context.subscriptions.push(
-    vscode.workspace.onDidChangeWorkspaceFolders(() => runChecksAndRefresh(context)),
+    vscode.workspace.onDidChangeWorkspaceFolders((e) => {
+      // Register watchers for newly added folders so they get the same
+      // file-change triggers as folders present at activation time.
+      if (e.added.length > 0) {
+        registerReadmeWatchersForFolders(context, e.added);
+      }
+      void runChecksAndRefresh(context);
+    }),
   );
 
   // Watch root-level README* per workspace folder; create/delete should
@@ -185,7 +206,13 @@ export function deactivate() {
 }
 
 function registerReadmeWatchers(context: vscode.ExtensionContext) {
-  const folders = vscode.workspace.workspaceFolders ?? [];
+  registerReadmeWatchersForFolders(context, vscode.workspace.workspaceFolders ?? []);
+}
+
+function registerReadmeWatchersForFolders(
+  context: vscode.ExtensionContext,
+  folders: readonly vscode.WorkspaceFolder[],
+) {
   // Watch every file the registered gates care about as INPUT (presence
   // or content used by the gate's decision). Source files are NOT
   // watched here — content scanners (secrets, network, conn_strings,
@@ -357,6 +384,8 @@ function runChecksAndRefresh(context: vscode.ExtensionContext): Promise<void> {
 }
 
 async function doRunChecksAndRefresh(context: vscode.ExtensionContext): Promise<void> {
+  statusBar.text = "$(loading~spin) l0-git: checking…";
+  statusBar.tooltip = "l0-git — running gates…";
   const roots = workspaceRoots();
   if (roots.length === 0) {
     provider.refresh();
@@ -518,10 +547,19 @@ async function openFinding(item: FindingItem) {
   if (!item || !item.finding) return;
   const f = item.finding;
   if (f.file_path) {
-    const abs = path.isAbsolute(f.file_path) ? f.file_path : path.join(f.project, f.file_path);
-    if (fs.existsSync(abs)) {
-      const doc = await vscode.workspace.openTextDocument(abs);
-      await vscode.window.showTextDocument(doc, { preview: false });
+    const fl = findingFileLine(f);
+    const absFile = fl
+      ? (path.isAbsolute(fl.file) ? fl.file : path.join(f.project, fl.file))
+      : (path.isAbsolute(f.file_path) ? f.file_path : path.join(f.project, f.file_path));
+    if (fs.existsSync(absFile)) {
+      const doc = await vscode.workspace.openTextDocument(absFile);
+      const editor = await vscode.window.showTextDocument(doc, { preview: false });
+      if (fl && fl.line > 1) {
+        const lineIdx = fl.line - 1;
+        const range = new vscode.Range(lineIdx, 0, lineIdx, 0);
+        editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+        editor.selection = new vscode.Selection(lineIdx, 0, lineIdx, 0);
+      }
       return;
     }
   }
@@ -575,8 +613,14 @@ async function clearProject(context: vscode.ExtensionContext) {
     ? roots[0]
     : await vscode.window.showQuickPick(roots, { placeHolder: "Project to clear" });
   if (!target) return;
+  let countLabel = "";
+  try {
+    const out = await runLGIT(context, ["list", `-project=${target}`, "-status=all", "-limit=5000"]);
+    const all = JSON.parse(out || "[]") as Finding[];
+    countLabel = ` (${all.length} finding${all.length === 1 ? "" : "s"})`;
+  } catch { /* count fetch is best-effort */ }
   const confirm = await vscode.window.showWarningMessage(
-    `Delete all l0-git findings for ${target}?`,
+    `Delete all l0-git findings for ${path.basename(target)}${countLabel}?`,
     { modal: true },
     "Delete",
   );
@@ -600,13 +644,22 @@ async function startMCP(context: vscode.ExtensionContext) {
     return;
   }
   const bin = resolveBinary(context);
-  mcpProcess = spawn(bin, ["mcp"], { env: envWithDB(), stdio: ["pipe", "pipe", "pipe"] });
-  mcpProcess.stdout?.on("data", (d) => outputChannel.append(`[mcp.out] ${d}`));
-  mcpProcess.stderr?.on("data", (d) => outputChannel.append(`[mcp.err] ${d}`));
-  mcpProcess.on("exit", (code) => {
-    outputChannel.appendLine(`[mcp] exited with code ${code}`);
-    mcpProcess = undefined;
+  if (!fs.existsSync(bin)) {
+    await notifyBinaryMissing(`lgit binary not found at '${bin}'. MCP server not started.`);
+    return;
+  }
+  const proc = spawn(bin, ["mcp"], { env: envWithDB(), stdio: ["pipe", "pipe", "pipe"] });
+  proc.stdout?.on("data", (d) => outputChannel.append(`[mcp.out] ${d}`));
+  proc.stderr?.on("data", (d) => outputChannel.append(`[mcp.err] ${d}`));
+  proc.on("error", (err) => {
+    outputChannel.appendLine(`[mcp] spawn error: ${err.message}`);
+    if (mcpProcess === proc) mcpProcess = undefined;
   });
+  proc.on("exit", (code) => {
+    outputChannel.appendLine(`[mcp] exited with code ${code}`);
+    if (mcpProcess === proc) mcpProcess = undefined;
+  });
+  mcpProcess = proc;
   outputChannel.appendLine(`[mcp] started ${bin}`);
 }
 
