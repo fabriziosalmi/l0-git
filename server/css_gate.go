@@ -217,9 +217,9 @@ func evaluateCssFile(rel, src string, disabled map[string]bool) []Finding {
 var cssRules = map[string]composeRule{
 	"hidden_scrollbar": {
 		id:       "hidden_scrollbar",
-		severity: SeverityWarning,
+		severity: SeverityInfo,
 		title:    "Scrollbar hidden via CSS",
-		advice:   "Hiding the scrollbar disorients users on long content. Style it (track/thumb colours) instead of removing it.",
+		advice:   "Hiding the scrollbar disorients users on long content. Acceptable when the element has overflow:hidden (no actual scroll) or when a custom scrollbar replacement is provided; otherwise style the scrollbar instead of removing it.",
 	},
 	"thin_font_weight": {
 		id:       "thin_font_weight",

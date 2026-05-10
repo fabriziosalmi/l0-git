@@ -106,6 +106,44 @@ func TestTestsPresent_EmptyTestDir(t *testing.T) {
 	}
 }
 
+// E2E / integration test directories must satisfy the gate.
+func TestTestsPresent_E2EDirs(t *testing.T) {
+	for _, dir := range []string{"cypress", "playwright", "e2e", "integration", "features"} {
+		t.Run(dir, func(t *testing.T) {
+			root := t.TempDir()
+			if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			mustWrite(t, filepath.Join(root, dir, "foo.spec.ts"), "test content")
+			fs, err := checkTestsPresent(context.Background(), root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(fs) != 0 {
+				t.Errorf("%s/ dir must satisfy gate, got: %+v", dir, fs)
+			}
+		})
+	}
+}
+
+// package.json with a well-known test runner must satisfy the gate.
+func TestTestsPresent_PackageJSONTestRunner(t *testing.T) {
+	for _, runner := range []string{"jest", "vitest", "cypress", "@playwright/test"} {
+		t.Run(runner, func(t *testing.T) {
+			root := t.TempDir()
+			mustWrite(t, filepath.Join(root, "package.json"),
+				`{"devDependencies":{"`+runner+`":"^1.0.0"}}`)
+			fs, err := checkTestsPresent(context.Background(), root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(fs) != 0 {
+				t.Errorf("package.json with %q must satisfy gate, got: %+v", runner, fs)
+			}
+		})
+	}
+}
+
 // Skip directories listed in testScanSkipDirs even if they contain
 // test-named files (vendored deps, node_modules, …).
 func TestTestsPresent_SkipsVendoredDirs(t *testing.T) {

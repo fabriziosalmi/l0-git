@@ -142,7 +142,42 @@ func httpHostExempt(url string) bool {
 		strings.HasSuffix(host, ".invalid") || strings.HasSuffix(host, ".local") {
 		return true
 	}
+	// Well-known specification / standard-body hosts whose URIs appear
+	// routinely in documentation, XML namespaces, and MIME type registries.
+	// These are never operational URLs — flagging them is pure noise.
+	for _, exempt := range httpSpecHosts {
+		if host == exempt || strings.HasSuffix(host, "."+exempt) {
+			return true
+		}
+	}
 	return false
+}
+
+// httpSpecHosts is the closed list of standard-body and well-known
+// documentation hosts whose http:// URIs should never trigger a finding.
+var httpSpecHosts = []string{
+	"www.w3.org",
+	"w3.org",
+	"www.ietf.org",
+	"ietf.org",
+	"tools.ietf.org",
+	"datatracker.ietf.org",
+	"www.rfc-editor.org",
+	"rfc-editor.org",
+	"schemas.xmlsoap.org",
+	"schemas.microsoft.com",
+	"schemas.openxmlformats.org",
+	"xmlns.jcp.org",
+	"java.sun.com",
+	"purl.org",
+	"dublincore.org",
+	"www.dublincore.org",
+	"docs.oasis-open.org",
+	"www.oasis-open.org",
+	"ogc.org",
+	"www.ogc.org",
+	"opengis.net",
+	"www.opengis.net",
 }
 
 func atoiSafe(s string) int {

@@ -74,6 +74,41 @@ func TestUnexpectedExecutableBit_NoFalsePositiveOnRegularFile(t *testing.T) {
 	}
 }
 
+// Files in conventional script directories (bin/, scripts/, tools/, …) must
+// not trigger unexpected_executable_bit regardless of extension.
+func TestUnexpectedExecutableBit_ScriptDirExempt(t *testing.T) {
+	root := initRepoWithMode(t, map[string]string{
+		"bin/deploy":          "#!/bin/sh\necho deploy\n",
+		"scripts/bootstrap":   "#!/bin/bash\necho bootstrap\n",
+		"tools/lint.sh":       "#!/bin/sh\necho lint\n",
+		"hack/update.py":      "#!/usr/bin/env python3\n",
+		"cmd/run":             "#!/bin/sh\n",
+	}, []string{
+		"bin/deploy", "scripts/bootstrap", "tools/lint.sh", "hack/update.py", "cmd/run",
+	})
+	fs, err := checkUnexpectedExecutableBit(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) != 0 {
+		t.Errorf("script-dir files must be silent, got: %+v", fs)
+	}
+}
+
+// A data file outside script dirs with the executable bit set must still fire.
+func TestUnexpectedExecutableBit_DataFileOutsideScriptDirFires(t *testing.T) {
+	root := initRepoWithMode(t, map[string]string{
+		"config/settings.json": `{"key":"value"}`,
+	}, []string{"config/settings.json"})
+	fs, err := checkUnexpectedExecutableBit(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) == 0 {
+		t.Errorf("json file with executable bit outside bin/ must produce a finding")
+	}
+}
+
 func TestVendoredDirTracked_FlagsCommonDirs(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
 		"node_modules/foo/index.js": "x",
@@ -109,6 +144,45 @@ func TestVendoredDirTracked_DeduplicatesByDir(t *testing.T) {
 	}
 	if len(fs) != 1 {
 		t.Errorf("expected exactly 1 finding for the dir, got %d", len(fs))
+	}
+}
+
+func TestVendoredDirTracked_SilentForGoVendor(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"go.mod":                    "module example.com/m\ngo 1.22\n",
+		"vendor/modules.txt":        "# github.com/pkg/errors v0.9.1\n",
+		"vendor/github.com/pkg/errors/errors.go": "package errors",
+		"main.go":                   "package main",
+	})
+	fs, err := checkVendoredDirTracked(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fs {
+		if f.FilePath == "vendor" {
+			t.Errorf("go vendor/ with modules.txt must be silent, got: %+v", f)
+		}
+	}
+}
+
+func TestVendoredDirTracked_FlagsVendorWithoutModulesTxt(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"go.mod":            "module example.com/m\ngo 1.22\n",
+		"vendor/foo/foo.go": "package foo",
+		"main.go":           "package main",
+	})
+	fs, err := checkVendoredDirTracked(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, f := range fs {
+		if f.FilePath == "vendor" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("vendor/ without modules.txt should still be flagged")
 	}
 }
 
@@ -196,6 +270,30 @@ func TestNvmrcMissing_SilentWithPin(t *testing.T) {
 				t.Errorf("%s present: must be silent, got: %+v", pin, fs)
 			}
 		})
+	}
+}
+
+func TestNvmrcMissing_SilentWithEnginesNode(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "package.json"), `{"engines":{"node":">=20.0.0"}}`)
+	fs, err := checkNvmrcMissing(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) != 0 {
+		t.Errorf("engines.node present: must be silent, got: %+v", fs)
+	}
+}
+
+func TestNvmrcMissing_SilentWithVolta(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "package.json"), `{"volta":{"node":"20.10.0"}}`)
+	fs, err := checkNvmrcMissing(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) != 0 {
+		t.Errorf("volta.node present: must be silent, got: %+v", fs)
 	}
 }
 

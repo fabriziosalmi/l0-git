@@ -28,11 +28,18 @@ var cidrRe = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}/(?:3[0-2]|[12]?\d)\b`
 // ASN reference: "AS" + up to 7 digits. Bare numbers are too noisy.
 var asnRe = regexp.MustCompile(`\bAS[0-9]{1,7}\b`)
 
-// Documentation ranges per RFC 5737 / 3849 + the well-known TEST-NET CIDRs.
+// Documentation ranges that should not trigger a warning:
+//   - RFC 5737 TEST-NET-1/2/3: 192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24
+//   - RFC 2544 benchmarking: 198.18.0.0/15 (TEST-NET-2 per IANA)
+//   - IANA MCAST-TEST-NET: 233.252.0.0/24
+//   - RFC 6598 shared address space (CGNAT): 100.64.0.0/10
 var docNets = mustParseNets(
 	"192.0.2.0/24",
 	"198.51.100.0/24",
 	"203.0.113.0/24",
+	"198.18.0.0/15",
+	"233.252.0.0/24",
+	"100.64.0.0/10",
 )
 
 func mustParseNets(cidrs ...string) []*net.IPNet {

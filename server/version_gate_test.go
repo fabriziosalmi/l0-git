@@ -128,3 +128,32 @@ func TestVersionDrift_PomFirstVersion(t *testing.T) {
 		t.Errorf("pom + VERSION agree on 3.1.4, expected no finding, got: %+v", fs)
 	}
 }
+
+// In a pnpm / Yarn / npm workspace the root package.json version is a
+// placeholder and must not be compared against other manifests.
+func TestVersionDrift_MonorepoRootPackageJSONSkipped(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "package.json"), `{"name":"root","version":"0.0.0","workspaces":["packages/*"]}`)
+	mustWrite(t, filepath.Join(root, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n")
+	mustWrite(t, filepath.Join(root, "VERSION"), "1.2.3\n")
+	fs, err := checkVersionDrift(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) != 0 {
+		t.Errorf("monorepo root package.json must be skipped; expected no drift, got: %+v", fs)
+	}
+}
+
+func TestVersionDrift_NonMonorepoPackageJSONCompared(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "package.json"), `{"version":"1.0.0"}`)
+	mustWrite(t, filepath.Join(root, "VERSION"), "2.0.0\n")
+	fs, err := checkVersionDrift(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) == 0 {
+		t.Errorf("non-monorepo: package.json vs VERSION drift must be reported")
+	}
+}

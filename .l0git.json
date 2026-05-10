@@ -1,31 +1,13 @@
 {
   "gate_options": {
-    "secrets_scan": {
-      "skip_default_fixture_paths": true
-    },
     "connection_strings": {
-      "skip_default_fixture_paths": true,
       "exclude_paths": ["server/conn_gate.go", "README.md", "CHANGELOG.md"]
     },
     "network_scan": {
-      "skip_default_fixture_paths": true,
       "exclude_paths": ["server/network_gate.go", "server/conn_gate.go"]
     },
     "dead_placeholders": {
-      "skip_default_fixture_paths": true,
       "exclude_paths": ["server/dead_placeholders_gate.go", "server/gates.go", "README.md", "CHANGELOG.md", "extension/src/stubs.ts"]
-    },
-    "merge_conflict_markers": {
-      "skip_default_fixture_paths": true
-    },
-    "markdown_lint": {
-      "skip_default_fixture_paths": true
-    },
-    "html_lint": {
-      "skip_default_fixture_paths": true
-    },
-    "css_lint": {
-      "skip_default_fixture_paths": true
     }
   }
 }

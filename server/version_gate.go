@@ -43,8 +43,16 @@ var versionExtractors = []versionExtractor{
 var versionShape = regexp.MustCompile(`^v?\d+(?:\.\d+){1,3}(?:[-+][\w.\-]+)?$`)
 
 func checkVersionDrift(_ context.Context, root string, _ json.RawMessage) ([]Finding, error) {
+	// In monorepo layouts the root package.json is a workspace container —
+	// its version field is often a placeholder (0.0.0) and should not be
+	// compared against the other manifests' real versions.
+	skipPackageJSON := isMonorepoRoot(root)
+
 	declared := []manifestVersion{}
 	for _, ex := range versionExtractors {
+		if skipPackageJSON && ex.relPath == "package.json" {
+			continue
+		}
 		full := filepath.Join(root, ex.relPath)
 		data, err := os.ReadFile(full)
 		if err != nil {
@@ -104,6 +112,32 @@ func checkVersionDrift(_ context.Context, root string, _ json.RawMessage) ([]Fin
 		})
 	}
 	return out, nil
+}
+
+// isMonorepoRoot returns true when the project root contains well-known
+// monorepo tooling markers: pnpm-workspace.yaml, lerna.json, nx.json,
+// turbo.json, or a package.json that declares a "workspaces" field.
+// In these setups the root package.json version is a placeholder and must
+// not be cross-checked against other manifests.
+func isMonorepoRoot(root string) bool {
+	markers := []string{
+		"pnpm-workspace.yaml",
+		"pnpm-workspace.yml",
+		"lerna.json",
+		"nx.json",
+		"turbo.json",
+	}
+	for _, m := range markers {
+		if _, err := os.Stat(filepath.Join(root, m)); err == nil {
+			return true
+		}
+	}
+	// package.json#workspaces field is the npm/Yarn monorepo convention.
+	pkgData, err := os.ReadFile(filepath.Join(root, "package.json"))
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(pkgData), `"workspaces"`)
 }
 
 // extractJSONVersion finds the top-level "version": "..." key in a JSON

@@ -76,6 +76,12 @@ func checkUnexpectedExecutableBit(ctx context.Context, root string, opts json.Ra
 		if e.Mode != "100755" {
 			continue
 		}
+		// Files living under well-known script/binary directories are
+		// intentionally executable regardless of extension. A shell wrapper
+		// in bin/ with no extension is a legitimate binary, not a mistake.
+		if isInScriptDir(e.Path) {
+			continue
+		}
 		ext := strings.ToLower(filepath.Ext(e.Path))
 		base := strings.ToLower(filepath.Base(e.Path))
 		if !nonExecutableExts[ext] && !looksLikeLockfile(base) {
@@ -92,6 +98,32 @@ func checkUnexpectedExecutableBit(ctx context.Context, root string, opts json.Ra
 		})
 	}
 	return out, nil
+}
+
+// scriptDirPrefixes are top-level directory names where executable bits are
+// intentional: scripts, binaries, and distribution wrappers live here.
+var scriptDirPrefixes = []string{
+	"bin/",
+	"scripts/",
+	"script/",
+	"tools/",
+	"tool/",
+	"cmd/",
+	"hack/",
+	".bin/",
+}
+
+// isInScriptDir returns true when the relative path starts with one of the
+// known script/binary directory prefixes (depth-1 only: we only exempt
+// the conventional top-level dirs, not arbitrary nested `bin/` folders).
+func isInScriptDir(rel string) bool {
+	slash := filepath.ToSlash(rel)
+	for _, prefix := range scriptDirPrefixes {
+		if strings.HasPrefix(slash, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // looksLikeLockfile catches package-lock.json, Cargo.lock, poetry.lock,
@@ -146,6 +178,10 @@ func checkVendoredDirTracked(ctx context.Context, root string, opts json.RawMess
 	}
 	scan := parseScanOptions(opts)
 
+	// Build a set of directory prefixes that are legitimately vendored in
+	// this project (i.e. not a mistake to commit).
+	legitimateVendor := buildLegitimateVendorSet(root)
+
 	// One finding per offending top-level directory, not per file —
 	// otherwise a stray node_modules with 50k files would bury the
 	// Problems pane.
@@ -163,6 +199,9 @@ func checkVendoredDirTracked(ctx context.Context, root string, opts json.RawMess
 					break
 				}
 				seen[key] = true
+				if legitimateVendor[prefix] {
+					break
+				}
 				out = append(out, Finding{
 					Severity: SeverityWarning,
 					Title:    "Vendored directory tracked in git",
@@ -177,6 +216,29 @@ func checkVendoredDirTracked(ctx context.Context, root string, opts json.RawMess
 		}
 	}
 	return out, nil
+}
+
+// buildLegitimateVendorSet returns the set of vendoredDirPrefixes that are
+// deliberately committed in this project and should not trigger a warning.
+//
+// Rules applied:
+//   - "vendor/" is legitimate when go.mod + vendor/modules.txt both exist
+//     (Go's -mod=vendor idiom for reproducible, air-gapped builds).
+//   - "vendor/" is also legitimate when composer.json + vendor/autoload.php
+//     both exist (PHP Composer idiom).
+func buildLegitimateVendorSet(root string) map[string]bool {
+	ok := map[string]bool{}
+	fileExists := func(parts ...string) bool {
+		_, err := os.Stat(filepath.Join(parts...))
+		return err == nil
+	}
+	if fileExists(root, "go.mod") && fileExists(root, "vendor", "modules.txt") {
+		ok["vendor/"] = true
+	}
+	if fileExists(root, "composer.json") && fileExists(root, "vendor", "autoload.php") {
+		ok["vendor/"] = true
+	}
+	return ok
 }
 
 // dirMatchesAtAnyDepth returns true when rel contains "/<prefix>" or starts
@@ -382,10 +444,36 @@ func checkNvmrcMissing(_ context.Context, root string, _ json.RawMessage) ([]Fin
 			return nil, nil
 		}
 	}
+	// Silent when package.json declares the runtime via engines.node or volta.
+	if pkgNodeVersionDeclared(pkgPath) {
+		return nil, nil
+	}
 	return []Finding{{
 		Severity: SeverityInfo,
 		Title:    "package.json without .nvmrc / .node-version",
 		Message:  "package.json exists but no .nvmrc / .node-version pins the runtime. nvm/asdf/Volta users (and CI runners) will silently pick whatever Node is on PATH. Add a one-line .nvmrc with the target version.",
 		FilePath: ".nvmrc",
 	}}, nil
+}
+
+// pkgNodeVersionDeclared returns true when package.json at pkgPath
+// carries an engines.node constraint or a volta.node pin — either is a
+// sufficient, standards-compliant alternative to .nvmrc / .node-version.
+func pkgNodeVersionDeclared(pkgPath string) bool {
+	data, err := os.ReadFile(pkgPath)
+	if err != nil {
+		return false
+	}
+	var pkg struct {
+		Engines struct {
+			Node string `json:"node"`
+		} `json:"engines"`
+		Volta struct {
+			Node string `json:"node"`
+		} `json:"volta"`
+	}
+	if err := json.Unmarshal(data, &pkg); err != nil {
+		return false
+	}
+	return pkg.Engines.Node != "" || pkg.Volta.Node != ""
 }

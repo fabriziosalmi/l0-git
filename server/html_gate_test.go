@@ -80,6 +80,26 @@ func TestHTML_MysteryMeatNav(t *testing.T) {
 	}
 }
 
+// SVG <title> provides an accessible name — must not fire mystery_meat_nav.
+func TestHTML_MysteryMeatNav_SVGTitle(t *testing.T) {
+	fs := runHTMLRules(t, `<button><svg><title>Close</title><path/></svg></button>`)
+	if findFindingByRule(fs, "mystery_meat_nav") != nil {
+		t.Errorf("SVG <title> must satisfy accessible name: %+v", fs)
+	}
+	fs = runHTMLRules(t, `<a href="/home"><svg><title>Home</title></svg></a>`)
+	if findFindingByRule(fs, "mystery_meat_nav") != nil {
+		t.Errorf("SVG <title> in anchor must satisfy accessible name: %+v", fs)
+	}
+}
+
+// aria-label with only whitespace must NOT satisfy the accessible name requirement.
+func TestHTML_MysteryMeatNav_WhitespaceAriaLabel(t *testing.T) {
+	fs := runHTMLRules(t, `<button aria-label="   "><svg/></button>`)
+	if findFindingByRule(fs, "mystery_meat_nav") == nil {
+		t.Errorf("whitespace-only aria-label must not satisfy accessible name: %+v", fs)
+	}
+}
+
 func TestHTML_PlaceholderAsLabel(t *testing.T) {
 	fs := runHTMLRules(t, `<form><input id="email" placeholder="Email"></form>`)
 	if findFindingByRule(fs, "placeholder_as_label") == nil {

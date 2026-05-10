@@ -44,20 +44,25 @@ func runGit(t *testing.T, dir string, args ...string) {
 // fake match in a tracked file and asserts the corresponding pattern_id
 // shows up in the findings.
 func TestSecretsScan_PatternsFire(t *testing.T) {
+	// High-entropy strings are required for patterns with an entropy floor.
+	// These are synthetic but random-looking; patterns without entropy checks
+	// (private_key_header) use their literal structure.
 	cases := []struct {
 		name      string
 		content   string
 		patternID string
 	}{
-		{"aws", "AKIA" + strings.Repeat("A", 16), "aws_access_key"},
-		{"github_classic", "ghp_" + strings.Repeat("a", 36), "github_pat_classic"},
-		{"github_fg", "github_pat_" + strings.Repeat("a", 82), "github_pat_fg"},
-		{"openai", "sk-" + strings.Repeat("a", 48), "openai_key"},
-		{"anthropic", "sk-ant-" + strings.Repeat("a", 50), "anthropic_key"},
-		{"google", "AIza" + strings.Repeat("a", 35), "google_api_key"},
-		{"slack", "xoxb-" + strings.Repeat("a", 20), "slack_token"},
-		{"stripe", "sk_live_" + strings.Repeat("a", 30), "stripe_live"},
-		{"jwt", "eyJ" + strings.Repeat("a", 12) + ".eyJ" + strings.Repeat("a", 12) + "." + strings.Repeat("a", 12), "jwt"},
+		// AWS: charset is [0-9A-Z] only — use uppercase + digits.
+		{"aws", "AKIA1A2B3C4D5E6F7G8H", "aws_access_key"},
+		// GitHub classic: mixed case + digits.
+		{"github_classic", "ghp_" + highEntropyAlnum(36), "github_pat_classic"},
+		{"github_fg", "github_pat_" + highEntropyAlnum(82), "github_pat_fg"},
+		{"openai", "sk-" + highEntropyAlnum(48), "openai_key"},
+		{"anthropic", "sk-ant-" + highEntropyAlnum(50), "anthropic_key"},
+		{"google", "AIza" + highEntropyAlnum(35), "google_api_key"},
+		{"slack", "xoxb-1a2B3c4D5e6F7g8H12", "slack_token"},
+		{"stripe", "sk_live_" + highEntropyAlnum(30), "stripe_live"},
+		{"jwt", "eyJ" + highEntropyAlnum(12) + ".eyJ" + highEntropyAlnum(12) + "." + highEntropyAlnum(12), "jwt"},
 		{"pem", "-----BEGIN RSA PRIVATE KEY-----", "private_key_header"},
 	}
 	ctx := context.Background()
@@ -193,9 +198,10 @@ func TestSecretsScan_LargeFileSkipped(t *testing.T) {
 // gate_options.secrets_scan.exclude_paths must skip files whose relative
 // path matches a glob pattern, leaving genuine matches everywhere else.
 func TestSecretsScan_ExcludePaths(t *testing.T) {
+	key := "AKIA1A2B3C4D5E6F7G8H" // high-entropy AWS-format key (uppercase+digits)
 	root := initRepoWithFiles(t, map[string]string{
-		"src/leaky.txt":  "AKIA" + strings.Repeat("A", 16) + "\n",
-		"test/leaky.txt": "AKIA" + strings.Repeat("B", 16) + "\n",
+		"src/leaky.txt":  key + "\n",
+		"test/leaky.txt": key + "\n",
 	})
 	opts := []byte(`{"exclude_paths": ["test/*"]}`)
 	fs, err := checkSecretsScan(context.Background(), root, opts)
@@ -210,6 +216,63 @@ func TestSecretsScan_ExcludePaths(t *testing.T) {
 	// And the unexcluded file is still flagged.
 	if !findingsContainPattern(fs, "aws_access_key") {
 		t.Errorf("expected aws_access_key from src/, got: %+v", fs)
+	}
+}
+
+// highEntropyAlnum returns a deterministic alphanumeric string of length n
+// with Shannon entropy ≥ 3.5 bits/char, suitable for use in test vectors
+// that must clear the entropy floor of secretPatterns.
+func highEntropyAlnum(n int) string {
+	const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = alphabet[i%len(alphabet)]
+	}
+	return string(b)
+}
+
+// TestShannonEntropy validates the helper against known values.
+func TestShannonEntropy(t *testing.T) {
+	cases := []struct {
+		s    string
+		low  bool // true = below 3.5 threshold
+	}{
+		{strings.Repeat("A", 20), true},          // single char → entropy 0
+		{"AKIA" + strings.Repeat("A", 16), true}, // mostly same char
+		{"AKIA1a2B3c4D5e6F7g8H", false},          // 8 distinct chars, 4 bits
+		{highEntropyAlnum(40), false},             // cycling 62-char alphabet
+	}
+	for _, c := range cases {
+		h := shannonEntropy(c.s)
+		below := h < 3.5
+		if below != c.low {
+			t.Errorf("shannonEntropy(%q) = %.2f; below-3.5=%v, want %v", c.s, h, below, c.low)
+		}
+	}
+}
+
+// TestSecretsScan_LowEntropySkipped verifies that pattern matches with
+// entropy below 3.5 bits/char are silently dropped (not false-positived).
+func TestSecretsScan_LowEntropySkipped(t *testing.T) {
+	cases := []string{
+		"AKIA" + strings.Repeat("A", 16), // AWS mock — all same char
+		"ghp_" + strings.Repeat("a", 36), // GitHub mock
+		"sk-" + strings.Repeat("a", 48),  // OpenAI mock
+	}
+	ctx := context.Background()
+	for _, content := range cases {
+		t.Run(content[:10], func(t *testing.T) {
+			root := initRepoWithFiles(t, map[string]string{"low_entropy.txt": content + "\n"})
+			fs, err := checkSecretsScan(ctx, root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, f := range fs {
+				if f.FilePath != "low_entropy.txt:0:env_tracked" {
+					t.Errorf("low-entropy match must be skipped, got: %+v", f)
+				}
+			}
+		})
 	}
 }
 

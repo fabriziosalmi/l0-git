@@ -29,10 +29,11 @@ type composeFinding struct {
 }
 
 type composeRule struct {
-	id       string
-	severity string
-	title    string
-	advice   string
+	id             string
+	severity       string
+	title          string
+	advice         string
+	overrideAliases []string // parent rule IDs whose inline overrides also silence this rule
 }
 
 var composeRules = map[string]composeRule{
@@ -59,6 +60,15 @@ var composeRules = map[string]composeRule{
 		severity: SeverityWarning,
 		title:    "Compose service mounts the Docker socket",
 		advice:   "Mounting /var/run/docker.sock into a container effectively grants it root on the host. Tools like Traefik/Portainer/Watchtower do this by design — if so, override with `# l0git: ignore docker_socket_mount reason: …`.",
+	},
+	// Same rule, info-level — emitted when the image is a well-known
+	// orchestrator/proxy that requires socket access by design.
+	"docker_socket_mount_orchestrator": {
+		id:              "docker_socket_mount_orchestrator",
+		severity:        SeverityInfo,
+		title:           "Compose orchestrator image mounts the Docker socket",
+		advice:          "This image (Traefik, Portainer, Watchtower, …) requires /var/run/docker.sock by design. The mount is expected — no action needed unless you want to restrict it.",
+		overrideAliases: []string{"docker_socket_mount"},
 	},
 	"missing_memory_limit": {
 		id:       "missing_memory_limit",
@@ -224,10 +234,18 @@ func scanComposeService(svc *yaml.Node) []composeFinding {
 	if v := mappingValue(svc, "volumes"); v != nil && v.Kind == yaml.SequenceNode {
 		for _, item := range v.Content {
 			if isDockerSocketMount(item) {
+				// Demote to info for well-known orchestrator/proxy images that
+				// require Docker socket access by design.
+				sev := "docker_socket_mount"
+				msg := "volumes mount /var/run/docker.sock"
+				if isOrchestratorImage(svc) {
+					sev = "docker_socket_mount_orchestrator"
+					msg = "volumes mount /var/run/docker.sock (orchestrator image — expected)"
+				}
 				out = append(out, composeFinding{
-					ruleID:  "docker_socket_mount",
+					ruleID:  sev,
 					line:    item.Line,
-					message: "volumes mount /var/run/docker.sock",
+					message: msg,
 				})
 				break // one finding per service is enough
 			}
@@ -282,6 +300,49 @@ func hasMemoryLimit(svc *yaml.Node) bool {
 	return mappingValue(limits, "memory") != nil
 }
 
+// orchestratorImages are well-known container images that require the Docker
+// socket by design. We demote their docker_socket_mount finding to info so
+// the user doesn't have to add an inline override for every Traefik/Portainer
+// deployment.
+var orchestratorImages = []string{
+	"traefik",
+	"portainer/portainer",
+	"portainer/portainer-ce",
+	"portainer/portainer-ee",
+	"containrrr/watchtower",
+	"v2tec/watchtower",
+	"louislam/dockge",
+	"amir20/dozzle",
+	"gcr.io/cadvisor/cadvisor",
+	"google/cadvisor",
+	"nicolargo/glances",
+	"netdata/netdata",
+	"diun",
+	"crazymax/diun",
+	"autoheal",
+	"willfarrell/autoheal",
+}
+
+// isOrchestratorImage returns true when the service's image field starts with
+// one of the known orchestrator image names (tag/digest suffix ignored).
+func isOrchestratorImage(svc *yaml.Node) bool {
+	imgNode := mappingValue(svc, "image")
+	if imgNode == nil || imgNode.Kind != yaml.ScalarNode {
+		return false
+	}
+	img := strings.ToLower(imgNode.Value)
+	// Strip digest/tag for comparison.
+	if i := strings.IndexAny(img, ":@"); i >= 0 {
+		img = img[:i]
+	}
+	for _, known := range orchestratorImages {
+		if img == known || strings.HasSuffix(img, "/"+known) {
+			return true
+		}
+	}
+	return false
+}
+
 func isDockerSocketMount(node *yaml.Node) bool {
 	switch node.Kind {
 	case yaml.ScalarNode:
@@ -317,7 +378,7 @@ func collectComposeOverrides(content string) map[int]*gateOverride {
 }
 
 func ruleFinding(rel string, line int, rule composeRule, msg string, overrides map[int]*gateOverride) Finding {
-	if ov := lookupOverrideForRule(line, overrides, rule.id); ov != nil {
+	if ov := lookupOverrideForRule(line, overrides, rule.id, rule.overrideAliases...); ov != nil {
 		// The override's own .Line was set during collection; embed it
 		// into a synthetic instruction so we can reuse the shared
 		// audit-trail formatter.
@@ -343,11 +404,21 @@ func ruleFinding(rel string, line int, rule composeRule, msg string, overrides m
 const overrideLookbackLines = 6
 
 // lookupOverrideForRule scans upward from `line` and returns the first
-// override directive that matches ruleID. Returns nil when none applies.
-func lookupOverrideForRule(line int, overrides map[int]*gateOverride, ruleID string) *gateOverride {
+// override directive that matches ruleID or any of aliasIDs. Returns nil
+// when none applies.
+//
+// aliasIDs allows "parent" rule IDs to silence derived variants — e.g. an
+// override for `docker_socket_mount` also silences
+// `docker_socket_mount_orchestrator`.
+func lookupOverrideForRule(line int, overrides map[int]*gateOverride, ruleID string, aliasIDs ...string) *gateOverride {
+	ids := append([]string{ruleID}, aliasIDs...)
 	for delta := 0; delta <= overrideLookbackLines; delta++ {
-		if ov, ok := overrides[line-delta]; ok && ov.matches(ruleID) {
-			return ov
+		if ov, ok := overrides[line-delta]; ok {
+			for _, id := range ids {
+				if ov.matches(id) {
+					return ov
+				}
+			}
 		}
 	}
 	return nil

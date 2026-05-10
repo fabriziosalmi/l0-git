@@ -69,10 +69,36 @@ func TestCompose_DockerSocketShortAndLongForm(t *testing.T) {
 	for name, src := range map[string]string{"short": short, "long": long} {
 		t.Run(name, func(t *testing.T) {
 			fs := runComposeRules(t, src)
-			if findFindingByRule(fs, "docker_socket_mount") == nil {
-				t.Errorf("expected docker_socket_mount for %s form, got: %+v", name, fs)
+			// Traefik is a known orchestrator image — finding must be demoted to info.
+			f := findFindingByRule(fs, "docker_socket_mount_orchestrator")
+			if f == nil {
+				t.Errorf("expected docker_socket_mount_orchestrator (info) for Traefik %s form, got: %+v", name, fs)
+			} else if f.Severity != SeverityInfo {
+				t.Errorf("Traefik socket mount must be info, got: %s", f.Severity)
+			}
+			// Must NOT produce the warning-level variant.
+			if findFindingByRule(fs, "docker_socket_mount") != nil {
+				t.Errorf("Traefik must not produce warning-level docker_socket_mount")
 			}
 		})
+	}
+}
+
+// A non-orchestrator image mounting the socket keeps the warning.
+func TestCompose_DockerSocketNonOrchestratorWarns(t *testing.T) {
+	src := `services:
+  app:
+    image: myapp:latest
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+`
+	fs := runComposeRules(t, src)
+	if findFindingByRule(fs, "docker_socket_mount") == nil {
+		t.Errorf("non-orchestrator image must produce docker_socket_mount warning, got: %+v", fs)
 	}
 }
 
@@ -149,12 +175,18 @@ func TestCompose_InlineOverride(t *testing.T) {
           memory: 128M
 `
 	fs := runComposeRules(t, src)
+	// Neither the warning nor the orchestrator-info variant must survive the override.
 	if findFindingByRule(fs, "docker_socket_mount") != nil {
-		t.Errorf("override must silence docker_socket_mount: %+v", fs)
+		t.Errorf("override must silence docker_socket_mount warning: %+v", fs)
 	}
+	if findFindingByRule(fs, "docker_socket_mount_orchestrator") != nil {
+		t.Errorf("override must also silence docker_socket_mount_orchestrator: %+v", fs)
+	}
+	// An audit-trail override_accepted finding must appear.
 	found := false
 	for _, f := range fs {
-		if strings.HasSuffix(f.FilePath, ":override_docker_socket_mount") {
+		if strings.HasSuffix(f.FilePath, ":override_docker_socket_mount") ||
+			strings.HasSuffix(f.FilePath, ":override_docker_socket_mount_orchestrator") {
 			found = true
 			if f.Severity != SeverityInfo {
 				t.Errorf("override severity = %q, want info", f.Severity)
@@ -165,7 +197,7 @@ func TestCompose_InlineOverride(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("expected override_docker_socket_mount audit finding, got: %+v", fs)
+		t.Errorf("expected override audit finding, got: %+v", fs)
 	}
 }
 
