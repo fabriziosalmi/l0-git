@@ -131,3 +131,51 @@ func TestCSS_CommentsPreserveLines(t *testing.T) {
 		t.Errorf("expected line 5 (after multi-line comment), got %q", f.FilePath)
 	}
 }
+
+// body.dark-theme is still body text — thin weight should fire.
+func TestCSS_ThinFontWeight_BodyWithModifierClass(t *testing.T) {
+	src := `body.dark-theme { font-weight: 100; }
+`
+	fs := runCSSRules(t, src)
+	if findFindingByRule(fs, "thin_font_weight") == nil {
+		t.Errorf("expected thin_font_weight for body.dark-theme, got: %+v", fs)
+	}
+}
+
+// Comma-separated selector list — one body-text part is enough.
+func TestCSS_ThinFontWeight_CommaSelector(t *testing.T) {
+	src := `html, body { font-weight: 200; }
+`
+	fs := runCSSRules(t, src)
+	if findFindingByRule(fs, "thin_font_weight") == nil {
+		t.Errorf("expected thin_font_weight for html, body selector, got: %+v", fs)
+	}
+}
+
+// @media print { … justify … } must NOT fire.
+func TestCSS_JustifiedText_PrintMediaExempt(t *testing.T) {
+	src := `@media print {
+  p {
+    text-align: justify;
+  }
+}
+`
+	fs := runCSSRules(t, src)
+	if findFindingByRule(fs, "justified_text") != nil {
+		t.Errorf("justified_text must be silent inside @media print, got: %+v", fs)
+	}
+}
+
+// Outside @media print the rule still fires.
+func TestCSS_JustifiedText_NonPrintFires(t *testing.T) {
+	src := `@media screen {
+  p {
+    text-align: justify;
+  }
+}
+`
+	fs := runCSSRules(t, src)
+	if findFindingByRule(fs, "justified_text") == nil {
+		t.Errorf("expected justified_text outside @media print, got: %+v", fs)
+	}
+}

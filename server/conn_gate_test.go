@@ -134,3 +134,23 @@ func TestConnectionStrings_NotGitRepo(t *testing.T) {
 		t.Errorf("expected one info skip, got: %+v", fs)
 	}
 }
+
+// Single-label hostnames (Docker/k8s service names) must never fire.
+func TestConnectionStrings_SingleLabelHostExempt(t *testing.T) {
+	for _, url := range []string{
+		"http://kafka/health",
+		"http://redis:6379",
+		"http://db-primary/api",
+		"http://elasticsearch:9200",
+		"http://backend",
+	} {
+		t.Run(url, func(t *testing.T) {
+			fs := scanConnectionLine("config.yml", 1, []byte(url))
+			for _, f := range fs {
+				if strings.HasSuffix(f.FilePath, ":http_remote") {
+					t.Errorf("single-label host %q must be exempt, got finding: %+v", url, f)
+				}
+			}
+		})
+	}
+}

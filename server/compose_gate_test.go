@@ -8,7 +8,7 @@ import (
 
 func runComposeRules(t *testing.T, src string) []Finding {
 	t.Helper()
-	return evaluateComposeFile("compose.yml", []byte(src), nil)
+	return evaluateComposeFile("compose.yml", []byte(src), nil, nil)
 }
 
 func TestCompose_PrivilegedTrue(t *testing.T) {
@@ -247,5 +247,54 @@ func TestCompose_SuggestWhenMissing(t *testing.T) {
 	}
 	if len(fs2) != 1 || fs2[0].Severity != SeverityInfo {
 		t.Errorf("expected 1 info finding, got: %+v", fs2)
+	}
+}
+
+// nginx is now an orchestrator — should be demoted to info.
+func TestCompose_NginxProxyDemotedToInfo(t *testing.T) {
+	src := `services:
+  proxy:
+    image: nginx
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+`
+	fs := runComposeRules(t, src)
+	for _, f := range fs {
+		if strings.HasSuffix(f.FilePath, ":docker_socket_mount") {
+			t.Errorf("nginx must be demoted, got warning: %+v", f)
+		}
+	}
+	found := false
+	for _, f := range fs {
+		if strings.HasSuffix(f.FilePath, ":docker_socket_mount_orchestrator") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected docker_socket_mount_orchestrator for nginx, got: %+v", fs)
+	}
+}
+
+// additional_orchestrator_images gate option lets users extend the list.
+func TestCompose_AdditionalOrchestratorImages(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"compose.yml": `services:
+  myproxy:
+    image: acme/custom-proxy:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+`,
+	})
+	runGit(t, root, "commit", "--allow-empty", "-q", "-m", "init")
+
+	opts := []byte(`{"additional_orchestrator_images": ["acme/custom-proxy"]}`)
+	fs, err := checkComposeLint(context.Background(), root, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fs {
+		if strings.HasSuffix(f.FilePath, ":docker_socket_mount") {
+			t.Errorf("custom orchestrator must be demoted, got warning: %+v", f)
+		}
 	}
 }

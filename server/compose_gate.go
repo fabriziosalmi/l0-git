@@ -14,8 +14,9 @@ import (
 // composeLintOptions is the shape of gate_options.compose_lint.
 type composeLintOptions struct {
 	scanOptions
-	DisabledRules      []string `json:"disabled_rules,omitempty"`
-	SuggestWhenMissing bool     `json:"suggest_when_missing,omitempty"`
+	DisabledRules               []string `json:"disabled_rules,omitempty"`
+	SuggestWhenMissing          bool     `json:"suggest_when_missing,omitempty"`
+	AdditionalOrchestratorImages []string `json:"additional_orchestrator_images,omitempty"`
 }
 
 // composeFinding is the gate's intermediate structure: a (line, ruleID,
@@ -132,7 +133,7 @@ func checkComposeLint(ctx context.Context, root string, opts json.RawMessage) ([
 		if err != nil {
 			continue
 		}
-		out = append(out, evaluateComposeFile(rel, data, disabled)...)
+		out = append(out, evaluateComposeFile(rel, data, disabled, options.AdditionalOrchestratorImages)...)
 	}
 	return out, nil
 }
@@ -153,7 +154,7 @@ func isComposeBasename(name string) bool {
 // evaluateComposeFile parses one compose file and applies every enabled
 // rule. Pulled out so dockerfile_lint-style direct unit tests can target
 // the same code path the runner uses.
-func evaluateComposeFile(rel string, data []byte, disabled map[string]bool) []Finding {
+func evaluateComposeFile(rel string, data []byte, disabled map[string]bool, extraOrchestrators []string) []Finding {
 	overrides := collectComposeOverrides(string(data))
 
 	var root yaml.Node
@@ -189,7 +190,7 @@ func evaluateComposeFile(rel string, data []byte, disabled map[string]bool) []Fi
 			continue
 		}
 		_ = nameNode // currently kept for future "service: foo" prefixing
-		composeViolations = append(composeViolations, scanComposeService(serviceNode)...)
+		composeViolations = append(composeViolations, scanComposeService(serviceNode, extraOrchestrators)...)
 	}
 
 	out := []Finding{}
@@ -209,7 +210,7 @@ func evaluateComposeFile(rel string, data []byte, disabled map[string]bool) []Fi
 // scanComposeService walks one service mapping and emits violations for
 // every rule that applies. Each violation carries the line of the
 // offending YAML node so findings can pin to the right place.
-func scanComposeService(svc *yaml.Node) []composeFinding {
+func scanComposeService(svc *yaml.Node, extraOrchestrators []string) []composeFinding {
 	out := []composeFinding{}
 
 	// privileged: true
@@ -238,7 +239,7 @@ func scanComposeService(svc *yaml.Node) []composeFinding {
 				// require Docker socket access by design.
 				sev := "docker_socket_mount"
 				msg := "volumes mount /var/run/docker.sock"
-				if isOrchestratorImage(svc) {
+				if isOrchestratorImage(svc, extraOrchestrators) {
 					sev = "docker_socket_mount_orchestrator"
 					msg = "volumes mount /var/run/docker.sock (orchestrator image — expected)"
 				}
@@ -305,27 +306,49 @@ func hasMemoryLimit(svc *yaml.Node) bool {
 // the user doesn't have to add an inline override for every Traefik/Portainer
 // deployment.
 var orchestratorImages = []string{
+	// Reverse proxies / load balancers
 	"traefik",
+	"nginx",
+	"jwilder/nginx-proxy",
+	"nginxproxy/nginx-proxy",
+	"haproxy",
+	"envoyproxy/envoy",
+	"caddy",
+	// Container management / orchestration UI
 	"portainer/portainer",
 	"portainer/portainer-ce",
 	"portainer/portainer-ee",
+	"louislam/dockge",
+	"louislam/portainer",
+	// Auto-update / lifecycle
 	"containrrr/watchtower",
 	"v2tec/watchtower",
-	"louislam/dockge",
+	"willfarrell/autoheal",
+	"autoheal",
+	// Monitoring / observability
 	"amir20/dozzle",
 	"gcr.io/cadvisor/cadvisor",
 	"google/cadvisor",
 	"nicolargo/glances",
 	"netdata/netdata",
+	"prom/prometheus",
+	"grafana/grafana",
+	"grafana/loki",
+	"grafana/promtail",
+	"grafana/alloy",
+	"prom/alertmanager",
+	"prom/node-exporter",
+	"quay.io/prometheus/node-exporter",
+	// Image update notifications
 	"diun",
 	"crazymax/diun",
-	"autoheal",
-	"willfarrell/autoheal",
+	"ghcr.io/nicholaswilde/diun",
+	"containrrr/diun",
 }
 
 // isOrchestratorImage returns true when the service's image field starts with
 // one of the known orchestrator image names (tag/digest suffix ignored).
-func isOrchestratorImage(svc *yaml.Node) bool {
+func isOrchestratorImage(svc *yaml.Node, extra []string) bool {
 	imgNode := mappingValue(svc, "image")
 	if imgNode == nil || imgNode.Kind != yaml.ScalarNode {
 		return false
@@ -335,7 +358,12 @@ func isOrchestratorImage(svc *yaml.Node) bool {
 	if i := strings.IndexAny(img, ":@"); i >= 0 {
 		img = img[:i]
 	}
-	for _, known := range orchestratorImages {
+	all := orchestratorImages
+	if len(extra) > 0 {
+		all = append(all, extra...)
+	}
+	for _, known := range all {
+		known = strings.ToLower(known)
 		if img == known || strings.HasSuffix(img, "/"+known) {
 			return true
 		}

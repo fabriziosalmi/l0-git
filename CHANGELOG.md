@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-05-10
+
+### Fixed (false-positive reduction — round 2, 5 gates)
+
+- **`connection_strings`**: single-label hostnames (no dot) are now exempt from the `http_remote` rule — `http://kafka`, `http://redis`, `http://db-primary` are Docker/k8s internal service names that are never reachable on the public internet.
+- **`css_lint` / `thin_font_weight`**: `selectorIsBodyText` now handles element selectors with class/pseudo-class modifiers (`body.dark-theme`, `p:not(.lead)`) and comma-separated lists (`html, body { … }`); the `"html, body"` dead case in the switch was removed.
+- **`css_lint` / `justified_text`**: `@media print { … }` blocks are exempt — justified text is standard typographic practice in print stylesheets where hyphenation is controlled by the renderer.
+- **`compose_lint`**: orchestrator image list extended with `nginx`, `jwilder/nginx-proxy`, `nginxproxy/nginx-proxy`, `haproxy`, `envoyproxy/envoy`, `caddy`, `prom/prometheus`, `grafana/grafana`, `grafana/loki`, `grafana/promtail`, `prom/alertmanager`, `prom/node-exporter`, and more; new gate option `additional_orchestrator_images` lets projects add custom entries without an inline override per service.
+- **`vendored_dir_tracked`**: `vendor/` is now exempt in Ruby projects that have `Gemfile` + `vendor/bundle/` (Bundler `--deployment` / `--path vendor/bundle` idiom for hermetic builds).
+
 ## [0.1.7] - 2026-05-10
 
 ### Fixed (false-positive reduction — 14 gates)
