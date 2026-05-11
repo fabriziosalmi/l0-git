@@ -4,7 +4,7 @@
 VERSION ?= dev
 LDFLAGS  := -s -w -X main.Version=$(VERSION)
 
-.PHONY: help build test vet extension-bins extension-compile vsix clean install-mcp update status
+.PHONY: help build test vet extension-bins extension-compile vsix clean install-mcp update update-local status release-patch release-minor release-major release-dry
 
 help:
 	@echo "Targets:"
@@ -16,7 +16,12 @@ help:
 	@echo "  vsix              — package the extension (.vsix)"
 	@echo "  install-mcp       — register the local lgit with claude code"
 	@echo "  update            — pull latest, rebuild, re-register MCP (+ restart hints)"
+	@echo "  update-local      — same as 'update' but without git pull"
 	@echo "  status            — show binary version and MCP registration state"
+	@echo "  release-patch     — bump patch (X.Y.Z+1), tag, push → triggers GH release"
+	@echo "  release-minor     — bump minor (X.Y+1.0), tag, push → triggers GH release"
+	@echo "  release-major     — bump major (X+1.0.0), tag, push → triggers GH release"
+	@echo "  release-dry       — show what 'release-patch' WOULD do (no changes)"
 	@echo "  clean             — remove server binary, extension/bin, .vsix files"
 
 build:
@@ -74,6 +79,18 @@ status:
 	else \
 		echo "  claude CLI not found in PATH"; \
 	fi
+
+release-patch:
+	@bash scripts/release.sh patch
+
+release-minor:
+	@bash scripts/release.sh minor
+
+release-major:
+	@bash scripts/release.sh major
+
+release-dry:
+	@bash scripts/release.sh --dry-run patch
 
 clean:
 	rm -f server/lgit server/lgit.exe

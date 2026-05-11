@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-05-11
+
+### Added
+
+- **`scripts/update.sh` — lifecycle manager for the local install**. Pulls the latest `main`, rebuilds the `lgit` binary, re-registers the Claude Code MCP server, and prints a restart hint. Flags: `--no-pull` (build current tree), `--dry-run`, `--quiet`, `--force` (skip dirty-tree check), `--no-mcp`, `--no-restart-hint`. Runs from any subdirectory — `cd`s to repo root itself.
+- **`make update` / `make update-local` / `make status`** — thin Makefile wrappers around `scripts/update.sh` plus a status target that prints the binary version, running `lgit` PIDs, and the Claude Code MCP registration state. No more guessing which `lgit` is wired up.
+- **`scripts/release.sh` + `make release-patch|release-minor|release-major`** — one-command release flow: verifies clean tree on `main` up-to-date with `origin`, bumps `extension/package.json` and `extension/package-lock.json`, rotates the CHANGELOG `Unreleased` section to the new version with today's date, commits, creates an annotated tag, and pushes both — which triggers the `release.yml` workflow that publishes binaries and `.vsix`.
+
+### Fixed
+
+- **Extension version alignment**: `extension/package.json` and `extension/package-lock.json` were stuck at `0.1.11` and `0.1.6` respectively across every tag from `v0.1.7` onward. The published `.vsix` therefore reported a stale internal version regardless of the tag name. Both files are now in lock-step with the release tag, enforced by `scripts/release.sh`.
+
 ## [0.1.12] - 2026-05-10
 
 ### Added
