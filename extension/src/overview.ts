@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import { randomBytes } from "crypto";
 
 // Stats matches server/store.go FindingsStats. Kept loose-typed where the
 // shape isn't load-bearing in the renderer.
@@ -205,7 +206,8 @@ button.secondary:hover { background: var(--vscode-button-secondaryHoverBackgroun
   white-space: nowrap;
 }
 .row { display: flex; align-items: center; gap: 10px; padding: 4px 6px; border-radius: 2px; cursor: pointer; }
-.row:hover { background: var(--row-hover); }
+.row:hover, .row:focus-visible { background: var(--row-hover); outline: none; }
+.chip:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
 .row .key { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9em; }
 .row .count { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.85em; min-width: 30px; text-align: right; }
 .row .row-bar { width: 60px; height: 6px; background: var(--bar-bg); border-radius: 1px; overflow: hidden; }
@@ -286,16 +288,47 @@ button.secondary:hover { background: var(--vscode-button-secondaryHoverBackgroun
 
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
-document.getElementById("run").addEventListener("click", () => vscode.postMessage({ cmd: "runChecks" }));
-document.getElementById("refresh").addEventListener("click", () => vscode.postMessage({ cmd: "refresh" }));
-document.querySelectorAll("[data-gate]").forEach(el => {
-  el.addEventListener("click", () => vscode.postMessage({ cmd: "filterGate", payload: el.getAttribute("data-gate") }));
+
+// Double-click guard: a scan takes seconds, so an impatient user can
+// fire several runChecks in parallel. Disabling both action buttons +
+// aria-busy on body for the duration is enough — the next refresh
+// re-renders the whole panel, which replaces these elements wholesale.
+const runBtn = document.getElementById("run");
+const refreshBtn = document.getElementById("refresh");
+function setBusy(label) {
+  if (runBtn) { runBtn.disabled = true; if (label) runBtn.textContent = label; }
+  if (refreshBtn) refreshBtn.disabled = true;
+  document.body.setAttribute("aria-busy", "true");
+}
+runBtn?.addEventListener("click", () => {
+  if (runBtn.disabled) return;
+  setBusy("⏳ Running…");
+  vscode.postMessage({ cmd: "runChecks" });
 });
-document.querySelectorAll("[data-tag]").forEach(el => {
-  el.addEventListener("click", () => vscode.postMessage({ cmd: "filterTag", payload: el.getAttribute("data-tag") }));
+refreshBtn?.addEventListener("click", () => {
+  if (refreshBtn.disabled) return;
+  setBusy(null);
+  vscode.postMessage({ cmd: "refresh" });
 });
-document.querySelectorAll("[data-file]").forEach(el => {
-  el.addEventListener("click", () => vscode.postMessage({ cmd: "openFile", payload: el.getAttribute("data-file") }));
+
+// One delegated activator handles click + Enter/Space for every
+// role=button cell. data-* attributes pick the postMessage shape.
+function activate(el) {
+  const gate = el.getAttribute("data-gate");
+  if (gate) return vscode.postMessage({ cmd: "filterGate", payload: gate });
+  const tag = el.getAttribute("data-tag");
+  if (tag) return vscode.postMessage({ cmd: "filterTag", payload: tag });
+  const file = el.getAttribute("data-file");
+  if (file) return vscode.postMessage({ cmd: "openFile", payload: file });
+}
+document.querySelectorAll("[data-gate],[data-tag],[data-file]").forEach(el => {
+  el.addEventListener("click", () => activate(el));
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      activate(el);
+    }
+  });
 });
 </script>
 </body>
@@ -340,7 +373,7 @@ function renderGateRows(rows: KeyCount[]): string {
   return rows
     .map((r) => {
       const pct = Math.round((r.count / max) * 100);
-      return `<div class="row" data-gate="${escapeAttr(r.key)}" title="Filter findings by ${escapeAttr(r.key)}">
+      return `<div class="row" role="button" tabindex="0" data-gate="${escapeAttr(r.key)}" aria-label="Filter findings by gate ${escapeAttr(r.key)} (${r.count})" title="Filter findings by ${escapeAttr(r.key)}">
         <div class="key">${escapeHtml(r.key)}</div>
         <div class="row-bar"><div class="row-bar-fill" style="width:${pct}%"></div></div>
         <div class="count">${r.count}</div>
@@ -355,7 +388,7 @@ function renderFileRows(rows: KeyCount[]): string {
   return rows
     .map((r) => {
       const pct = Math.round((r.count / max) * 100);
-      return `<div class="row" data-file="${escapeAttr(r.key)}" title="Open ${escapeAttr(r.key)}">
+      return `<div class="row" role="button" tabindex="0" data-file="${escapeAttr(r.key)}" aria-label="Open ${escapeAttr(r.key)} (${r.count} findings)" title="Open ${escapeAttr(r.key)}">
         <div class="key">${escapeHtml(r.key)}</div>
         <div class="row-bar"><div class="row-bar-fill" style="width:${pct}%"></div></div>
         <div class="count">${r.count}</div>
@@ -369,7 +402,7 @@ function renderTagChips(rows: KeyCount[]): string {
   return `<div class="chips">${rows
     .map(
       (r) =>
-        `<span class="chip" data-tag="${escapeAttr(r.key)}" title="Search findings tagged ${escapeAttr(r.key)}">${escapeHtml(r.key)}<span class="chip-count">${r.count}</span></span>`,
+        `<span class="chip" role="button" tabindex="0" data-tag="${escapeAttr(r.key)}" aria-label="Search findings tagged ${escapeAttr(r.key)} (${r.count})" title="Search findings tagged ${escapeAttr(r.key)}">${escapeHtml(r.key)}<span class="chip-count">${r.count}</span></span>`,
     )
     .join("")}</div>`;
 }
@@ -404,11 +437,87 @@ function renderSparkline(days: DayCount[]): string {
   return `<div class="spark">${bars}</div><div class="spark-axis">${axis}</div>`;
 }
 
-function renderError(_webview: vscode.Webview, msg: string): string {
-  return `<!DOCTYPE html><html><body style="font-family:var(--vscode-font-family);padding:16px;">
-    <h2>l0-git Overview</h2>
-    <p>Failed to load stats: <code>${escapeHtml(msg)}</code></p>
-  </body></html>`;
+// renderError mirrors renderOverview's CSP + theming so a failed stats call
+// doesn't drop the user into an unstyled white page, and offers the same
+// Run/Refresh actions so the failure is recoverable in-place.
+function renderError(webview: vscode.Webview, msg: string): string {
+  const nonce = makeNonce();
+  const csp = [
+    "default-src 'none'",
+    `style-src ${webview.cspSource} 'unsafe-inline'`,
+    `script-src 'nonce-${nonce}'`,
+  ].join("; ");
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="${csp}">
+<style>
+body {
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+  margin: 0;
+  padding: 16px 20px;
+}
+h1 { font-size: 1.3em; margin: 0 0 8px 0; font-weight: 600; }
+.muted { color: var(--vscode-descriptionForeground); font-size: 0.9em; margin-bottom: 16px; }
+pre {
+  background: var(--vscode-textBlockQuote-background, var(--vscode-input-background));
+  border-left: 3px solid var(--vscode-errorForeground, #f14c4c);
+  padding: 8px 12px;
+  margin: 0 0 16px 0;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.9em;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.actions { display: flex; gap: 8px; }
+button {
+  font: inherit;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  padding: 4px 10px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+button:hover { background: var(--vscode-button-hoverBackground); }
+button.secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
+button.secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
+</style>
+</head>
+<body>
+<h1>l0-git Overview</h1>
+<div class="muted">Failed to load stats from the lgit binary.</div>
+<pre>${escapeHtml(msg)}</pre>
+<div class="actions">
+  <button id="run">▶ Run all checks</button>
+  <button id="refresh" class="secondary">Retry</button>
+</div>
+<script nonce="${nonce}">
+const vscode = acquireVsCodeApi();
+const runBtn = document.getElementById("run");
+const refreshBtn = document.getElementById("refresh");
+function setBusy(label) {
+  if (runBtn) { runBtn.disabled = true; if (label) runBtn.textContent = label; }
+  if (refreshBtn) refreshBtn.disabled = true;
+  document.body.setAttribute("aria-busy", "true");
+}
+runBtn?.addEventListener("click", () => {
+  if (runBtn.disabled) return;
+  setBusy("⏳ Running…");
+  vscode.postMessage({ cmd: "runChecks" });
+});
+refreshBtn?.addEventListener("click", () => {
+  if (refreshBtn.disabled) return;
+  setBusy(null);
+  vscode.postMessage({ cmd: "refresh" });
+});
+</script>
+</body>
+</html>`;
 }
 
 // =============================================================================
@@ -437,9 +546,9 @@ function shortDate(iso: string): string {
   return iso.length === 10 ? iso.slice(5) : iso;
 }
 
+// CSP nonces must be unpredictable — Math.random is not cryptographically
+// secure. Use Node's crypto RNG (always present in the extension host) and
+// emit url-safe base64 so the value plugs into a CSP header unchanged.
 function makeNonce(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let out = "";
-  for (let i = 0; i < 32; i++) out += chars.charAt(Math.floor(Math.random() * chars.length));
-  return out;
+  return randomBytes(24).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
