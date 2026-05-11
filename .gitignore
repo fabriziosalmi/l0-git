@@ -27,4 +27,4 @@ extension/bin/
 
 # Env
 .env
-.env.*
+.env.*\ndocs/node_modules\ndocs/.vitepress/dist

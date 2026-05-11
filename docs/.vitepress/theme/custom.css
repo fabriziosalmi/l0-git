@@ -1,0 +1,93 @@
+:root {
+  --vp-c-brand: #000000;
+  --vp-c-brand-next: #333333;
+  --vp-home-hero-name-color: #000000;
+  --vp-home-hero-name-background: transparent;
+  
+  --vp-font-family-base: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --vp-font-family-mono: "SF Mono", SFMono-Regular, ui-monospace, "DejaVu Sans Mono", Menlo, Consolas, monospace;
+}
+
+.dark {
+  --vp-c-brand: #ffffff;
+  --vp-c-brand-next: #cccccc;
+  --vp-home-hero-name-color: #ffffff;
+}
+
+/* Apple-like clean look */
+.vp-doc h1, .vp-doc h2, .vp-doc h3, .vp-doc h4 {
+  letter-spacing: -0.02em;
+  font-weight: 600;
+}
+
+.vp-doc p {
+  line-height: 1.6;
+  color: var(--vp-c-text-1);
+}
+
+.vp-doc code {
+  font-size: 0.9em;
+  background-color: var(--vp-c-bg-soft);
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+}
+
+/* Data-driven table look */
+.vp-doc table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 20px 0;
+  font-size: 0.95em;
+}
+
+.vp-doc th {
+  background-color: var(--vp-c-bg-soft);
+  text-align: left;
+  padding: 12px;
+  border-bottom: 2px solid var(--vp-c-divider);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.8em;
+  letter-spacing: 0.05em;
+}
+
+.vp-doc td {
+  padding: 12px;
+  border-bottom: 1px solid var(--vp-c-divider);
+}
+
+/* Sidebar clean look */
+.VPSidebarItem.level-0 .text {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75em;
+  letter-spacing: 0.05em;
+  color: var(--vp-c-text-2);
+}
+
+/* Remove emojis from VitePress defaults if any */
+.vp-doc .header-anchor::before {
+  content: none !important;
+}
+
+/* Custom button look */
+.VPButton.brand {
+  border-radius: 20px;
+  padding: 0 24px;
+  font-weight: 500;
+  background-color: var(--vp-c-brand);
+  color: var(--vp-c-bg);
+  transition: all 0.2s ease;
+}
+
+.VPButton.brand:hover {
+  opacity: 0.8;
+}
+
+.VPButton.alt {
+  border-radius: 20px;
+  padding: 0 24px;
+  font-weight: 500;
+  border: 1px solid var(--vp-c-divider);
+  transition: all 0.2s ease;
+}
