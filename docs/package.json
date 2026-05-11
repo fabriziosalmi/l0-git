@@ -1,6 +1,7 @@
 {
   "name": "l0-git-docs",
   "version": "1.0.0",
+  "type": "module",
   "description": "Documentation for l0-git",
   "scripts": {
     "docs:dev": "vitepress dev",
