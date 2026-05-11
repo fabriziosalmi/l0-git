@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.16] - 2026-05-11
+
+### Changed
+
+- Release 0.1.16 (no notes — fill me in)
+
 ## [0.1.15] - 2026-05-11
 
 ### Changed
