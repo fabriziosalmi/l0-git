@@ -241,6 +241,11 @@ func splitPathAndAnchor(dest string) (string, string) {
 // localTargetExists resolves dest relative to the directory of the
 // markdown file (rel) and stats the resulting path. URL-decodes the
 // path because authors sometimes write `My%20Notes.md` in links.
+//
+// Static-site generators (VitePress, MkDocs, Docusaurus, Hugo, Jekyll, …)
+// resolve extensionless links: `./configuration` matches `configuration.md`
+// or `configuration/index.md`. When the literal path is missing we try
+// those two fallbacks before declaring the link broken.
 func localTargetExists(rel, root, dest string) bool {
 	if dest == "" {
 		// Pure anchor or empty link — handled elsewhere.
@@ -250,9 +255,26 @@ func localTargetExists(rel, root, dest string) bool {
 	if err != nil {
 		decoded = dest
 	}
-	target := filepath.Join(root, filepath.Dir(rel), decoded)
+	baseDir := filepath.Join(root, filepath.Dir(rel))
+	target := filepath.Join(baseDir, decoded)
 	if _, err := os.Stat(target); err == nil {
 		return true
+	}
+	// Extensionless-link fallback: only when the original path has no
+	// extension (so we don't paper over typos like `foo.mdd`).
+	if filepath.Ext(decoded) == "" {
+		if _, err := os.Stat(target + ".md"); err == nil {
+			return true
+		}
+		if _, err := os.Stat(target + ".markdown"); err == nil {
+			return true
+		}
+		if _, err := os.Stat(filepath.Join(target, "index.md")); err == nil {
+			return true
+		}
+		if _, err := os.Stat(filepath.Join(target, "index.markdown")); err == nil {
+			return true
+		}
 	}
 	return false
 }

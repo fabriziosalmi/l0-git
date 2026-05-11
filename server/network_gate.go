@@ -75,6 +75,12 @@ func checkNetworkScan(ctx context.Context, root string, opts json.RawMessage) ([
 		if scan.shouldSkip(rel) {
 			continue
 		}
+		// Changelog / release-note files routinely describe IP-related behaviour
+		// of the project itself ("added RFC 6598 100.64.0.0/10 to docNets") so
+		// every entry would be a self-referential FP. Skip the canonical names.
+		if isChangelogBasename(filepath.Base(rel)) {
+			continue
+		}
 		abs := filepath.Join(root, rel)
 		info, err := os.Stat(abs)
 		if err != nil || info.IsDir() {
@@ -113,6 +119,11 @@ func checkNetworkScan(ctx context.Context, root string, opts json.RawMessage) ([
 // scanNetworkLine runs every regex against one line and turns matches into
 // findings. CIDR is checked first so "10.0.0.0/8" doesn't double-fire as a
 // CIDR + bare IPv4.
+//
+// Doc-range hits (RFC 5737/2544/6598, MCAST-TEST-NET) are suppressed: the
+// category itself means "intended for documentation/testing", so emitting a
+// finding only generates noise — the maintainer already declared this is
+// not a real address by picking that range.
 func scanNetworkLine(rel string, lineNum int, content []byte) []Finding {
 	out := []Finding{}
 	cidrSpans := map[string]bool{}
@@ -126,6 +137,9 @@ func scanNetworkLine(rel string, lineNum int, content []byte) []Finding {
 			continue
 		}
 		sev, cat := classifyIPv4(ip)
+		if cat == "doc-range" {
+			continue
+		}
 		out = append(out, networkFinding(rel, lineNum, "cidr", text, sev, cat))
 	}
 
@@ -141,6 +155,9 @@ func scanNetworkLine(rel string, lineNum int, content []byte) []Finding {
 			continue
 		}
 		sev, cat := classifyIPv4(ip)
+		if cat == "doc-range" {
+			continue
+		}
 		out = append(out, networkFinding(rel, lineNum, "ipv4", text, sev, cat))
 	}
 
@@ -208,6 +225,21 @@ func kindLabel(kind string) string {
 	default:
 		return "IPv4"
 	}
+}
+
+// isChangelogBasename returns true for the canonical release-notes filenames
+// (any case). These files describe what the project does, including network
+// behaviour, so addresses listed inside are descriptive rather than wired.
+func isChangelogBasename(name string) bool {
+	switch strings.ToLower(name) {
+	case "changelog.md", "changelog", "changelog.txt", "changelog.rst",
+		"history.md", "history", "history.txt", "history.rst",
+		"releases.md", "releases", "releases.txt",
+		"release-notes.md", "release_notes.md", "releasenotes.md",
+		"changes.md", "changes", "changes.txt", "news.md", "news":
+		return true
+	}
+	return false
 }
 
 func networkAdvice(category string) string {

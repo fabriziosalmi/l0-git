@@ -19,7 +19,6 @@ func TestNetworkScan_Classification(t *testing.T) {
 		{"private_192", "addr = 192.168.1.10\n", SeverityInfo, "ipv4_private"},
 		{"private_10", "addr = 10.0.0.5\n", SeverityInfo, "ipv4_private"},
 		{"loopback", "addr = 127.0.0.1\n", SeverityInfo, "ipv4_loopback"},
-		{"doc_range", "addr = 192.0.2.42\n", SeverityInfo, "ipv4_doc-range"},
 		{"unspecified", "bind = 0.0.0.0\n", SeverityInfo, "ipv4_unspecified"},
 		{"public_cidr", "deny 1.1.1.0/24\n", SeverityWarning, "cidr_public"},
 		{"private_cidr", "allow 10.0.0.0/8\n", SeverityInfo, "cidr_private"},
@@ -42,6 +41,48 @@ func TestNetworkScan_Classification(t *testing.T) {
 			if !matched {
 				t.Fatalf("no finding matched (severity=%s, suffix=%s); got: %+v",
 					tc.wantSeverity, tc.wantSuffix, fs)
+			}
+		})
+	}
+}
+
+// Doc-range addresses (RFC 5737 / 2544 / 6598, MCAST-TEST-NET) are intended
+// for documentation/testing — emitting a finding only adds noise.
+func TestNetworkScan_DocRangeSuppressed(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+	}{
+		{"test_net_1", "addr = 192.0.2.42\n"},
+		{"test_net_3", "addr = 203.0.113.7\n"},
+		{"cgnat_cidr", "range = 100.64.0.0/10\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := initRepoWithFiles(t, map[string]string{"net.txt": tc.content})
+			fs, err := checkNetworkScan(context.Background(), root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(fs) != 0 {
+				t.Fatalf("doc-range must produce no findings; got: %+v", fs)
+			}
+		})
+	}
+}
+
+// Changelog / release-notes files reference IPs descriptively, not wired
+// addresses — every match is a self-referential FP. Skip by basename.
+func TestNetworkScan_SkipsChangelogFiles(t *testing.T) {
+	for _, name := range []string{"CHANGELOG.md", "HISTORY.md", "RELEASES.md", "CHANGES.md"} {
+		t.Run(name, func(t *testing.T) {
+			root := initRepoWithFiles(t, map[string]string{name: "added 8.8.8.8 to docs\n"})
+			fs, err := checkNetworkScan(context.Background(), root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(fs) != 0 {
+				t.Fatalf("changelog must be skipped; got: %+v", fs)
 			}
 		})
 	}

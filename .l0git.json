@@ -4,10 +4,13 @@
       "exclude_paths": ["server/conn_gate.go", "README.md", "CHANGELOG.md"]
     },
     "network_scan": {
-      "exclude_paths": ["server/network_gate.go", "server/conn_gate.go"]
+      "exclude_paths": ["server/network_gate.go", "server/conn_gate.go", "server/known_non_secrets.go"]
+    },
+    "secrets_scan": {
+      "exclude_paths": ["server/known_non_secrets.go", "server/known_non_secrets_test.go", "server/secrets.go"]
     },
     "dead_placeholders": {
-      "exclude_paths": ["server/dead_placeholders_gate.go", "server/gates.go", "README.md", "CHANGELOG.md", "extension/src/stubs.ts"]
+      "exclude_paths": ["server/dead_placeholders_gate.go", "server/dead_placeholders_gate_test.go", "server/gates.go", "server/remediation.go", "README.md", "CHANGELOG.md", "extension/src/stubs.ts"]
     }
   }
 }

@@ -123,6 +123,39 @@ func TestMD_LinkLocalBroken(t *testing.T) {
 	}
 }
 
+// Static-site generators (VitePress, MkDocs, Docusaurus, …) resolve
+// extensionless links. The gate must accept `./configuration` when
+// `configuration.md` or `configuration/index.md` exists.
+func TestMD_LinkLocalExtensionlessFallback(t *testing.T) {
+	t.Run("sibling_md", func(t *testing.T) {
+		root := t.TempDir()
+		mustWrite(t, filepath.Join(root, "configuration.md"), "x")
+		fs := evaluateMarkdownFile("getting-started.md", root,
+			[]byte("[Config](./configuration)\n"), nil)
+		if findFindingByRule(fs, "link_local_broken") != nil {
+			t.Errorf("extensionless link with sibling .md must not fire: %+v", fs)
+		}
+	})
+	t.Run("subdir_index_md", func(t *testing.T) {
+		root := t.TempDir()
+		mustWrite(t, filepath.Join(root, "guide", "index.md"), "x")
+		fs := evaluateMarkdownFile("README.md", root,
+			[]byte("[Guide](./guide)\n"), nil)
+		if findFindingByRule(fs, "link_local_broken") != nil {
+			t.Errorf("extensionless link to dir with index.md must not fire: %+v", fs)
+		}
+	})
+	t.Run("typo_extension_still_fires", func(t *testing.T) {
+		root := t.TempDir()
+		mustWrite(t, filepath.Join(root, "configuration.md"), "x")
+		fs := evaluateMarkdownFile("README.md", root,
+			[]byte("[Config](./configuration.mdd)\n"), nil)
+		if findFindingByRule(fs, "link_local_broken") == nil {
+			t.Errorf("typo with extension must still fire (no fallback): %+v", fs)
+		}
+	})
+}
+
 func TestMD_LinkLocalIgnoresAbsoluteAndAnchors(t *testing.T) {
 	src := "[ext](https://example.com) | [a](#intro)\n# Intro\n"
 	fs := runMDRules(t, src)
