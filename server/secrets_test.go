@@ -276,6 +276,108 @@ func TestSecretsScan_LowEntropySkipped(t *testing.T) {
 	}
 }
 
+// YARA / detection-rule files contain secret-shaped strings (header
+// markers, token formats) as the rule's payload. The file's reason to
+// exist IS the pattern — flagging is pure noise on security toolkit
+// repos.
+func TestSecretsScan_DetectionRuleFilesSkipped(t *testing.T) {
+	pem := "-----BEGIN PRIVATE KEY-----"
+	for _, name := range []string{
+		"rules/secrets.yar",
+		"detect/keys.yara",
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := initRepoWithFiles(t, map[string]string{
+				name:        "rule pk { strings: $h = \"" + pem + "\" condition: $h }\n",
+				"prod.go":   "var x = []byte(\"" + pem + "\")\n", // also caught by string-literal heuristic below
+				"leak.pem":  pem + "\n",                            // genuine
+			})
+			fs, err := checkSecretsScan(context.Background(), root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, f := range fs {
+				if strings.HasPrefix(f.FilePath, name) {
+					t.Errorf("%s must be skipped, got finding: %+v", name, f)
+				}
+			}
+			// Genuine PEM on its own line in a .pem file must still fire.
+			hit := false
+			for _, f := range fs {
+				if strings.HasPrefix(f.FilePath, "leak.pem") {
+					hit = true
+				}
+			}
+			if !hit {
+				t.Errorf("expected leak.pem to still fire, got: %+v", fs)
+			}
+		})
+	}
+}
+
+// In key-parsing / key-matching code, the header string appears as a
+// string literal next to an opening quote — it's a header constant, not
+// committed key material. Detect by the immediate-preceding-quote
+// + source-file-extension signature.
+func TestSecretsScan_PrivateKeyHeaderLiteralInSource(t *testing.T) {
+	cases := []struct {
+		path    string
+		content string
+	}{
+		{"src/key-match.ts", `const HEADER = "-----BEGIN PRIVATE KEY-----";` + "\n"},
+		{"lib/parse.go", `var hdr = "-----BEGIN RSA PRIVATE KEY-----"` + "\n"},
+		{"app.py", `HEADER = '-----BEGIN PRIVATE KEY-----'` + "\n"},
+		{"x.rs", "let h = \"-----BEGIN EC PRIVATE KEY-----\";\n"},
+	}
+	for _, c := range cases {
+		t.Run(c.path, func(t *testing.T) {
+			root := initRepoWithFiles(t, map[string]string{c.path: c.content})
+			fs, err := checkSecretsScan(context.Background(), root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, f := range fs {
+				if strings.HasSuffix(f.FilePath, ":private_key_header") {
+					t.Errorf("header in source string literal must be skipped: %+v", f)
+				}
+			}
+		})
+	}
+}
+
+// A genuine PEM blob (header at column 0 on its own line) MUST still
+// fire — the literal-in-source heuristic must not over-match.
+func TestSecretsScan_PrivateKeyHeaderGenuinePEM(t *testing.T) {
+	cases := []struct {
+		path    string
+		content string
+	}{
+		{"key.pem", "-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n"},
+		{"secrets/leaked.txt", "-----BEGIN RSA PRIVATE KEY-----\nMIIB...\n"},
+		// Even in a source file — if the header isn't preceded by a
+		// quote (no string-literal pattern), it's a leak.
+		{"main.go", "/*\n-----BEGIN PRIVATE KEY-----\nMIIB...\n*/\n"},
+	}
+	for _, c := range cases {
+		t.Run(c.path, func(t *testing.T) {
+			root := initRepoWithFiles(t, map[string]string{c.path: c.content})
+			fs, err := checkSecretsScan(context.Background(), root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			hit := false
+			for _, f := range fs {
+				if strings.HasSuffix(f.FilePath, ":private_key_header") {
+					hit = true
+				}
+			}
+			if !hit {
+				t.Errorf("genuine PEM in %s must fire, got: %+v", c.path, fs)
+			}
+		})
+	}
+}
+
 func findingsContainPattern(fs []Finding, patternID string) bool {
 	for _, f := range fs {
 		// FilePath looks like "<rel>:<line>:<pattern_id>".

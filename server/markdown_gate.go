@@ -125,7 +125,13 @@ func evaluateMarkdownFile(rel, root string, source []byte, disabled map[string]b
 			line := nodeLine(typed, lineStarts)
 			lang := strings.TrimSpace(string(typed.Language(source)))
 			if lang == "" {
-				if !disabled["codeblock_no_language"] {
+				// CHANGELOG / HISTORY / RELEASES routinely paste raw
+				// output, log excerpts, and ad-hoc snippets where a
+				// language tag isn't worth the churn — and old entries
+				// rot the moment anyone retags them. Suppress this one
+				// rule there; structural rules (broken links, payload
+				// parse) still run.
+				if !disabled["codeblock_no_language"] && !isChangelogBasename(filepath.Base(rel)) {
 					out = append(out, mdFindingAt(rel, line,
 						mdRules["codeblock_no_language"],
 						"fenced code block has no language tag",

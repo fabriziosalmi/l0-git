@@ -35,6 +35,44 @@ func TestMD_CodeblockNoLanguage(t *testing.T) {
 	}
 }
 
+// codeblock_no_language is suppressed on changelog-style files: log
+// pastes and old releases are not worth retagging, and tagging them
+// rewrites history nobody re-reads. Other rules still apply there.
+func TestMD_CodeblockNoLanguage_SkippedInChangelogFiles(t *testing.T) {
+	src := "```\nplain text\n```\n"
+	for _, name := range []string{
+		"CHANGELOG.md",
+		"changelog.md",
+		"HISTORY.md",
+		"RELEASES.md",
+		"CHANGES.md",
+		"NEWS.md",
+		"RELEASE_NOTES.md",
+	} {
+		t.Run(name, func(t *testing.T) {
+			fs := evaluateMarkdownFile(name, t.TempDir(), []byte(src), nil)
+			if f := findFindingByRule(fs, "codeblock_no_language"); f != nil {
+				t.Errorf("%s must skip codeblock_no_language; got: %+v", name, f)
+			}
+		})
+	}
+	// Sanity: the same content in a non-changelog file MUST still fire.
+	fs := evaluateMarkdownFile("docs/guide.md", t.TempDir(), []byte(src), nil)
+	if findFindingByRule(fs, "codeblock_no_language") == nil {
+		t.Errorf("non-changelog must still fire codeblock_no_language: %+v", fs)
+	}
+}
+
+// Structural rules (broken link, invalid payload) must still run on
+// CHANGELOG files — only the no-language nag is suppressed.
+func TestMD_OtherRulesStillFireInChangelog(t *testing.T) {
+	src := "```json\n{ not_quoted: 1 }\n```\n"
+	fs := evaluateMarkdownFile("CHANGELOG.md", t.TempDir(), []byte(src), nil)
+	if findFindingByRule(fs, "codeblock_invalid_payload") == nil {
+		t.Errorf("CHANGELOG.md must still fire codeblock_invalid_payload: %+v", fs)
+	}
+}
+
 func TestMD_CodeblockInvalidJSON(t *testing.T) {
 	src := "```json\n{ not_quoted: 1 }\n```\n"
 	fs := runMDRules(t, src)

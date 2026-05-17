@@ -98,6 +98,12 @@ func checkSecretsScan(ctx context.Context, root string, opts json.RawMessage) ([
 		if scan.shouldSkip(rel) {
 			continue
 		}
+		// Detection-rule files (YARA, …) contain secret patterns as the
+		// payload of the rule — the file's reason to exist is the
+		// pattern, not its leak. Skip outright.
+		if isDetectionRuleFile(rel) {
+			continue
+		}
 		// Tracked .env files are flagged regardless of content (the file
 		// itself is the smell). .env.example / .env.template / .env.sample
 		// are intentional and don't count.
@@ -127,14 +133,16 @@ func checkSecretsScan(ctx context.Context, root string, opts json.RawMessage) ([
 			continue
 		}
 
+		relForLookup := rel
 		line := 1
 		start := 0
 		emit := func(content []byte, lineNum int) {
 			for _, p := range secretPatterns {
-				match := p.re.Find(content)
-				if match == nil {
+				idx := p.re.FindIndex(content)
+				if idx == nil {
 					continue
 				}
+				match := content[idx[0]:idx[1]]
 				// Entropy floor: skip low-entropy matches (mock data, doc examples,
 				// placeholder strings that happen to satisfy the pattern syntax).
 				if p.minEntropy > 0 && shannonEntropy(string(match)) < p.minEntropy {
@@ -145,6 +153,14 @@ func checkSecretsScan(ctx context.Context, root string, opts json.RawMessage) ([
 				// or canonical documentation examples — they carry zero
 				// information advantage for an attacker.
 				if isKnownNonSecret(string(match)) {
+					continue
+				}
+				// Structural marker patterns (private_key_header) match a
+				// header string, not a value. In source code that parses
+				// or matches keys, the header appears as a literal string
+				// — that's code, not a leak. Skip when the match sits
+				// immediately after an opening quote in a source file.
+				if p.id == "private_key_header" && isQuotedLiteralInSource(relForLookup, content, idx[0]) {
 					continue
 				}
 				out = append(out, Finding{
@@ -237,6 +253,69 @@ func gitLsFilesWithMode(ctx context.Context, root string) ([]gitFileEntry, error
 		})
 	}
 	return out, nil
+}
+
+// isDetectionRuleFile returns true for files that exist to declare
+// detection patterns (YARA, …). These legitimately contain secret-like
+// strings as the rule's payload — flagging them generates noise on
+// every security/detection toolkit repo.
+func isDetectionRuleFile(rel string) bool {
+	switch strings.ToLower(filepath.Ext(rel)) {
+	case ".yar", ".yara":
+		return true
+	}
+	return false
+}
+
+// sourceCodeExtensions covers languages where a `"-----BEGIN PRIVATE
+// KEY-----"` is overwhelmingly a header literal used by key-parsing or
+// key-matching logic — not committed key material. The actual PEM
+// payload, if present, would be on the next line(s) and would not be
+// preceded by an opening quote on its own line.
+var sourceCodeExtensions = map[string]bool{
+	".go":    true,
+	".rs":    true,
+	".ts":    true,
+	".tsx":   true,
+	".js":    true,
+	".jsx":   true,
+	".mjs":   true,
+	".cjs":   true,
+	".py":    true,
+	".rb":    true,
+	".java":  true,
+	".kt":    true,
+	".kts":   true,
+	".scala": true,
+	".cs":    true,
+	".cpp":   true,
+	".cc":    true,
+	".c":     true,
+	".h":     true,
+	".hpp":   true,
+	".php":   true,
+	".swift": true,
+	".m":     true,
+	".mm":    true,
+	".dart":  true,
+}
+
+// isQuotedLiteralInSource returns true when the match at offset `at`
+// inside a single line `content` is preceded immediately (allowing one
+// optional byte-string prefix like b/r/u and at most a few escape
+// chars) by a quote character `"`, `'`, or `` ` ``, AND the file
+// extension belongs to a programming language. This is the signature
+// of header strings used by key-parsing / key-matching code, not of
+// committed PEM blobs (which start at column 0 on their own line).
+func isQuotedLiteralInSource(rel string, content []byte, at int) bool {
+	if at <= 0 {
+		return false
+	}
+	if !sourceCodeExtensions[strings.ToLower(filepath.Ext(rel))] {
+		return false
+	}
+	prev := content[at-1]
+	return prev == '"' || prev == '\'' || prev == '`'
 }
 
 // isBinary uses the same heuristic git itself does: any NUL byte in the
