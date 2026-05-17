@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- **Content-scan gates skip tabular data files by default**. `network_scan`, `connection_strings`, `secrets_scan` (via the same option struct), `markdown_lint`, `html_lint`, `css_lint`, `dockerfile_lint`, `compose_lint`, and `dead_placeholders` now skip `.csv`, `.tsv`, `.jsonl`, `.ndjson`, `.parquet`, `.arrow`, `.feather` — the addresses, URLs, and hashes inside are the file's payload, not embedded literals. Opt out per-gate with `"skip_default_data_files": false` in `gate_options`. Metadata-only gates (`large_file_tracked`, `vendored_dir_tracked`, …) still see these files.
+- **Content-scan gates skip local backup snapshots by default**. Files under `bak/`, `backup/`, `backups/`, `archive/`, `archived/` directories, with `.bak` / `.backup` / `.old` / `.orig` extensions, or whose basename / directory matches `backup[-_]YYYYMMDD([-_]HHMMSS)?` are skipped — they're stale echoes of the live tree. Opt out per-gate with `"skip_default_backup_paths": false`. The leading-anchor in the timestamp regex avoids matching `check_backup_*.py` and similar domain-word filenames.
+- **`connection_strings` skips changelog-style files** (`CHANGELOG.md`, `HISTORY.md`, `RELEASES.md`, `CHANGES.md`, `NEWS.md`, …) by basename, matching the existing `network_scan` policy. Those files quote past behaviour, not current configuration.
+- **`markdown_lint codeblock_no_language` skipped in changelog-style files**. Same rationale: changelogs paste raw output / log excerpts where retagging is churn nobody re-reads. Structural rules (`link_local_broken`, `link_anchor_broken`, `codeblock_invalid_payload`) still run.
+
+### Fixed
+
+- **`creds_in_url` no longer fires on template URLs**. `postgresql://nodeapp:${PG_DB_PASS}@host`, `https://$GITEA_USER:$GITEA_TOKEN@…`, `mongodb://%s:%s@host`, `https://{{ user }}:{{ token }}@…`, `redis://<user>:<pass>@…` are recognised as runtime templates: when the password segment is entirely one placeholder (`${VAR}`, `$VAR`, `%[sdvqxX]`, `<name>`, `{{ var }}`), the URL is not a committed secret. The username is treated as non-sensitive — `admin:hunter2@host` (literal password) still fires.
+- **`secrets_scan private_key_header` no longer fires on key-parsing code**. Two new signatures suppress the false positive without weakening detection on real PEM blobs:
+  - **Detection-rule files** (`.yar`, `.yara`) are skipped outright — the header IS the rule's payload.
+  - **Literal-context match in any file**: a header immediately preceded by `"`, `'`, or `` ` `` is treated as a string literal in source / YAML rule lists / Astro / Vue / Svelte / HTML attributes / Markdown inline code.
+  - **Comment-line match in source files**: header lines starting with `//`, `#`, `/*`, `*`, `--`, `;`, or `<!--` (across .go / .ts / .py / .rs / .swift / .sql / .html / …) are treated as documentation about the parser.
+  Genuine PEM blobs (header at column 0 on its own line, or inside a block-comment opener) still fire — verified by test.
+- **Nil-safe option defaults**: `skipEnabled(*bool)` treats `nil` as enabled, so the default-skip semantics now hold even when a gate's custom option parser decodes directly into the embedded `scanOptions` without going through `parseScanOptions`. Previously affected: `markdown_lint`, `html_lint`, `css_lint`, `dockerfile_lint`, `compose_lint`, `dead_placeholders`.
+
 ## [0.1.16] - 2026-05-11
 
 ### Changed

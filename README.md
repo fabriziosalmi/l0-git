@@ -26,6 +26,7 @@ project never blocks on probabilistic signals.
   documentation, release hygiene.
 - **`.l0git.json`** per-project config: ignore gates, override severity,
   pass per-gate options (`exclude_paths`, `skip_default_fixture_paths`,
+  `skip_default_data_files`, `skip_default_backup_paths`,
   `disabled_rules`, thresholds, …) without touching code.
 - **Inline overrides** via `# l0git: ignore <rule_id> reason: …` (and the
   YAML / HTML / CSS / Markdown comment variants) — every override emits
@@ -41,7 +42,7 @@ project never blocks on probabilistic signals.
 - 34 gates registered. l0-git scans clean against itself with the
   bundled [`.l0git.json`](.l0git.json) (test fixtures and gate-source
   self-references suppressed).
-- 179 PASS, race-clean. CI matrix: Linux / macOS / Windows × Go 1.22 / 1.23.
+- 500+ PASS, race-clean. CI matrix: Linux / macOS / Windows × Go 1.22 / 1.23.
 - Released artefacts at every tag (`v0.1.x`): cross-compiled binaries
   for darwin / linux / windows × amd64 / arm64, plus the bundled `.vsix`.
 
