@@ -227,6 +227,39 @@ func TestConnectionStrings_DataFilesSkippedByDefault(t *testing.T) {
 	}
 }
 
+// Changelog-style files quote past behaviour, not current
+// configuration. The connection_strings gate skips them outright,
+// matching the network_scan policy.
+func TestConnectionStrings_SkipsChangelogFiles(t *testing.T) {
+	for _, name := range []string{"CHANGELOG.md", "HISTORY.md", "RELEASES.md", "CHANGES.md", "NEWS.md"} {
+		t.Run(name, func(t *testing.T) {
+			root := initRepoWithFiles(t, map[string]string{
+				name:      "Switched from http://api.acme.io to https://api.acme.io\n",
+				"conf.go": "url := \"http://api.acme.io/v1\"\n",
+			})
+			fs, err := checkConnectionStrings(context.Background(), root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, f := range fs {
+				if strings.HasPrefix(f.FilePath, name) {
+					t.Errorf("%s must be skipped, got: %+v", name, f)
+				}
+			}
+			// Non-changelog files in the same repo must still fire.
+			hit := false
+			for _, f := range fs {
+				if strings.HasPrefix(f.FilePath, "conf.go") {
+					hit = true
+				}
+			}
+			if !hit {
+				t.Errorf("non-changelog must still fire, got: %+v", fs)
+			}
+		})
+	}
+}
+
 func TestConnectionStrings_NotGitRepo(t *testing.T) {
 	fs, err := checkConnectionStrings(context.Background(), t.TempDir(), nil)
 	if err != nil {

@@ -345,6 +345,66 @@ func TestSecretsScan_PrivateKeyHeaderLiteralInSource(t *testing.T) {
 	}
 }
 
+// Cross-language quote-preceded header is treated as a string literal
+// regardless of file extension. Catches YAML rule files, Astro/Vue/
+// HTML component attributes, .md inline code, …
+func TestSecretsScan_PrivateKeyHeaderQuotedAnywhere(t *testing.T) {
+	cases := []struct {
+		path    string
+		content string
+	}{
+		{"rules/security.yml", `  - "-----BEGIN RSA PRIVATE KEY-----"` + "\n"},
+		{"web/Tool.astro", `placeholder="-----BEGIN PRIVATE KEY-----..."` + "\n"},
+		{"app.vue", `placeholder="-----BEGIN PRIVATE KEY-----"` + "\n"},
+		{"docs/security.md", "Private keys (`-----BEGIN PRIVATE KEY-----`) are not allowed.\n"},
+		{"docs/dlp.md", "| `-----BEGIN RSA PRIVATE KEY-----` | Aho-Corasick |\n"},
+	}
+	for _, c := range cases {
+		t.Run(c.path, func(t *testing.T) {
+			root := initRepoWithFiles(t, map[string]string{c.path: c.content})
+			fs, err := checkSecretsScan(context.Background(), root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, f := range fs {
+				if strings.HasSuffix(f.FilePath, ":private_key_header") {
+					t.Errorf("quoted header in %s must be skipped: %+v", c.path, f)
+				}
+			}
+		})
+	}
+}
+
+// Comments in source files that describe supported headers are not
+// committed secrets. Catches `// -----BEGIN ENCRYPTED PRIVATE KEY-----`
+// and similar across C-like, shell, SQL, and XML-style comments.
+func TestSecretsScan_PrivateKeyHeaderInComment(t *testing.T) {
+	cases := []struct {
+		path    string
+		content string
+	}{
+		{"tls.swift", "    //   -----BEGIN ENCRYPTED PRIVATE KEY-----   (PKCS#8 encrypted)\n"},
+		{"util.go", "// -----BEGIN PRIVATE KEY-----\n"},
+		{"parse.py", "# -----BEGIN PRIVATE KEY-----\n"},
+		{"old.sql", "-- -----BEGIN PRIVATE KEY-----\n"},
+		{"page.html", "<!-- -----BEGIN PRIVATE KEY----- -->\n"},
+	}
+	for _, c := range cases {
+		t.Run(c.path, func(t *testing.T) {
+			root := initRepoWithFiles(t, map[string]string{c.path: c.content})
+			fs, err := checkSecretsScan(context.Background(), root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, f := range fs {
+				if strings.HasSuffix(f.FilePath, ":private_key_header") {
+					t.Errorf("comment-context header in %s must be skipped: %+v", c.path, f)
+				}
+			}
+		})
+	}
+}
+
 // A genuine PEM blob (header at column 0 on its own line) MUST still
 // fire — the literal-in-source heuristic must not over-match.
 func TestSecretsScan_PrivateKeyHeaderGenuinePEM(t *testing.T) {

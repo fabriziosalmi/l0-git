@@ -220,6 +220,13 @@ func checkConnectionStrings(ctx context.Context, root string, opts json.RawMessa
 		if scan.shouldSkipContent(rel) {
 			continue
 		}
+		// Changelog / release-note files describe the history of the
+		// project — http:// links, FTP mirrors, and connection strings
+		// listed there are quotations of past behaviour, not current
+		// configuration. Same rationale as network_scan.
+		if isChangelogBasename(filepath.Base(rel)) {
+			continue
+		}
 		abs := filepath.Join(root, rel)
 		info, err := os.Stat(abs)
 		if err != nil || info.IsDir() {

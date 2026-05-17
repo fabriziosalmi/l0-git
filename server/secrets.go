@@ -267,56 +267,97 @@ func isDetectionRuleFile(rel string) bool {
 	return false
 }
 
-// sourceCodeExtensions covers languages where a `"-----BEGIN PRIVATE
-// KEY-----"` is overwhelmingly a header literal used by key-parsing or
-// key-matching logic — not committed key material. The actual PEM
-// payload, if present, would be on the next line(s) and would not be
-// preceded by an opening quote on its own line.
+// sourceCodeExtensions covers files where a comment-prefixed line
+// (`//`, `#`, `/*`, `*`, `--`, `;`) bearing a key-header string is
+// almost always documentation about the parser/format, not committed
+// key material. Used only for comment-context detection; quote-context
+// detection now runs on every file because string-literal embedding
+// of header markers is a cross-language pattern (YAML rule files,
+// Astro/Vue/Svelte/HTML attributes, .md inline code, …).
 var sourceCodeExtensions = map[string]bool{
-	".go":    true,
-	".rs":    true,
-	".ts":    true,
-	".tsx":   true,
-	".js":    true,
-	".jsx":   true,
-	".mjs":   true,
-	".cjs":   true,
-	".py":    true,
-	".rb":    true,
-	".java":  true,
-	".kt":    true,
-	".kts":   true,
-	".scala": true,
-	".cs":    true,
-	".cpp":   true,
-	".cc":    true,
-	".c":     true,
-	".h":     true,
-	".hpp":   true,
-	".php":   true,
-	".swift": true,
-	".m":     true,
-	".mm":    true,
-	".dart":  true,
+	".go":     true,
+	".rs":     true,
+	".ts":     true,
+	".tsx":    true,
+	".js":     true,
+	".jsx":    true,
+	".mjs":    true,
+	".cjs":    true,
+	".py":     true,
+	".rb":     true,
+	".java":   true,
+	".kt":     true,
+	".kts":    true,
+	".scala":  true,
+	".cs":     true,
+	".cpp":    true,
+	".cc":     true,
+	".c":      true,
+	".h":      true,
+	".hpp":    true,
+	".php":    true,
+	".swift":  true,
+	".m":      true,
+	".mm":     true,
+	".dart":   true,
+	".astro":  true,
+	".vue":    true,
+	".svelte": true,
+	".html":   true,
+	".htm":    true,
+	".sql":    true,
+	".sh":     true,
+	".bash":   true,
+	".zsh":    true,
+	".ps1":    true,
+	".lua":    true,
+	".pl":     true,
+	".r":      true,
+	".jl":     true,
 }
 
-// isQuotedLiteralInSource returns true when the match at offset `at`
-// inside a single line `content` is preceded immediately (allowing one
-// optional byte-string prefix like b/r/u and at most a few escape
-// chars) by a quote character `"`, `'`, or `` ` ``, AND the file
-// extension belongs to a programming language. This is the signature
-// of header strings used by key-parsing / key-matching code, not of
-// committed PEM blobs (which start at column 0 on their own line).
+// isQuotedLiteralInSource returns true when a private-key-header match
+// at offset `at` inside the line `content` looks like a header string
+// in a literal context — not committed key material. Three signatures:
+//
+//  1. Quote-preceded (any file): the char immediately before `at` is
+//     `"`, `'`, or `` ` ``. Covers TS/Go/Py string literals, YAML
+//     `- "-----BEGIN …"`, Astro/HTML `placeholder="…"`, and Markdown
+//     inline code `` `-----BEGIN …` ``. Cross-language.
+//
+//  2. Comment-line in a source file: the line up to `at`, after
+//     trimming whitespace, starts with a comment marker (`//`, `#`,
+//     `/*`, `*`, `--`, `;`, `<!--`). Catches docstrings and inline
+//     comments explaining a parser's supported headers.
+//
+// Genuine PEM blobs sit at column 0 on their own line with no quote
+// or comment ahead of them — they keep firing.
 func isQuotedLiteralInSource(rel string, content []byte, at int) bool {
 	if at <= 0 {
 		return false
 	}
+	prev := content[at-1]
+	if prev == '"' || prev == '\'' || prev == '`' {
+		return true
+	}
 	if !sourceCodeExtensions[strings.ToLower(filepath.Ext(rel))] {
 		return false
 	}
-	prev := content[at-1]
-	return prev == '"' || prev == '\'' || prev == '`'
+	// Comment-line check: scan the line prefix and see whether it
+	// opens with a comment marker.
+	prefix := bytes.TrimLeft(content[:at], " \t")
+	for _, marker := range commentMarkers {
+		if bytes.HasPrefix(prefix, []byte(marker)) {
+			return true
+		}
+	}
+	return false
 }
+
+// commentMarkers are the leading sequences that open a line-or-block
+// comment across the languages we care about. Order is irrelevant —
+// every prefix is tried.
+var commentMarkers = []string{"//", "#", "/*", "*", "--", ";", "<!--"}
 
 // isBinary uses the same heuristic git itself does: any NUL byte in the
 // first 8 KiB means binary. Cheap and correct for our purposes.

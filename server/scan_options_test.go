@@ -127,6 +127,49 @@ func TestIsDefaultDataFile(t *testing.T) {
 	}
 }
 
+func TestIsDefaultBackupPath(t *testing.T) {
+	cases := []struct {
+		path string
+		want bool
+	}{
+		// directory components
+		{"bak/build.func", true},
+		{"src/bak/old.go", true},
+		{"backup/snapshot.tar", true},
+		{"backups/2025-11-29/db.sql", true},
+		{"archive/v1/index.html", true},
+		{"archived/legacy/main.py", true},
+		{"src/Bak/old.go", true}, // case-insensitive
+		// extensions
+		{"main.go.bak", true},
+		{"config.yaml.backup", true},
+		{"build.func.old", true},
+		{"server.conf.orig", true},
+		// timestamped suffixes
+		{"bak/core_bak/build.func - advanced-backup-20251127-154005.func", true},
+		{"build.func.backup-20251029-123804", true},
+		{"foo.backup-20260514", true},
+		// underscore-separated timestamp in a directory name
+		{"security_fixes_backup_20250626_003832/main.py", true},
+		{"security_fixes_backup_20250626/main.py", true},
+		// must NOT match
+		{"src/main.go", false},
+		{"docs/backups.md", false},                       // basename mention, not a backup file
+		{"archive_test.go", false},                       // "archive" not a directory component
+		{"backupable_module.py", false},                  // contains "backup" as substring only
+		{"old/file.go", false},                           // "old" alone isn't a backup-dir marker
+		{"checks/aws/efs/check_backup_enabled.py", false}, // "backup" is domain word, no timestamp
+		{"src/check_backup_policy.py", false},            // same — code checking backup policies
+	}
+	for _, c := range cases {
+		t.Run(c.path, func(t *testing.T) {
+			if got := isDefaultBackupPath(c.path); got != c.want {
+				t.Errorf("%q: got %v, want %v", c.path, got, c.want)
+			}
+		})
+	}
+}
+
 func TestScanOptions_ShouldSkipContent(t *testing.T) {
 	// Default (nil opts): data files are skipped by content scanners,
 	// but the metadata-only shouldSkip path still sees them.
@@ -145,8 +188,24 @@ func TestScanOptions_ShouldSkipContent(t *testing.T) {
 	}
 
 	// ExcludePaths still works on top of data-file skip.
-	o := scanOptions{ExcludePaths: []string{"docs/*"}, SkipDefaultDataFiles: boolPtr(true), SkipDefaultFixturePaths: boolPtr(true)}
+	o := scanOptions{ExcludePaths: []string{"docs/*"}, SkipDefaultDataFiles: boolPtr(true), SkipDefaultFixturePaths: boolPtr(true), SkipDefaultBackupPaths: boolPtr(true)}
 	if !o.shouldSkipContent("docs/README.md") || !o.shouldSkipContent("data/x.csv") {
 		t.Errorf("shouldSkipContent must respect ExcludePaths AND data-file skip")
+	}
+
+	// Default: backup paths are skipped by content scanners.
+	if !parsed.shouldSkipContent("bak/build.func") || !parsed.shouldSkipContent("main.go.bak") {
+		t.Errorf("default opts must skip backup paths in content scan")
+	}
+	// But shouldSkip (metadata path) must still see backups —
+	// vendored_dir_tracked / large_file_tracked may want to flag them.
+	if parsed.shouldSkip("bak/build.func") {
+		t.Errorf("shouldSkip (metadata path) must NOT skip backup paths")
+	}
+
+	// Explicit false disables backup skip.
+	parsedNoBak := parseScanOptions(json.RawMessage(`{"skip_default_backup_paths":false}`))
+	if parsedNoBak.shouldSkipContent("bak/foo.go") {
+		t.Errorf("explicit false must not skip backup paths in content scan")
 	}
 }

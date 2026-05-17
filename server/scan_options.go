@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -40,6 +41,19 @@ type scanOptions struct {
 	// to false in .l0git.json gate_options if you're treating data
 	// files as code (rare).
 	SkipDefaultDataFiles *bool `json:"skip_default_data_files,omitempty"`
+
+	// SkipDefaultBackupPaths controls whether content-scan gates skip
+	// files that look like local backups (bak/, backup/, backups/,
+	// archive/, archived/ directories, or .bak/.backup/.old/.orig
+	// extensions, or basenames ending in `-backup-YYYYMMDD-HHMMSS`).
+	// These are tagged-and-shelved snapshots of past code — every
+	// TODO, http://, or private key header inside them is a stale echo
+	// of something that exists in the live tree.
+	//
+	// Default true. Metadata gates (vendored_dir_tracked,
+	// large_file_tracked) still see them and may correctly flag the
+	// backup files as something that shouldn't be in git at all.
+	SkipDefaultBackupPaths *bool `json:"skip_default_backup_paths,omitempty"`
 }
 
 func parseScanOptions(opts json.RawMessage) scanOptions {
@@ -56,7 +70,20 @@ func parseScanOptions(opts json.RawMessage) scanOptions {
 		t := true
 		s.SkipDefaultDataFiles = &t
 	}
+	if s.SkipDefaultBackupPaths == nil {
+		t := true
+		s.SkipDefaultBackupPaths = &t
+	}
 	return s
+}
+
+// skipEnabled treats nil as "use the default" (true). Each
+// Skip-Default-… flag's design is "off only when explicitly set to
+// false". This makes the helpers robust against custom option
+// parsers that decode into the embedded scanOptions without going
+// through parseScanOptions (markdown, html, dead_placeholders, …).
+func skipEnabled(p *bool) bool {
+	return p == nil || *p
 }
 
 // shouldSkip combines pathExcluded with the optional default-fixture
@@ -68,21 +95,25 @@ func (s scanOptions) shouldSkip(rel string) bool {
 	if pathExcluded(rel, s.ExcludePaths) {
 		return true
 	}
-	if s.SkipDefaultFixturePaths != nil && *s.SkipDefaultFixturePaths && isDefaultFixturePath(rel) {
+	if skipEnabled(s.SkipDefaultFixturePaths) && isDefaultFixturePath(rel) {
 		return true
 	}
 	return false
 }
 
-// shouldSkipContent is shouldSkip plus the default-data-file skip. Used
-// by gates that read file contents and would otherwise drown in
-// findings on tabular data files where the payload IS addresses/URLs
-// (blocklists, fingerprint datasets, exported logs, …).
+// shouldSkipContent is shouldSkip plus the default-data-file and
+// default-backup-path skips. Used by gates that read file contents
+// and would otherwise drown in findings on tabular data files
+// (blocklists, fingerprint datasets) or local snapshot folders
+// (bak/, backup/, archive/ — stale echoes of the live tree).
 func (s scanOptions) shouldSkipContent(rel string) bool {
 	if s.shouldSkip(rel) {
 		return true
 	}
-	if s.SkipDefaultDataFiles != nil && *s.SkipDefaultDataFiles && isDefaultDataFile(rel) {
+	if skipEnabled(s.SkipDefaultDataFiles) && isDefaultDataFile(rel) {
+		return true
+	}
+	if skipEnabled(s.SkipDefaultBackupPaths) && isDefaultBackupPath(rel) {
 		return true
 	}
 	return false
@@ -133,6 +164,62 @@ var dataFileExtensions = map[string]bool{
 // from dataFileExtensions. Case-insensitive on the extension.
 func isDefaultDataFile(rel string) bool {
 	return dataFileExtensions[strings.ToLower(filepath.Ext(rel))]
+}
+
+// backupDirNames are directory names that, when present anywhere in a
+// file's path, mark the file as a local backup snapshot. Lower-cased
+// match.
+var backupDirNames = map[string]bool{
+	"bak":      true,
+	"backup":   true,
+	"backups":  true,
+	"archive":  true,
+	"archived": true,
+}
+
+// backupExtensions are file extensions that mark snapshot/copy files.
+var backupExtensions = map[string]bool{
+	".bak":    true,
+	".backup": true,
+	".old":    true,
+	".orig":   true,
+}
+
+// backupTimestampedRe matches names containing a backup timestamp
+// suffix like `foo.func.backup-20251029-123804`,
+// `build.func - advanced-backup-20251127-154005.func`, or
+// `security_fixes_backup_20250626_003832`. Conservative: requires the
+// literal `backup` token, then a separator (`-` or `_`), then
+// YYYYMMDD, then optionally another separator + HHMMSS. The leading
+// `[-_ .]` anchor avoids matching `check_backup_*.py` (where
+// "backup" is a domain word, not a backup marker).
+var backupTimestampedRe = regexp.MustCompile(`[-_ .]backup[-_]\d{8}([-_]\d{6})?`)
+
+// isDefaultBackupPath returns true for files that look like local
+// backups/snapshots — a directory component matches backupDirNames,
+// any directory component embeds a `backup-YYYYMMDD` timestamp, the
+// extension is one of backupExtensions, or the basename embeds a
+// `backup-YYYYMMDD` timestamp.
+func isDefaultBackupPath(rel string) bool {
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	for i := 0; i < len(parts)-1; i++ {
+		p := strings.ToLower(parts[i])
+		if backupDirNames[p] {
+			return true
+		}
+		// e.g. `security_fixes_backup_20250626_003832/...`
+		if backupTimestampedRe.MatchString(p) {
+			return true
+		}
+	}
+	base := strings.ToLower(filepath.Base(rel))
+	if backupExtensions[strings.ToLower(filepath.Ext(base))] {
+		return true
+	}
+	if backupTimestampedRe.MatchString(base) {
+		return true
+	}
+	return false
 }
 
 // isDefaultFixturePath returns true when the given relative path looks

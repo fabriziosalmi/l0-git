@@ -65,7 +65,7 @@ func checkDeadPlaceholders(ctx context.Context, root string, opts json.RawMessag
 
 	out := []Finding{}
 	for _, rel := range files {
-		if options.shouldSkip(rel) {
+		if options.shouldSkipContent(rel) {
 			continue
 		}
 		// Files whose name IS the tracking register for placeholders — scanning

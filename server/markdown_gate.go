@@ -50,7 +50,7 @@ func checkMarkdownLint(ctx context.Context, root string, opts json.RawMessage) (
 
 	out := []Finding{}
 	for _, rel := range files {
-		if options.shouldSkip(rel) {
+		if options.shouldSkipContent(rel) {
 			continue
 		}
 		if !isMarkdownBasename(filepath.Base(rel)) {
