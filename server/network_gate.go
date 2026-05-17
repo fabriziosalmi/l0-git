@@ -72,7 +72,7 @@ func checkNetworkScan(ctx context.Context, root string, opts json.RawMessage) ([
 	scan := parseScanOptions(opts)
 	out := []Finding{}
 	for _, rel := range files {
-		if scan.shouldSkip(rel) {
+		if scan.shouldSkipContent(rel) {
 			continue
 		}
 		// Changelog / release-note files routinely describe IP-related behaviour

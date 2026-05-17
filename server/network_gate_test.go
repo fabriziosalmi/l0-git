@@ -88,6 +88,44 @@ func TestNetworkScan_SkipsChangelogFiles(t *testing.T) {
 	}
 }
 
+// Tabular data files (CSV/JSONL/TSV/…) ARE address lists by definition —
+// blocklists, ASN dumps, fingerprint datasets. Default behaviour:
+// skipped by network_scan so users aren't drowned in payload findings.
+func TestNetworkScan_SkipsDataFilesByDefault(t *testing.T) {
+	for _, name := range []string{
+		"blocklist.csv",
+		"fingerprints.jsonl",
+		"asn-dump.tsv",
+		"events.ndjson",
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := initRepoWithFiles(t, map[string]string{
+				name:        "8.8.8.8\n1.1.1.1\n",
+				"net.txt":   "see 9.9.9.9 in source\n",
+			})
+			fs, err := checkNetworkScan(context.Background(), root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, f := range fs {
+				if strings.HasPrefix(f.FilePath, name) {
+					t.Errorf("default scan must skip %s: %+v", name, f)
+				}
+			}
+			// The .txt file in the same repo must still produce findings.
+			txtHit := false
+			for _, f := range fs {
+				if strings.HasPrefix(f.FilePath, "net.txt") {
+					txtHit = true
+				}
+			}
+			if !txtHit {
+				t.Errorf("expected net.txt to still be scanned, got: %+v", fs)
+			}
+		})
+	}
+}
+
 // CIDR matches must shadow the bare IPv4 inside them — otherwise we'd emit
 // "10.0.0.0/8 (cidr)" AND "10.0.0.0 (ipv4)" for the same span.
 func TestNetworkScan_CIDRDoesNotDoubleFire(t *testing.T) {

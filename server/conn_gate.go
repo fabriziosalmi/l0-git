@@ -217,7 +217,7 @@ func checkConnectionStrings(ctx context.Context, root string, opts json.RawMessa
 	scan := parseScanOptions(opts)
 	out := []Finding{}
 	for _, rel := range files {
-		if scan.shouldSkip(rel) {
+		if scan.shouldSkipContent(rel) {
 			continue
 		}
 		abs := filepath.Join(root, rel)
@@ -271,6 +271,15 @@ func scanConnectionLine(rel string, lineNum int, content []byte) []Finding {
 			if p.id == "http_remote" && httpHostExempt(text) {
 				continue
 			}
+			if p.id == "creds_in_url" && credsArePlaceholder(text) {
+				// scheme://${USER}:${PASS}@host — the maintainer has
+				// written the URL as a template; user/pass come from
+				// the environment at runtime. Not a leaked secret.
+				// Claim the span so a lower-severity pattern (e.g.
+				// db_uri) doesn't re-flag the same range.
+				claimed = append(claimed, claimedSpan{start, end})
+				continue
+			}
 			claimed = append(claimed, claimedSpan{start, end})
 			out = append(out, Finding{
 				Severity: p.severity,
@@ -281,6 +290,48 @@ func scanConnectionLine(rel string, lineNum int, content []byte) []Finding {
 		}
 	}
 	return out
+}
+
+// placeholderTokenRe matches a single template-placeholder token used in
+// install scripts, CI workflows, and docs to stand in for credentials
+// supplied at runtime: ${VAR} / $VAR / %s / <name> / {{ var }}.
+var placeholderTokenRe = regexp.MustCompile(
+	`^(?:` +
+		`\$\{[^}]+\}` + // ${VAR}, ${VAR:-default}, ${PG_DB_PASS}
+		`|\$[A-Za-z_][A-Za-z0-9_]*` + // $VAR, $GITEA_TOKEN
+		`|%[sdvqxX]` + // printf verbs: %s %d %v %q %x %X
+		`|<[A-Za-z_][A-Za-z0-9_-]*>` + // <user>, <DB_PASS>
+		`|\{\{\s*[A-Za-z_][A-Za-z0-9_.-]*\s*\}\}` + // {{ user }}, {{var}}
+		`)$`,
+)
+
+// credsArePlaceholder returns true when the password segment of a URL
+// is entirely a single template placeholder. The username is treated
+// as non-sensitive: account names rarely qualify as secrets, and
+// patterns like `postgresql://nodeapp:$DBPASS@host` are templates
+// where only the password is supplied at runtime. The sensitive value
+// is the password — if it's a placeholder, nothing real was committed.
+// Required input shape matches creds_in_url's regex:
+// scheme://USER:PASS@rest.
+func credsArePlaceholder(url string) bool {
+	schemeEnd := strings.Index(url, "://")
+	if schemeEnd < 0 {
+		return false
+	}
+	rest := url[schemeEnd+3:]
+	// User ends at the first ':'; password ends at the first '@'. The
+	// creds_in_url regex guarantees both delimiters exist within the
+	// captured span.
+	colon := strings.Index(rest, ":")
+	if colon < 0 {
+		return false
+	}
+	at := strings.Index(rest[colon+1:], "@")
+	if at < 0 {
+		return false
+	}
+	pass := rest[colon+1 : colon+1+at]
+	return placeholderTokenRe.MatchString(pass)
 }
 
 type claimedSpan struct{ start, end int }

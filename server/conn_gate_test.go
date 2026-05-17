@@ -125,6 +125,108 @@ func TestConnectionStrings_CredsInURLDeduplicates(t *testing.T) {
 	}
 }
 
+// Template-style credentials (${VAR}, $VAR, %s, <name>, {{ var }}) are
+// placeholders supplied at runtime, not committed secrets. The
+// creds_in_url rule must stay quiet whenever the PASSWORD is a
+// placeholder — the username is non-sensitive (account name, not a
+// secret), so mixed forms like `postgresql://nodeapp:$DBPASS@host`
+// also skip. The sensitive value is the password — if it's templated,
+// nothing was leaked.
+func TestConnectionStrings_CredsArePlaceholder(t *testing.T) {
+	cases := []string{
+		"postgresql://${PG_DB_USER}:${PG_DB_PASS}@localhost/${PG_DB_NAME}",
+		"postgresql://$PG_DB_USER:$PG_DB_PASS@localhost:5432/db",
+		"mongodb://%s:%s@host:27017",
+		"https://${GITEA_USER}:${GITEA_TOKEN}@git.example.com/x.git",
+		"redis://<user>:<pass>@cache.example.com:6379",
+		"https://{{ user }}:{{ token }}@api.example.com",
+		// Mixed: literal username, placeholder password — still a
+		// template (the secret value comes from the environment).
+		"postgresql://nodeapp:$DBPASS@localhost/nodeapp",
+		"postgresql://alma:${DB_PASSWORD}@postgres:5432/alma",
+		"https://admin:${PASS}@example.com",
+	}
+	for _, url := range cases {
+		t.Run(url, func(t *testing.T) {
+			if !credsArePlaceholder(url) {
+				t.Errorf("expected placeholder, credsArePlaceholder=false: %s", url)
+			}
+			fs := scanConnectionLine("conf.txt", 1, []byte(url+"\n"))
+			for _, f := range fs {
+				if strings.HasSuffix(f.FilePath, ":creds_in_url") {
+					t.Errorf("placeholder URL must not fire creds_in_url; got: %+v", f)
+				}
+				// Must not be downgraded to db_uri/http_remote either:
+				// the span is claimed by creds_in_url.
+				if strings.HasSuffix(f.FilePath, ":db_uri") || strings.HasSuffix(f.FilePath, ":http_remote") {
+					t.Errorf("placeholder URL leaked to a lower-severity rule: %+v", f)
+				}
+			}
+		})
+	}
+}
+
+// A real credential URL (literal password) must still fire — the
+// placeholder detection must not over-match. Username being literal
+// is fine; the trigger is a literal password.
+func TestConnectionStrings_RealCredsStillFire(t *testing.T) {
+	cases := []string{
+		"postgres://admin:hunter2@db.production.io:5432/app",
+		"https://user:s3cret@api.example.com",
+		"mongodb://root:passw0rd@10.0.0.5:27017",
+		// Literal pass that LOOKS like a token but is not a
+		// placeholder pattern.
+		"https://api:sk-1234567890abcdef@hooks.example.com",
+	}
+	for _, url := range cases {
+		t.Run(url, func(t *testing.T) {
+			if credsArePlaceholder(url) {
+				t.Errorf("real creds must NOT be classified as placeholder: %s", url)
+			}
+			fs := scanConnectionLine("conf.txt", 1, []byte(url+"\n"))
+			matched := false
+			for _, f := range fs {
+				if strings.HasSuffix(f.FilePath, ":creds_in_url") {
+					matched = true
+				}
+			}
+			if !matched {
+				t.Errorf("real creds_in_url must still fire: %s :: %+v", url, fs)
+			}
+		})
+	}
+}
+
+// Data files (.csv/.jsonl/...) are payload-bearing — their addresses
+// and URLs ARE the file's content. Default behaviour: skipped by
+// content scanners.
+func TestConnectionStrings_DataFilesSkippedByDefault(t *testing.T) {
+	// Use api.acme.io — example.com is in the docs-host exempt list.
+	root := initRepoWithFiles(t, map[string]string{
+		"data/urls.csv": "id,url\n1,http://api.acme.io/v1\n2,ftp://leak.acme.io\n",
+		"src/main.go":   "url := \"http://api.acme.io/v1\"\n",
+	})
+	fs, err := checkConnectionStrings(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fs {
+		if strings.HasPrefix(f.FilePath, "data/urls.csv") {
+			t.Errorf("default scan must not flag .csv content: %+v", f)
+		}
+	}
+	// And the .go file must still produce findings.
+	srcHit := false
+	for _, f := range fs {
+		if strings.HasPrefix(f.FilePath, "src/main.go") {
+			srcHit = true
+		}
+	}
+	if !srcHit {
+		t.Errorf("expected .go source to still be scanned, got: %+v", fs)
+	}
+}
+
 func TestConnectionStrings_NotGitRepo(t *testing.T) {
 	fs, err := checkConnectionStrings(context.Background(), t.TempDir(), nil)
 	if err != nil {

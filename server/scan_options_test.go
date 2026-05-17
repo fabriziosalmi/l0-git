@@ -97,3 +97,56 @@ func TestScanOptions_ShouldSkip(t *testing.T) {
 		t.Errorf("explicit false must not skip fixture paths")
 	}
 }
+
+func TestIsDefaultDataFile(t *testing.T) {
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{"data/blocklist.csv", true},
+		{"data/Blocklist.CSV", true}, // case-insensitive ext
+		{"fingerprints.jsonl", true},
+		{"events.ndjson", true},
+		{"export.tsv", true},
+		{"snapshot.parquet", true},
+		{"table.arrow", true},
+		{"vec.feather", true},
+		// must NOT skip
+		{"README.md", false},
+		{"server/main.go", false},
+		{"data.json", false},   // .json is structured but not line-delimited; gates handle it
+		{"config.yaml", false}, // structured config — must still scan
+		{"weights.bin", false}, // binary, but content scanners catch it via isBinary
+	}
+	for _, c := range cases {
+		t.Run(c.path, func(t *testing.T) {
+			if got := isDefaultDataFile(c.path); got != c.want {
+				t.Errorf("%q: got %v, want %v", c.path, got, c.want)
+			}
+		})
+	}
+}
+
+func TestScanOptions_ShouldSkipContent(t *testing.T) {
+	// Default (nil opts): data files are skipped by content scanners,
+	// but the metadata-only shouldSkip path still sees them.
+	parsed := parseScanOptions(nil)
+	if !parsed.shouldSkipContent("data/blocklist.csv") {
+		t.Errorf("default opts must skip .csv in content scan")
+	}
+	if parsed.shouldSkip("data/blocklist.csv") {
+		t.Errorf("shouldSkip (metadata path) must NOT skip .csv — large_file/vendored need to see it")
+	}
+
+	// Explicit false: data files become scannable.
+	parsedOff := parseScanOptions(json.RawMessage(`{"skip_default_data_files":false}`))
+	if parsedOff.shouldSkipContent("data/blocklist.csv") {
+		t.Errorf("explicit false must not skip .csv")
+	}
+
+	// ExcludePaths still works on top of data-file skip.
+	o := scanOptions{ExcludePaths: []string{"docs/*"}, SkipDefaultDataFiles: boolPtr(true), SkipDefaultFixturePaths: boolPtr(true)}
+	if !o.shouldSkipContent("docs/README.md") || !o.shouldSkipContent("data/x.csv") {
+		t.Errorf("shouldSkipContent must respect ExcludePaths AND data-file skip")
+	}
+}
