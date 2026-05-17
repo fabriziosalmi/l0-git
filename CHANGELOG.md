@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.17] - 2026-05-17
+
 ### Changed
 
 - **Content-scan gates skip tabular data files by default**. `network_scan`, `connection_strings`, `secrets_scan` (via the same option struct), `markdown_lint`, `html_lint`, `css_lint`, `dockerfile_lint`, `compose_lint`, and `dead_placeholders` now skip `.csv`, `.tsv`, `.jsonl`, `.ndjson`, `.parquet`, `.arrow`, `.feather` — the addresses, URLs, and hashes inside are the file's payload, not embedded literals. Opt out per-gate with `"skip_default_data_files": false` in `gate_options`. Metadata-only gates (`large_file_tracked`, `vendored_dir_tracked`, …) still see these files.
