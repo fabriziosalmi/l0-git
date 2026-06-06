@@ -64,6 +64,43 @@ func TestGitignoreCoverage_RustProject(t *testing.T) {
 	}
 }
 
+// A glob already present (`*.DS_Store`) covers the literal (`.DS_Store`) —
+// the gate must NOT propose a redundant add.
+func TestGitignoreCoverage_GlobPatternCoversLiteral(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "package.json"), `{}`)
+	mustWrite(t, filepath.Join(root, ".gitignore"), "node_modules/\n*.DS_Store\n")
+	fs, err := checkGitignoreCoverage(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fs {
+		if strings.Contains(f.FilePath, "DS_Store") {
+			t.Errorf("*.DS_Store should cover .DS_Store; got redundant finding: %+v", f)
+		}
+	}
+}
+
+// A similar-but-non-covering pattern (`venv` does NOT cover `.venv`) must still flag.
+func TestGitignoreCoverage_SimilarPatternStillFlags(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "pyproject.toml"), "[project]\nname='x'\n")
+	mustWrite(t, filepath.Join(root, ".gitignore"), "__pycache__/\nvenv\n")
+	fs, err := checkGitignoreCoverage(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hit := false
+	for _, f := range fs {
+		if strings.Contains(f.FilePath, ".venv") {
+			hit = true
+		}
+	}
+	if !hit {
+		t.Fatalf("`venv` must not be treated as covering `.venv`; expected a .venv finding: %+v", fs)
+	}
+}
+
 func TestGitignoreCoverage_PythonProject(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, filepath.Join(root, "pyproject.toml"), "[project]\nname='x'\n")

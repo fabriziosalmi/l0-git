@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **`gitignore_coverage` is now glob-aware — no more redundant suggestions.** The gate matched recommended entries (`.DS_Store`, `.venv`, …) against `.gitignore` lines by exact/normalised string only, so a project already ignoring `*.DS_Store` was still told to add `.DS_Store`. Coverage now also honours globs via `filepath.Match` (`*.DS_Store` covers `.DS_Store`), while preserving the literal distinction that matters (`venv` does NOT cover `.venv`).
+
 ## [0.1.18] - 2026-06-06
 
 ### Fixed

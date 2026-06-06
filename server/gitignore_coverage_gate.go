@@ -112,7 +112,7 @@ func checkGitignoreCoverage(_ context.Context, root string, opts json.RawMessage
 			if disabled[normalised] {
 				continue
 			}
-			if covered[normalised] {
+			if coveredBy(covered, normalised) {
 				continue
 			}
 			advice := req.reason
@@ -172,6 +172,31 @@ func readGitignorePatterns(root string) (map[string]bool, error) {
 		out[normaliseGitignorePattern(line)] = true
 	}
 	return out, nil
+}
+
+// coveredBy reports whether `want` is already covered by an existing .gitignore
+// pattern — exact match OR a glob that matches it (e.g. `*.DS_Store` already
+// covers `.DS_Store`, `*.log` does not cover `.DS_Store`). Without the glob
+// check the gate would propose a redundant entry that adds nothing.
+func coveredBy(covered map[string]bool, want string) bool {
+	if covered[want] {
+		return true
+	}
+	base := want
+	if i := strings.LastIndex(want, "/"); i >= 0 {
+		base = want[i+1:]
+	}
+	for pat := range covered {
+		if ok, _ := filepath.Match(pat, want); ok {
+			return true
+		}
+		if base != want {
+			if ok, _ := filepath.Match(pat, base); ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // normaliseGitignorePattern collapses `node_modules`, `node_modules/`,
