@@ -165,6 +165,32 @@ func TestVendoredDirTracked_SilentForGoVendor(t *testing.T) {
 	}
 }
 
+// A `vendor` dir under a served static web root (e.g. ui/public/vendor) is
+// hand-committed assets, not rebuildable package vendoring — must NOT be flagged
+// (untracking would delete served files nothing rebuilds).
+func TestVendoredDirTracked_SkipsServedStaticAssets(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"ui/public/vendor/chart.min.js":       "x",
+		"ui/public/vendor/fonts/inter.woff2":  "y",
+		"src/static/vendor/lib.js":            "z",
+		"vendor/foo/foo.go":                   "package foo", // root vendor still flagged
+	})
+	fs, err := checkVendoredDirTracked(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := map[string]bool{}
+	for _, f := range fs {
+		keys[f.FilePath] = true
+	}
+	if keys["ui/public/vendor"] || keys["src/static/vendor"] {
+		t.Errorf("served static vendor dirs must NOT be flagged, got: %v", keys)
+	}
+	if !keys["vendor"] {
+		t.Errorf("root vendor/ (no manifest) should still be flagged, got: %v", keys)
+	}
+}
+
 func TestVendoredDirTracked_FlagsVendorWithoutModulesTxt(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
 		"go.mod":            "module example.com/m\ngo 1.22\n",

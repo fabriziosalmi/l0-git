@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **`vendored_dir_tracked` no longer flags vendored dirs under a served static web root.** A `vendor/`, `node_modules/`, … directory under `public/`, `static/`, `assets/`, `www/`, `htdocs/`, or `wwwroot/` holds hand-committed third-party assets (fonts, chart libs, polyfills) that nothing rebuilds — `git rm -r --cached`-ing them would delete files the site serves and break the build. Those paths are now skipped. Package-manager vendoring and build outputs (`dist/`, `build/`, `target/`, root `vendor/` without a manifest) are still flagged.
+
 ## [0.1.17] - 2026-05-17
 
 ### Changed

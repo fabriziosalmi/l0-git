@@ -199,7 +199,7 @@ func checkVendoredDirTracked(ctx context.Context, root string, opts json.RawMess
 					break
 				}
 				seen[key] = true
-				if legitimateVendor[prefix] {
+				if legitimateVendor[prefix] || underServedStaticRoot(key) {
 					break
 				}
 				out = append(out, Finding{
@@ -244,6 +244,27 @@ func buildLegitimateVendorSet(root string) map[string]bool {
 		ok["vendor/"] = true
 	}
 	return ok
+}
+
+// servedStaticRoots are web roots whose contents are served as-is. A vendored
+// directory under one of these (e.g. ui/public/vendor) holds hand-committed
+// third-party assets that nothing rebuilds — removing it from git would break
+// the site. That is the opposite of package-manager vendoring or build outputs,
+// so such directories must NOT be flagged for untracking.
+var servedStaticRoots = map[string]bool{
+	"public": true, "static": true, "assets": true,
+	"www": true, "htdocs": true, "wwwroot": true,
+}
+
+// underServedStaticRoot reports whether a vendored-dir key sits under a served
+// static web root (any path segment matches servedStaticRoots).
+func underServedStaticRoot(key string) bool {
+	for _, seg := range strings.Split(key, "/") {
+		if servedStaticRoots[seg] {
+			return true
+		}
+	}
+	return false
 }
 
 // dirMatchesAtAnyDepth returns true when rel contains "/<prefix>" or starts
