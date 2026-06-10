@@ -87,6 +87,7 @@ func TestRunChecks_EmptyDir(t *testing.T) {
 		"ci_workflow_present",
 		"code_of_conduct_present",
 		"compose_lint",              // skipped (not git)
+		"config_parse_error",        // skipped (not git)
 		"connection_strings",        // skipped (not git)
 		"contributing_present",
 		"css_lint",                  // skipped (not git)

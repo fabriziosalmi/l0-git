@@ -21,7 +21,7 @@ project never blocks on probabilistic signals.
 - **Pure Go** — `modernc.org/sqlite`, `golang.org/x/net/html`, `gopkg.in/yaml.v3`,
   `github.com/yuin/goldmark`. No CGO, no Python, no rule engine, no YAML DSL.
 - **One binary, two modes**: `lgit mcp` (stdio MCP server) and `lgit <subcmd>` CLI.
-- **34 built-in gates** across project hygiene, security (incl. history scanning),
+- **35 built-in gates** across project hygiene, security (incl. history scanning),
   git hygiene, accessibility, frontend quality, containers, governance,
   documentation, release hygiene.
 - **`.l0git.json`** per-project config: ignore gates, override severity,
@@ -39,7 +39,7 @@ project never blocks on probabilistic signals.
 
 ## Status
 
-- 34 gates registered. l0-git scans clean against itself with the
+- 35 gates registered. l0-git scans clean against itself with the
   bundled [`.l0git.json`](.l0git.json) (test fixtures and gate-source
   self-references suppressed).
 - 500+ PASS, race-clean. CI matrix: Linux / macOS / Windows × Go 1.22 / 1.23.
@@ -53,7 +53,7 @@ server/      Go MCP server + CLI (the `lgit` binary)
 extension/   VSCode extension (TreeView + Overview + bundled binaries)
 ```
 
-## Built-in gates (34)
+## Built-in gates (35)
 
 Grouped by theme. Severity is the *default* — every gate's severity can be
 overridden per-project via `.l0git.json`. Tags are CSV strings used for
@@ -76,13 +76,14 @@ filtering in the UI and the dashboard.
 | `codeowners_present`          | info     | `CODEOWNERS` at root, `.github/`, or `docs/` — silent on docs-only repos |
 | `branch_protection_declared`  | info     | **Opt-in.** Verifies `.github/settings.yml` (Probot Settings) declares `branches: [{protection: …}]`. Can't read the server-side GitHub state — that needs an auth'd API call, out of scope |
 
-### Quality + release hygiene (3)
+### Quality + release hygiene (4)
 
 | Gate ID            | Severity        | What it checks                                                              |
 |--------------------|-----------------|-----------------------------------------------------------------------------|
 | `tests_present`    | warning / info  | Multi-language test detection (Go, Python, TS/JS, Rust, Java, Kotlin, Ruby) |
 | `version_drift`    | warning         | Cross-checks declared versions across `package.json`, `Cargo.toml`, `pyproject.toml`, `mix.exs`, `pom.xml`, `VERSION` |
 | `nvmrc_missing`    | info            | `package.json` exists but no `.nvmrc` / `.node-version` pins the runtime    |
+| `config_parse_error` | warning       | Tracked JSON/YAML that fails to parse. Skips JSONC (`tsconfig`, `.vscode/*`, `*.jsonc`) and templates (`{{ }}`, `<% %>`); accepts custom YAML tags + multi-doc. TOML/INI out of scope |
 
 ### Git hygiene (7)
 

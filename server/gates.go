@@ -122,6 +122,14 @@ func gateRegistry() []Gate {
 			Check:       checkTestsPresent,
 		},
 		{
+			ID:          "config_parse_error",
+			Title:       "Config file failed to parse",
+			Description: "Parses every tracked JSON and YAML config file and flags any that don't parse — a broken package.json, CI workflow, or k8s manifest is a deterministic defect. JSONC (tsconfig, .vscode/*.json, *.jsonc) and template files (Helm/Jinja {{ }}, ERB <% %>) are skipped; custom YAML tags (!Ref, …) are accepted. TOML/INI are out of scope.",
+			Severity:    SeverityWarning,
+			Tags:        "quality,build",
+			Check:       checkConfigParse,
+		},
+		{
 			ID:          "merge_conflict_markers",
 			Title:       "Merge conflict markers in tracked file",
 			Description: "Detects unresolved git merge conflict markers (<<<<<<<, =======, >>>>>>>) in tracked files. Anything that lands on main with these is a bug.",

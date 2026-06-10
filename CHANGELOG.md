@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **New gate `config_parse_error`** — parses every tracked JSON and YAML config file and flags any that fail to parse. A broken `package.json`, CI workflow, or k8s manifest is a deterministic defect that breaks downstream tooling the moment it lands. Built to the zero-FP bar: JSONC files (`tsconfig.json`, `.vscode/*.json`, `*.jsonc`) are skipped by path, and any other `.json` that merely uses comments or trailing commas is rescued by a tolerant re-parse before it could be flagged; YAML is decoded into a `yaml.Node` so custom tags (`!Ref`, `!GetAtt`, …) and multi-document files are accepted, and template files (Helm/Jinja `{{ }}`, ERB `<% %>`) are skipped. A UTF-8 BOM and empty files are tolerated. TOML and INI are intentionally out of scope (no parser without a new dependency; INI has no single grammar). Honours the shared `exclude_paths` / `skip_default_*` options. Verified zero false positives across a real-world repo corpus.
+
 ## [0.1.19] - 2026-06-06
 
 ### Fixed
