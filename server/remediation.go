@@ -122,13 +122,19 @@ func remediateVendoredDir(f Finding) Remediation {
 			{Run: fmt.Sprintf("git rm -r --cached %s", shellQuote(dir)), Note: "remove from the index, leave on disk"},
 			{Run: fmt.Sprintf("git commit -m %s", shellQuote("stop tracking "+dir))},
 		},
-		FileEdits: []FileEdit{
-			{Path: ".gitignore", Op: OpAppend, Content: dir + "/\n"},
-		},
 		Caveats: []string{"Other contributors will see the directory disappear from git on next pull — they keep their local copies."},
 	}
+	// The dir is TRACKED. If .gitignore already covers it, re-appending the line is
+	// redundant — and an agent/gate that rejects redundant .gitignore edits would drop
+	// the whole fix, leaving the dir tracked forever. Only add the line when it's missing.
+	summary := fmt.Sprintf("Stop tracking %s in git and add it to .gitignore.", dir)
+	if ignoreAlreadyCovered(f.Project, dir+"/") {
+		summary = fmt.Sprintf("Stop tracking %s in git (already covered by .gitignore).", dir)
+	} else {
+		recipe.FileEdits = []FileEdit{{Path: ".gitignore", Op: OpAppend, Content: dir + "/\n"}}
+	}
 	return Remediation{
-		Summary:      fmt.Sprintf("Stop tracking %s in git and add it to .gitignore.", dir),
+		Summary:      summary,
 		Confidence:   ConfidenceDeter,
 		Recipe:       recipe,
 		ClaudePrompt: buildClaudePrompt(f, "Apply the recipe exactly. Do not touch unrelated files.", recipe),
@@ -154,12 +160,18 @@ func remediateIdeArtifact(f Finding) Remediation {
 			{Run: fmt.Sprintf("git rm --cached %s", shellQuote(rel)), Note: "remove from the index, leave on disk"},
 			{Run: fmt.Sprintf("git commit -m %s", shellQuote("untrack editor artefact "+rel))},
 		},
-		FileEdits: []FileEdit{
-			{Path: ".gitignore", Op: OpAppend, Content: ignoreLine + "\n"},
-		},
+	}
+	// The artefact is TRACKED. If .gitignore already covers it, re-appending the line is
+	// redundant — and an agent/gate that rejects redundant .gitignore edits would drop the
+	// whole fix, leaving the file tracked forever. Only add the line when it's missing.
+	summary := fmt.Sprintf("Untrack %s and ignore it going forward.", rel)
+	if ignoreAlreadyCovered(f.Project, ignoreLine) {
+		summary = fmt.Sprintf("Untrack %s (already covered by .gitignore).", rel)
+	} else {
+		recipe.FileEdits = []FileEdit{{Path: ".gitignore", Op: OpAppend, Content: ignoreLine + "\n"}}
 	}
 	return Remediation{
-		Summary:      fmt.Sprintf("Untrack %s and ignore it going forward.", rel),
+		Summary:      summary,
 		Confidence:   ConfidenceDeter,
 		Recipe:       recipe,
 		ClaudePrompt: buildClaudePrompt(f, "Apply the recipe exactly. Do not touch unrelated files.", recipe),
@@ -325,6 +337,19 @@ func largeBlobThresholdMB(project string) int {
 		return 5
 	}
 	return parsed.ThresholdMB
+}
+
+// ignoreAlreadyCovered reports whether the project root's .gitignore already covers
+// ignoreLine (e.g. `.vscode/`, `node_modules/`). Reused by the untrack recipes to drop a
+// redundant .gitignore append when the pattern is already present. `want` is normalised to
+// match readGitignorePatterns' keys (coveredBy compares against the normalised set). Fails
+// open (false) when the .gitignore can't be read, so an unreadable root keeps prior behaviour.
+func ignoreAlreadyCovered(root, ignoreLine string) bool {
+	pats, err := readGitignorePatterns(root)
+	if err != nil {
+		return false
+	}
+	return coveredBy(pats, normaliseGitignorePattern(ignoreLine))
 }
 
 // shellQuote returns s wrapped in single quotes, with any embedded single

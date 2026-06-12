@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -48,6 +50,57 @@ func TestRemediationFor_IdeArtifactPicksDirGlob(t *testing.T) {
 	}
 	if got := r.Recipe.FileEdits[0].Content; !strings.Contains(got, ".vscode/") {
 		t.Errorf("expected .vscode/ ignore, got %q", got)
+	}
+}
+
+func TestRemediationFor_IdeArtifactSkipsRedundantIgnore(t *testing.T) {
+	// .vscode/ is ALREADY in .gitignore -> the recipe must NOT re-append it (that redundant
+	// edit would get a downstream agent to drop the whole fix), but the untrack must remain.
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("node_modules/\n.vscode/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := RemediationFor(Finding{GateID: "ide_artifact_tracked", Project: dir, FilePath: ".vscode/settings.json"})
+	if r.Recipe == nil {
+		t.Fatal("expected recipe")
+	}
+	if len(r.Recipe.FileEdits) != 0 {
+		t.Errorf("expected no .gitignore edit (already covered), got %+v", r.Recipe.FileEdits)
+	}
+	if len(r.Recipe.Commands) == 0 || !strings.Contains(r.Recipe.Commands[0].Run, "git rm --cached") {
+		t.Errorf("the untrack command must remain, got %+v", r.Recipe.Commands)
+	}
+	if !strings.Contains(r.Summary, "already covered") {
+		t.Errorf("summary should note already-covered, got %q", r.Summary)
+	}
+}
+
+func TestRemediationFor_IdeArtifactAddsIgnoreWhenMissing(t *testing.T) {
+	// .gitignore exists but does NOT cover .vscode/ -> the append is still produced.
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("node_modules/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := RemediationFor(Finding{GateID: "ide_artifact_tracked", Project: dir, FilePath: ".vscode/settings.json"})
+	if r.Recipe == nil || len(r.Recipe.FileEdits) != 1 || !strings.Contains(r.Recipe.FileEdits[0].Content, ".vscode/") {
+		t.Errorf("expected a .vscode/ .gitignore edit when not covered, got %+v", r.Recipe)
+	}
+}
+
+func TestRemediationFor_VendoredDirSkipsRedundantIgnore(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("node_modules/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := RemediationFor(Finding{GateID: "vendored_dir_tracked", Project: dir, FilePath: "node_modules"})
+	if r.Recipe == nil || len(r.Recipe.FileEdits) != 0 {
+		t.Errorf("expected no .gitignore edit (node_modules already covered), got %+v", r.Recipe)
+	}
+	if len(r.Recipe.Commands) == 0 || !strings.Contains(r.Recipe.Commands[0].Run, "git rm -r --cached") {
+		t.Errorf("the untrack command must remain, got %+v", r.Recipe.Commands)
+	}
+	if !strings.Contains(r.Summary, "already covered") {
+		t.Errorf("summary should note already-covered, got %q", r.Summary)
 	}
 }
 
