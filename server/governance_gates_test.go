@@ -62,8 +62,8 @@ func TestCodeowners_FiresOnCodebase(t *testing.T) {
 
 func TestCodeowners_GithubLocationSatisfies(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
-		"main.go":             "package main\n",
-		".github/CODEOWNERS":  "* @me\n",
+		"main.go":            "package main\n",
+		".github/CODEOWNERS": "* @me\n",
 	})
 	fs, err := checkCodeownersPresent(context.Background(), root, nil)
 	if err != nil {
@@ -114,6 +114,16 @@ func TestEnvExample_HashInsideQuoteIsNotAComment(t *testing.T) {
 	fs := evaluateEnvExample(".env.example", src)
 	if len(fs) != 1 {
 		t.Errorf("hash-in-string must NOT count as comment, got: %+v", fs)
+	}
+}
+
+// Quoted values containing = must not be split incorrectly.
+func TestEnvExample_EqualsInsideQuoteIsNotAKeyValSplit(t *testing.T) {
+	src := `DATABASE_URL="postgres://example.com/db?token=abc"
+`
+	fs := evaluateEnvExample(".env.example", src)
+	if len(fs) != 0 {
+		t.Errorf("equals-inside-quote must not trigger finding, got: %+v", fs)
 	}
 }
 
