@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.21] - 2026-06-12
+
 ### Fixed
 
 - **Untrack recipes no longer append a redundant `.gitignore` line.** The `ide_artifact_tracked` and `vendored_dir_tracked` remediations always added the ignore pattern to `.gitignore`, even when it was already covered — the common case, since git keeps tracking files added *before* an ignore rule, so a tracked-but-ignored artefact is exactly what the gate flags. The redundant edit is harmless to a human, but makes automated consumers that reject redundant `.gitignore` changes drop the *whole* remediation — so the artefact is never untracked and gets re-flagged every scan. The append is now emitted only when the pattern isn't already covered (reusing the gate's `readGitignorePatterns`/`coveredBy`); otherwise the recipe is the untrack command alone and the summary notes "(already covered by .gitignore)". Fails open (keeps the append) when `.gitignore` can't be read. Mirrors the v0.1.19 glob-aware fix on the detection side.
