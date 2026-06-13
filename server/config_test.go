@@ -118,3 +118,18 @@ func TestProjectConfig_NilSafe(t *testing.T) {
 		t.Errorf("nil config severity should fall through, got %q", got)
 	}
 }
+
+func TestProjectConfig_EmptyExcludePaths(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, projectConfigFilename), `{
+		"exclude_paths": []
+	}`)
+	cfg, err := loadProjectConfig(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts := parseScanOptions(cfg.optionsFor("secrets_scan"))
+	if len(opts.ExcludePaths) != 0 {
+		t.Errorf("expected empty ExcludePaths, got %v", opts.ExcludePaths)
+	}
+}
