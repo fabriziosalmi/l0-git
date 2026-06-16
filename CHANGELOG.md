@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.22] - 2026-06-16
+
 ### Fixed
 
 - **`vendored_dir_tracked` no longer flags a `vendor/` of hand-committed web assets.** Self-hosted fonts/CSS/JS vendored same-origin to remove third-party egress (e.g. `vendor/font-awesome/*.woff2`, `docs/vendor/chart.umd.min.js`) are *served* by the site and rebuilt by nothing — `git rm -r --cached` + `.gitignore` would 404 the deployed page, the inverse of package-manager vendoring. The gate already exempted package-manager `vendor/` (go.mod+modules.txt, composer, bundler) and dirs under a served static root (`public`/`static`/…), but missed a top-level `vendor/` and a GitHub-Pages `docs/vendor/` of hand-committed assets. Now a `vendor/`-prefixed dir containing browser-served files (`woff2`/`woff`/`ttf`/`eot`/`otf`/`css`/`js`/`svg`/`map`) is left tracked; `node_modules`/`bower_components` stay flagged (the exemption is scoped to the `vendor/` prefix).
