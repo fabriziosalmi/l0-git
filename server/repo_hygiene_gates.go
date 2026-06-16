@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -199,7 +200,11 @@ func checkVendoredDirTracked(ctx context.Context, root string, opts json.RawMess
 					break
 				}
 				seen[key] = true
-				if legitimateVendor[prefix] || underServedStaticRoot(key) {
+				// vendor/ of hand-committed web assets (self-hosted fonts/CSS/JS that
+				// kill third-party egress) is served, not rebuildable — never untrack it.
+				// Scoped to vendor/ so node_modules/bower_components stay flagged.
+				if legitimateVendor[prefix] || underServedStaticRoot(key) ||
+					(prefix == "vendor/" && vendorHoldsServedWebAssets(root, key)) {
 					break
 				}
 				out = append(out, Finding{
@@ -265,6 +270,35 @@ func underServedStaticRoot(key string) bool {
 		}
 	}
 	return false
+}
+
+// servedWebAssetExts are extensions a browser fetches directly. A vendor/ dir
+// holding these is hand-committed third-party web assets (self-hosted fonts /
+// CSS / JS to remove third-party egress) that NOTHING rebuilds — `git rm` would
+// 404 the deployed site. That is the inverse of a package-manager vendor dir, so
+// it must not be flagged for untracking.
+var servedWebAssetExts = map[string]bool{
+	".woff2": true, ".woff": true, ".ttf": true, ".eot": true, ".otf": true,
+	".css": true, ".js": true, ".mjs": true, ".svg": true, ".map": true,
+}
+
+var errFoundWebAsset = errors.New("served web asset found")
+
+// vendorHoldsServedWebAssets reports whether the directory at key (slash path,
+// relative to root) contains any browser-served asset. The walk stops at the
+// first hit, so a large tree is not fully traversed.
+func vendorHoldsServedWebAssets(root, key string) bool {
+	dir := filepath.Join(root, filepath.FromSlash(key))
+	err := filepath.Walk(dir, func(_ string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil || info == nil || info.IsDir() {
+			return nil
+		}
+		if servedWebAssetExts[strings.ToLower(filepath.Ext(info.Name()))] {
+			return errFoundWebAsset
+		}
+		return nil
+	})
+	return errors.Is(err, errFoundWebAsset)
 }
 
 // dirMatchesAtAnyDepth returns true when rel contains "/<prefix>" or starts

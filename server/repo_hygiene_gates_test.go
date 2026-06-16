@@ -191,6 +191,38 @@ func TestVendoredDirTracked_SkipsServedStaticAssets(t *testing.T) {
 	}
 }
 
+// A vendor/ of hand-committed web assets (self-hosted fonts/CSS/JS that kill
+// third-party egress) is served, not rebuildable — must NOT be flagged, even at
+// the repo root (lws/vendor/font-awesome) or under docs/ for GitHub Pages
+// (blacklists/docs/vendor/chart.js), neither of which the served-static-root
+// list covers. node_modules with .js MUST still be flagged.
+func TestVendoredDirTracked_SkipsHandVendoredWebAssets(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"vendor/font-awesome/all.min.css":        "x",
+		"vendor/font-awesome/fa-solid-900.woff2":  "y",
+		"docs/vendor/chart.umd.min.js":            "z",
+		"src/internal/thing.go":                   "package internal",
+		"node_modules/react/index.js":             "m",
+	})
+	fs, err := checkVendoredDirTracked(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := map[string]bool{}
+	for _, f := range fs {
+		keys[f.FilePath] = true
+	}
+	if keys["vendor"] {
+		t.Errorf("root vendor/ of webfonts must NOT be flagged (hand-vendored web assets), got: %v", keys)
+	}
+	if keys["docs/vendor"] {
+		t.Errorf("docs/vendor of a vendored JS lib must NOT be flagged, got: %v", keys)
+	}
+	if !keys["node_modules"] {
+		t.Errorf("node_modules must STILL be flagged (package-managed, not served), got: %v", keys)
+	}
+}
+
 func TestVendoredDirTracked_FlagsVendorWithoutModulesTxt(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
 		"go.mod":            "module example.com/m\ngo 1.22\n",
