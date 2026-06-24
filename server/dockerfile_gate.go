@@ -75,8 +75,28 @@ var dockerfileRules = []dockerfileRule{
 	},
 }
 
+// stageAliases collects every build-stage name introduced by `FROM <img> AS
+// <name>`. A later `FROM <name>` references that internal stage, not a registry
+// image, so it cannot carry a tag and must never be flagged as untagged.
+func stageAliases(instrs []dockerfileInstr) map[string]bool {
+	aliases := map[string]bool{}
+	for _, ins := range instrs {
+		if ins.Kind != "FROM" {
+			continue
+		}
+		fields := strings.Fields(ins.Args)
+		for i := 0; i+1 < len(fields); i++ {
+			if strings.EqualFold(fields[i], "AS") {
+				aliases[strings.ToLower(fields[i+1])] = true
+			}
+		}
+	}
+	return aliases
+}
+
 func checkFromUntagged(instrs []dockerfileInstr) []dockerfileViolation {
 	out := []dockerfileViolation{}
+	aliases := stageAliases(instrs)
 	for i, ins := range instrs {
 		if ins.Kind != "FROM" {
 			continue
@@ -84,6 +104,12 @@ func checkFromUntagged(instrs []dockerfileInstr) []dockerfileViolation {
 		image := fromImage(ins.Args)
 		// Anything with a digest is pinned by definition; allow.
 		if strings.Contains(image, "@sha256:") {
+			continue
+		}
+		// A reference to an earlier build stage (e.g. `FROM builder`) is an
+		// internal alias, not a registry image — it cannot be tagged. The
+		// single most common multi-stage idiom; flagging it is a pure FP.
+		if aliases[strings.ToLower(image)] {
 			continue
 		}
 		// Strip platform prefix variants like "--platform=linux/amd64".

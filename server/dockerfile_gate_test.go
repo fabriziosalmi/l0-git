@@ -32,6 +32,28 @@ func TestDockerfile_FromUntagged(t *testing.T) {
 	}
 }
 
+// TestDockerfile_FromStageAliasNotUntagged locks in the FP fix: a second-stage
+// `FROM builder` references an internal `AS builder` stage, which cannot carry a
+// tag — the most common multi-stage idiom must not fire from_untagged.
+func TestDockerfile_FromStageAliasNotUntagged(t *testing.T) {
+	src := "FROM golang:1.22 AS builder\nRUN go build -o app\n\nFROM builder AS final\nUSER nobody\nCMD [\"app\"]\n"
+	fs := runRules(t, src)
+	if findFindingByRule(fs, "from_untagged") != nil {
+		t.Errorf("FROM <stage-alias> must not fire from_untagged: %+v", fs)
+	}
+}
+
+// TestDockerfile_HeredocBodyNotInstruction locks in the FP fix: BuildKit heredoc
+// body lines are file/script data, not Dockerfile instructions — a `USER root`
+// inside a heredoc must not fire user_root.
+func TestDockerfile_HeredocBodyNotInstruction(t *testing.T) {
+	src := "FROM alpine:3.19\nCOPY <<FILE /app/config.txt\nsetting=value\nUSER root\nFILE\nUSER appuser\n"
+	fs := runRules(t, src)
+	if findFindingByRule(fs, "user_root") != nil {
+		t.Errorf("USER root inside a heredoc must not fire user_root: %+v", fs)
+	}
+}
+
 func TestDockerfile_FromTaggedNoFinding(t *testing.T) {
 	fs := runRules(t, "FROM node:20-alpine\nUSER nobody\nCMD [\"x\"]\n")
 	if findFindingByRule(fs, "from_untagged") != nil {

@@ -117,13 +117,17 @@ func TestEnvExample_HashInsideQuoteIsNotAComment(t *testing.T) {
 	}
 }
 
-// Quoted values containing = must not be split incorrectly.
+// Quoted values containing = must not be split incorrectly. The first `=`
+// correctly yields key=DATABASE_URL (the `=` inside the quoted value is not a
+// second split point); the key is uncommented, so — exactly like the
+// hash-in-quote twin above — it fires precisely one finding. (The prior `!= 0`
+// expectation was inconsistent with that twin and never matched the gate.)
 func TestEnvExample_EqualsInsideQuoteIsNotAKeyValSplit(t *testing.T) {
 	src := `DATABASE_URL="postgres://example.com/db?token=abc"
 `
 	fs := evaluateEnvExample(".env.example", src)
-	if len(fs) != 0 {
-		t.Errorf("equals-inside-quote must not trigger finding, got: %+v", fs)
+	if len(fs) != 1 {
+		t.Errorf("equals-inside-quote: expected one uncommented-key finding, got: %+v", fs)
 	}
 }
 

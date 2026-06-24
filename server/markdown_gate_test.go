@@ -226,6 +226,60 @@ func TestMD_LinkAnchorSlugNormalisation(t *testing.T) {
 	}
 }
 
+// TestGithubSlug locks the faithful github-slugger algorithm: Unicode letters
+// preserved, runs of hyphens NOT collapsed, leading/trailing hyphens NOT
+// trimmed, punctuation dropped (not replaced). These are the three divergences
+// the old ASCII approximation got wrong.
+func TestGithubSlug(t *testing.T) {
+	cases := map[string]string{
+		"Hello, World!":     "hello-world",
+		"Node.js & npm":     "nodejs--npm",
+		"Café Menu":         "café-menu",
+		"🚀 Getting Started": "-getting-started",
+		"snake_case_id":     "snake_case_id",
+		"a -- b":            "a----b", // 2 spaces + 2 literal hyphens, none collapsed
+	}
+	for in, want := range cases {
+		if got := githubSlug(in); got != want {
+			t.Errorf("githubSlug(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// Headings the old approximation mis-slugged (inline code double-counted,
+// consecutive dashes collapsed) must now match their real GitHub anchor.
+func TestMD_LinkAnchorSluggerParity(t *testing.T) {
+	cases := []struct{ name, src string }{
+		{"inline_code", "## The `config.json` file\n\n[x](#the-configjson-file)\n"},
+		{"double_dash", "## Node.js & npm\n\n[x](#nodejs--npm)\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fs := runMDRules(t, tc.src)
+			if f := findFindingByRule(fs, "link_anchor_broken"); f != nil {
+				t.Errorf("valid anchor must not fire link_anchor_broken: %+v", f)
+			}
+		})
+	}
+}
+
+// Explicit HTML anchors (<a name>, <h2 id>) are valid link targets and must not
+// be reported as broken.
+func TestMD_LinkAnchorExplicitHTML(t *testing.T) {
+	cases := []struct{ name, src string }{
+		{"h2_id", "<h2 id=\"install\">Installation</h2>\n\n[x](#install)\n"},
+		{"a_name", "<a name=\"custom\"></a>\n\nText [x](#custom)\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fs := runMDRules(t, tc.src)
+			if f := findFindingByRule(fs, "link_anchor_broken"); f != nil {
+				t.Errorf("explicit HTML anchor must not fire link_anchor_broken: %+v", f)
+			}
+		})
+	}
+}
+
 // Inline override silences the rule and emits override_accepted.
 func TestMD_InlineOverride(t *testing.T) {
 	src := "<!-- l0git: ignore image_no_alt reason: decorative spacer -->\n![](spacer.png)\n"

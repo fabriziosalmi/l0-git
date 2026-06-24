@@ -33,6 +33,34 @@ func commitAndRemove(t *testing.T, secret string) string {
 	return root
 }
 
+// commitAndRemoveNamed is commitAndRemove for an arbitrary relative path (so a
+// test can exercise the detection-rule / data-file skips that key off the path,
+// not just secret.txt). Content is written verbatim.
+func commitAndRemoveNamed(t *testing.T, relPath, content string) string {
+	t.Helper()
+	root := t.TempDir()
+	gitInit(t, root)
+	runGit(t, root, "config", "user.email", "t@t")
+	runGit(t, root, "config", "user.name", "t")
+
+	full := filepath.Join(root, relPath)
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(full, []byte(content+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, root, "add", "-A")
+	runGit(t, root, "commit", "-q", "-m", "introduce")
+
+	if err := os.Remove(full); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, root, "add", "-A")
+	runGit(t, root, "commit", "-q", "-m", "remove")
+	return root
+}
+
 func TestSecretsScanHistory_DefaultOff(t *testing.T) {
 	root := commitAndRemove(t, "AKIA"+strings.Repeat("A", 16))
 	fs, err := checkSecretsScanHistory(context.Background(), root, nil)
@@ -45,7 +73,11 @@ func TestSecretsScanHistory_DefaultOff(t *testing.T) {
 }
 
 func TestSecretsScanHistory_FindsRemovedSecret(t *testing.T) {
-	root := commitAndRemove(t, "AKIA"+strings.Repeat("A", 16))
+	// A realistic high-entropy key — clears the 3.5 bits/char entropy floor
+	// the history gate now shares with the working-tree gate. (A synthetic
+	// all-same-char key would be suppressed as a placeholder, which is
+	// exactly what TestSecretsScanHistory_SuppressesDocExample asserts.)
+	root := commitAndRemove(t, "AKIA2E4F7HXMPL9QRSTU")
 	// Sanity: working-tree gate must not see anything.
 	fs, err := checkSecretsScan(context.Background(), root, nil)
 	if err != nil {
@@ -72,6 +104,40 @@ func TestSecretsScanHistory_FindsRemovedSecret(t *testing.T) {
 	}
 	if !hit {
 		t.Fatalf("expected aws_access_key history finding, got: %+v", hist)
+	}
+}
+
+// TestSecretsScanHistory_SuppressesDocExample locks in the FP fix: the history
+// gate must apply the same suppression chain as the working-tree gate. A
+// canonical AWS documentation key committed-then-removed must NOT surface in
+// history (it carries no information advantage and would otherwise re-appear
+// on every scan forever with a destructive filter-repo remedy).
+func TestSecretsScanHistory_SuppressesDocExample(t *testing.T) {
+	root := commitAndRemove(t, "AKIAIOSFODNN7EXAMPLE")
+	hist, err := checkSecretsScanHistory(context.Background(), root, []byte(`{"enabled": true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range hist {
+		if strings.HasSuffix(f.FilePath, ":aws_access_key") {
+			t.Fatalf("doc-example key must be suppressed in history, got: %+v", f)
+		}
+	}
+}
+
+// TestSecretsScanHistory_SuppressesYaraRule locks in the detection-rule skip on
+// the history path: a YARA file whose payload IS a private-key header must not
+// surface as a history secret.
+func TestSecretsScanHistory_SuppressesYaraRule(t *testing.T) {
+	root := commitAndRemoveNamed(t, "rules/keys.yar", `rule k { strings: $h = "-----BEGIN RSA PRIVATE KEY-----" condition: $h }`)
+	hist, err := checkSecretsScanHistory(context.Background(), root, []byte(`{"enabled": true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range hist {
+		if strings.HasSuffix(f.FilePath, ":private_key_header") {
+			t.Fatalf("YARA-rule payload must be suppressed in history, got: %+v", f)
+		}
 	}
 }
 

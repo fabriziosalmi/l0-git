@@ -8,6 +8,35 @@ import (
 	"testing"
 )
 
+// TestMatchesLFSPatterns_Doublestar locks in the FP fix: a file that IS
+// LFS-managed via a `**/*.ext` pattern (the form `git lfs track` emits) must be
+// recognised as covered, so large_file_tracked never tells the user to "move it
+// to LFS" when it already is. A naive strings.Contains check can never match a
+// `*` glob against a real path.
+func TestMatchesLFSPatterns_Doublestar(t *testing.T) {
+	cases := []struct {
+		rel      string
+		patterns []string
+		want     bool
+	}{
+		{"design/logo.psd", []string{"**/*.psd"}, true},     // the regression
+		{"logo.psd", []string{"**/*.psd"}, true},            // zero leading segments
+		{"assets/img/x.bin", []string{"assets/**/*.bin"}, true},
+		{"assets/x.bin", []string{"assets/**/*.bin"}, true}, // **/ matches empty
+		{"assets/anything.dat", []string{"assets/**"}, true},
+		{"design/logo.psd", []string{"*.psd"}, true},        // bare basename, any depth
+		{"src/main.go", []string{"**/*.psd"}, false},        // wrong extension
+		{"other/x.bin", []string{"assets/**/*.bin"}, false}, // outside the anchor
+		{"models/net.onnx", []string{"models/*.onnx"}, true},
+		{"models/sub/net.onnx", []string{"models/*.onnx"}, false}, // single * stays in one segment
+	}
+	for _, tc := range cases {
+		if got := matchesLFSPatterns(tc.rel, tc.patterns); got != tc.want {
+			t.Errorf("matchesLFSPatterns(%q, %v) = %v, want %v", tc.rel, tc.patterns, got, tc.want)
+		}
+	}
+}
+
 func TestMergeConflictMarkers_DetectsAllThreeMarkerKinds(t *testing.T) {
 	cases := map[string]string{
 		"left":   "ok\n<<<<<<< HEAD\nleft side\n=======\nright side\n>>>>>>> branch\n",

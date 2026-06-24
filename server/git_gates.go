@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -219,35 +220,71 @@ func loadLFSPatterns(root string) []string {
 	return patterns
 }
 
-// matchesLFSPatterns honours the small subset of .gitattributes glob
-// semantics we actually see in the wild: bare basename like "*.psd" and
-// path globs like "assets/**". filepath.Match handles single-segment
-// globs; for the doublestar case we fall back to substring matching,
-// which is enough for the typical "assets/**/*.bin" pattern.
+// matchesLFSPatterns reports whether the repo-relative path rel is covered by
+// any of the .gitattributes LFS patterns. It implements gitattributes glob
+// semantics faithfully via lfsPatternToRegex — crucially the doublestar form
+// `**/*.ext` (the single most common shape `git lfs track` emits), which a
+// naive substring check can never match because the literal `*` is not present
+// in a real path. A file that IS LFS-managed must never be flagged as bloat.
 func matchesLFSPatterns(rel string, patterns []string) bool {
-	base := filepath.Base(rel)
 	for _, p := range patterns {
-		if strings.Contains(p, "**") {
-			// Convert "assets/**" or "**/*.bin" into a substring check
-			// on the literal segments.
-			for _, seg := range strings.Split(p, "**") {
-				seg = strings.Trim(seg, "/")
-				if seg != "" && !strings.Contains(rel, seg) {
-					goto next
-				}
-			}
-			return true
-		next:
-			continue
-		}
-		if ok, _ := filepath.Match(p, rel); ok {
-			return true
-		}
-		if ok, _ := filepath.Match(p, base); ok {
+		if re := lfsPatternToRegex(p); re != nil && re.MatchString(rel) {
 			return true
 		}
 	}
 	return false
+}
+
+// lfsPatternToRegex translates a .gitattributes glob into an anchored regexp.
+//   - `*`  matches any run of non-separator characters
+//   - `**` matches across separators; `**/` matches zero-or-more leading segments
+//   - `?`  matches a single non-separator character
+//
+// A pattern containing a `/` is anchored to the repo root (the location of the
+// top-level .gitattributes); a pattern with no `/` matches the basename at any
+// depth (e.g. `*.psd`). Returns nil on a pattern that fails to compile, in which
+// case the caller simply treats it as non-matching.
+func lfsPatternToRegex(p string) *regexp.Regexp {
+	p = strings.TrimSuffix(p, "/")
+	anchored := strings.HasPrefix(p, "/") || strings.Contains(p, "/")
+	p = strings.TrimPrefix(p, "/")
+
+	var b strings.Builder
+	b.WriteString("^")
+	if !anchored {
+		b.WriteString("(?:.*/)?") // match at any depth (basename pattern)
+	}
+	for i := 0; i < len(p); i++ {
+		c := p[i]
+		switch c {
+		case '*':
+			if i+1 < len(p) && p[i+1] == '*' {
+				if i+2 < len(p) && p[i+2] == '/' {
+					b.WriteString("(?:.*/)?") // `**/` = zero or more segments
+					i += 2
+				} else {
+					b.WriteString(".*") // trailing/standalone `**`
+					i++
+				}
+			} else {
+				b.WriteString("[^/]*") // `*` = within one segment
+			}
+		case '?':
+			b.WriteString("[^/]")
+		case '.', '+', '(', ')', '|', '^', '$', '{', '}', '\\':
+			b.WriteByte('\\')
+			b.WriteByte(c)
+		default:
+			// `[` / `]` pass through so simple char classes like [0-9] work.
+			b.WriteByte(c)
+		}
+	}
+	b.WriteString("$")
+	re, err := regexp.Compile(b.String())
+	if err != nil {
+		return nil
+	}
+	return re
 }
 
 // splitLines splits a string into LF-delimited lines, stripping trailing

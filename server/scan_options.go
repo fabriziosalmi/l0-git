@@ -54,6 +54,17 @@ type scanOptions struct {
 	// large_file_tracked) still see them and may correctly flag the
 	// backup files as something that shouldn't be in git at all.
 	SkipDefaultBackupPaths *bool `json:"skip_default_backup_paths,omitempty"`
+
+	// SkipDefaultGeneratedFiles controls whether content-scan gates skip
+	// machine-generated artefacts where any pattern match is an artefact of
+	// a build (or a value already present in the scanned source): source
+	// maps (.map), dependency lockfiles (package-lock.json, go.sum,
+	// Cargo.lock, …), and generated code (.pb.go). Minified bundles
+	// (.min.js) are deliberately NOT included — build-time-injected
+	// frontend secrets live there and nowhere else.
+	//
+	// Default true. Set to false to scan generated files too.
+	SkipDefaultGeneratedFiles *bool `json:"skip_default_generated_files,omitempty"`
 }
 
 func parseScanOptions(opts json.RawMessage) scanOptions {
@@ -73,6 +84,10 @@ func parseScanOptions(opts json.RawMessage) scanOptions {
 	if s.SkipDefaultBackupPaths == nil {
 		t := true
 		s.SkipDefaultBackupPaths = &t
+	}
+	if s.SkipDefaultGeneratedFiles == nil {
+		t := true
+		s.SkipDefaultGeneratedFiles = &t
 	}
 	return s
 }
@@ -114,6 +129,40 @@ func (s scanOptions) shouldSkipContent(rel string) bool {
 		return true
 	}
 	if skipEnabled(s.SkipDefaultBackupPaths) && isDefaultBackupPath(rel) {
+		return true
+	}
+	if skipEnabled(s.SkipDefaultGeneratedFiles) && isDefaultGeneratedFile(rel) {
+		return true
+	}
+	return false
+}
+
+// generatedFileBasenames are dependency lockfiles — generated and updated by a
+// package manager, never hand-edited. Any address / hash / URL inside is the
+// tool's bookkeeping, not an authored literal.
+var generatedFileBasenames = map[string]bool{
+	"package-lock.json":   true,
+	"npm-shrinkwrap.json": true,
+	"yarn.lock":           true,
+	"pnpm-lock.yaml":      true,
+	"composer.lock":       true,
+	"gemfile.lock":        true,
+	"poetry.lock":         true,
+	"pipfile.lock":        true,
+	"cargo.lock":          true,
+	"go.sum":              true,
+	"flake.lock":          true,
+}
+
+// isDefaultGeneratedFile reports whether rel is a machine-generated artefact
+// content-scan gates should skip: a source map (.map), a dependency lockfile, or
+// generated Go protobuf (.pb.go). Minified bundles are intentionally excluded.
+func isDefaultGeneratedFile(rel string) bool {
+	base := strings.ToLower(filepath.Base(rel))
+	if generatedFileBasenames[base] {
+		return true
+	}
+	if strings.HasSuffix(base, ".map") || strings.HasSuffix(base, ".pb.go") {
 		return true
 	}
 	return false
