@@ -93,7 +93,12 @@ func TestConfigParseTruePositives(t *testing.T) {
 }
 
 func TestLooksLikeTemplate(t *testing.T) {
-	yes := []string{"a: {{ x }}", "h: <%= y %>", "x: {{- trim }}"}
+	yes := []string{
+		"a: {{ x }}", "h: <%= y %>", "x: {{- trim }}",
+		// Jinja/Salt/Ansible control blocks with NO {{ }} expression.
+		"{% if grains['os'] == 'Ubuntu' %}\napache:\n  pkg.installed: []\n{% endif %}",
+		"{%- for i in services %}",
+	}
 	no := []string{"a: 1", "url: http://x/y", "a: '{ literal brace }'"}
 	for _, s := range yes {
 		if !looksLikeTemplate([]byte(s)) {

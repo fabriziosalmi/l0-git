@@ -187,13 +187,28 @@ func coveredBy(covered map[string]bool, want string) bool {
 		base = want[i+1:]
 	}
 	for pat := range covered {
-		if ok, _ := filepath.Match(pat, want); ok {
+		if globCovers(pat, want) {
 			return true
 		}
-		if base != want {
-			if ok, _ := filepath.Match(pat, base); ok {
-				return true
-			}
+		if base != want && globCovers(pat, base) {
+			return true
+		}
+	}
+	return false
+}
+
+// globCovers reports whether a .gitignore glob pat matches name. Go's
+// filepath.Match has no recursive `**`, so a `**/`-anchored pattern (the
+// canonical recursive form, e.g. `**/__pycache__/`) is also tested with the
+// `**/` prefix stripped — otherwise the gate proposes a redundant entry the
+// user already has.
+func globCovers(pat, name string) bool {
+	if ok, _ := filepath.Match(pat, name); ok {
+		return true
+	}
+	if strings.HasPrefix(pat, "**/") {
+		if ok, _ := filepath.Match(pat[len("**/"):], name); ok {
+			return true
 		}
 	}
 	return false

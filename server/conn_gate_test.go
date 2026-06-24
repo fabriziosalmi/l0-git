@@ -197,6 +197,28 @@ func TestConnectionStrings_RealCredsStillFire(t *testing.T) {
 	}
 }
 
+// TestConnectionStrings_DefaultCredPairExempt locks in the FP fix: a URL whose
+// user AND password are both canonical service defaults (the docker-compose /
+// quickstart idiom) must NOT fire creds_in_url — while real-looking creds still
+// do (asserted by TestConnectionStrings_RealCredsStillFire).
+func TestConnectionStrings_DefaultCredPairExempt(t *testing.T) {
+	exempt := []string{
+		"postgres://postgres:postgres@localhost:5432/app",
+		"mongodb://root:example@localhost:27017",
+		"amqp://guest:guest@rabbitmq:5672",
+	}
+	for _, url := range exempt {
+		t.Run(url, func(t *testing.T) {
+			fs := scanConnectionLine("conf.txt", 1, []byte(url+"\n"))
+			for _, f := range fs {
+				if strings.HasSuffix(f.FilePath, ":creds_in_url") {
+					t.Errorf("default-credential pair must not fire creds_in_url: %s :: %+v", url, f)
+				}
+			}
+		})
+	}
+}
+
 // Data files (.csv/.jsonl/...) are payload-bearing — their addresses
 // and URLs ARE the file's content. Default behaviour: skipped by
 // content scanners.

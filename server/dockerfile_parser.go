@@ -1,8 +1,24 @@
 package main
 
 import (
+	"regexp"
 	"strings"
 )
+
+// heredocRe matches a BuildKit heredoc redirect on an instruction line:
+// `<<EOF`, `<<-EOF`, `<<"EOF"`, `<<'EOF'`. The delimiter must start with a
+// letter or underscore (so shell bit-shifts like `$((1 << 4))` don't match).
+var heredocRe = regexp.MustCompile(`<<-?\s*["']?([A-Za-z_][A-Za-z0-9_]*)["']?`)
+
+// heredocDelims returns the delimiter words of every heredoc opened on a
+// (continuation-folded) instruction line, in order.
+func heredocDelims(line string) []string {
+	var out []string
+	for _, m := range heredocRe.FindAllStringSubmatch(line, -1) {
+		out = append(out, m[1])
+	}
+	return out
+}
 
 // dockerfileInstr is one logical instruction in a Dockerfile after line
 // continuations are folded. Line/EndLine are 1-based.
@@ -157,6 +173,24 @@ func parseDockerfile(content string) []dockerfileInstr {
 		instrs = append(instrs, instr)
 		pending = nil
 		i++
+
+		// BuildKit heredoc: COPY/RUN <<EOF … EOF. The body lines are file or
+		// script data, NOT Dockerfile instructions — consume them so a
+		// `USER root` or `FROM x` inside a heredoc isn't misclassified as a
+		// directive (which would fire user_root / from_* false positives).
+		if delims := heredocDelims(acc); len(delims) > 0 {
+			remaining := append([]string(nil), delims...)
+			for i < len(lines) && len(remaining) > 0 {
+				body := strings.TrimSpace(lines[i])
+				for idx, d := range remaining {
+					if body == d { // closing delimiter (TrimSpace covers <<- indentation)
+						remaining = append(remaining[:idx], remaining[idx+1:]...)
+						break
+					}
+				}
+				i++
+			}
+		}
 	}
 	return instrs
 }

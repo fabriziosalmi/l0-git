@@ -131,6 +131,42 @@ func TestVendoredDirTracked_FlagsCommonDirs(t *testing.T) {
 	}
 }
 
+// TestVendoredDirTracked_AmbiguousNameNeedsMarker locks in the FP fix: build/,
+// dist/, target/, .cache/ double as ordinary content dirs. Without a matching
+// build-tool marker the dir is hand-authored source — flagging it would propose
+// a destructive `git rm -r --cached`.
+func TestVendoredDirTracked_AmbiguousNameNeedsMarker(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"build/make_release.py": "print('release')\n", // hand-authored, .py (not a web asset)
+		"target/notes.md":       "# design target\n",
+		"README.md":             "# x\n",
+	})
+	fs, err := checkVendoredDirTracked(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// vendored_dir_tracked keys FilePath on the bare dir name, so assert on count.
+	if len(fs) != 0 {
+		t.Fatalf("unmarked build//target/ must not flag, got: %+v", fs)
+	}
+}
+
+// With a corroborating marker the ambiguous dir IS rebuildable output → flag.
+func TestVendoredDirTracked_AmbiguousNameFlaggedWithMarker(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"pyproject.toml":   "[build-system]\nrequires = [\"setuptools\"]\n",
+		"build/lib/mod.py": "x = 1\n", // setuptools build output, non-asset extension
+		"README.md":        "# x\n",
+	})
+	fs, err := checkVendoredDirTracked(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) == 0 || fs[0].FilePath != "build" {
+		t.Fatalf("build/ with a pyproject.toml marker must flag, got: %+v", fs)
+	}
+}
+
 // One finding per offending top-level dir, even with thousands of nested files.
 func TestVendoredDirTracked_DeduplicatesByDir(t *testing.T) {
 	files := map[string]string{}

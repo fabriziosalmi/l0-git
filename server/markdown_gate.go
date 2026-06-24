@@ -7,8 +7,10 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
@@ -289,46 +291,73 @@ func localTargetExists(rel, root, dest string) bool {
 // helpers: heading slugs
 // =============================================================================
 
-// collectHeadingSlugs walks the document, computes the GitHub-flavored
-// slug for each heading text, and stores them in a lowercase set so
-// link_anchor_broken can match in O(1).
+// collectHeadingSlugs walks the document, computes the GitHub-flavored slug for
+// each heading, AND collects explicit anchor targets written as raw HTML
+// (`<a name="…">`, `<h2 id="…">`, `<div id="…">`). All are stored lower-cased so
+// link_anchor_broken can match in O(1). Missing the explicit-anchor sources
+// would false-positive on every link into a hand-written anchor.
 func collectHeadingSlugs(doc ast.Node, source []byte) map[string]bool {
 	out := map[string]bool{}
 	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil
 		}
-		if h, ok := n.(*ast.Heading); ok {
-			out[githubSlug(extractText(h, source))] = true
+		switch node := n.(type) {
+		case *ast.Heading:
+			out[githubSlug(extractText(node, source))] = true
+		case *ast.RawHTML: // inline raw HTML, e.g. <a name="x"></a>
+			for i := 0; i < node.Segments.Len(); i++ {
+				seg := node.Segments.At(i)
+				addHTMLAnchors(out, seg.Value(source))
+			}
+		case *ast.HTMLBlock: // block raw HTML, e.g. <h2 id="install">…</h2>
+			segs := node.Lines()
+			for i := 0; i < segs.Len(); i++ {
+				seg := segs.At(i)
+				addHTMLAnchors(out, seg.Value(source))
+			}
 		}
 		return ast.WalkContinue, nil
 	})
 	return out
 }
 
-// githubSlug approximates GitHub's heading-to-anchor algorithm: lower,
-// drop punctuation except `-` `_`, collapse whitespace into `-`. Good
-// enough for the dominant case; perfect parity with GitHub's rules
-// (which involve a Ruby gem) is out of scope.
-func githubSlug(text string) string {
+// htmlAnchorRe matches an explicit anchor target attribute in raw HTML.
+var htmlAnchorRe = regexp.MustCompile(`(?i)\b(?:id|name)\s*=\s*["']([^"']+)["']`)
+
+// addHTMLAnchors extracts id="…" / name="…" anchor targets from a raw HTML
+// fragment and adds them (lower-cased) to the slug set.
+func addHTMLAnchors(out map[string]bool, html []byte) {
+	for _, m := range htmlAnchorRe.FindAllSubmatch(html, -1) {
+		out[strings.ToLower(string(m[1]))] = true
+	}
+}
+
+// githubSlug reproduces GitHub's README heading-to-anchor algorithm (the Ruby
+// html-pipeline TableOfContentsFilter): lower-case, drop every character that is
+// not a Unicode word character / hyphen / space, then turn each space into a
+// single hyphen. Crucially it does NOT collapse runs of hyphens, does NOT trim
+// leading/trailing hyphens, and preserves Unicode letters — the three ways the
+// previous ASCII approximation diverged from GitHub and produced false anchors.
+//
+//	"Node.js & npm"        -> "nodejs--npm"      (punctuation dropped, double dash kept)
+//	"Café Menu"            -> "café-menu"        (Unicode letter preserved)
+//	"🚀 Getting Started"   -> "-getting-started" (leading hyphen kept)
+func githubSlug(textStr string) string {
 	var b strings.Builder
-	prevDash := false
-	for _, r := range strings.ToLower(text) {
+	for _, r := range strings.ToLower(textStr) {
 		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+		case r == ' ':
+			b.WriteRune('-')
+		case r == '-' || r == '_':
 			b.WriteRune(r)
-			prevDash = false
-		case r == ' ' || r == '\t' || r == '-':
-			if !prevDash && b.Len() > 0 {
-				b.WriteRune('-')
-				prevDash = true
-			}
-		case r == '_':
+		case unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsMark(r):
 			b.WriteRune(r)
-			prevDash = false
+		default:
+			// Punctuation, symbols, emoji, tabs: dropped (not replaced).
 		}
 	}
-	return strings.TrimSuffix(b.String(), "-")
+	return b.String()
 }
 
 // extractText concatenates every Text/RawText/CodeSpan child of a node.
@@ -345,13 +374,17 @@ func extractText(n ast.Node, source []byte) string {
 		case *ast.String:
 			b.Write(c.Value)
 		case *ast.CodeSpan:
-			// Inline code inside a heading like `## `code`` — treat as
-			// part of the slug text.
+			// Inline code inside a heading like `## The `cfg` file` — treat
+			// as part of the slug text. Emit the code text here and SKIP the
+			// children: otherwise ast.Walk descends into the same Text nodes
+			// and counts the code text twice, corrupting every slug of a
+			// heading that contains inline code.
 			for cc := c.FirstChild(); cc != nil; cc = cc.NextSibling() {
 				if t, ok := cc.(*ast.Text); ok {
 					b.Write(t.Segment.Value(source))
 				}
 			}
+			return ast.WalkSkipChildren, nil
 		}
 		return ast.WalkContinue, nil
 	})

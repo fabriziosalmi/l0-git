@@ -61,7 +61,13 @@ func checkSecretsScanHistory(ctx context.Context, root string, opts json.RawMess
 			cappedAt = len(blobs)
 			break
 		}
-		if options.shouldSkip(b.Path) {
+		// Apply the same content-scan skips as the working-tree gate:
+		// data files / backup snapshots (shouldSkipContent), and
+		// detection-rule files (YARA) whose payload IS the pattern.
+		if options.shouldSkipContent(b.Path) {
+			continue
+		}
+		if isDetectionRuleFile(b.Path) {
 			continue
 		}
 		if b.Size > maxSize {
@@ -102,19 +108,29 @@ func scanHistoryBlob(b blobInfo, data []byte) []Finding {
 	start := 0
 	emit := func(content []byte, lineNum int) {
 		for _, p := range secretPatterns {
-			if p.re.Match(content) {
-				out = append(out, Finding{
-					Severity: SeverityWarning, // never error — already in history, requires filter-repo
-					Title:    p.title + " in git history",
-					Message: fmt.Sprintf(
-						"Possible %s in blob %s (path %s, line %d). The secret is in repo history even if removed from the working tree — rotate the credential, then run `git filter-repo --invert-paths --path %s` (or BFG) to scrub it.",
-						p.title, shortHash(b.Hash), b.Path, lineNum, b.Path,
-					),
-					// FilePath embeds the blob hash so each unique blob × line
-					// × pattern is its own finding (and survives upserts).
-					FilePath: fmt.Sprintf("history:%s:%d:%s", shortHash(b.Hash), lineNum, p.id),
-				})
+			idx := p.re.FindIndex(content)
+			if idx == nil {
+				continue
 			}
+			match := content[idx[0]:idx[1]]
+			// Same FP-suppression chain as the working-tree gate: entropy
+			// floor, known-non-secret allowlist, source-literal private keys.
+			// History blobs are immutable, so an un-suppressed FP would
+			// re-surface on every scan forever with a destructive remedy.
+			if secretMatchSuppressed(p, match, b.Path, content, idx[0]) {
+				continue
+			}
+			out = append(out, Finding{
+				Severity: SeverityWarning, // never error — already in history, requires filter-repo
+				Title:    p.title + " in git history",
+				Message: fmt.Sprintf(
+					"Possible %s in blob %s (path %s, line %d). The secret is in repo history even if removed from the working tree — rotate the credential, then run `git filter-repo --invert-paths --path %s` (or BFG) to scrub it.",
+					p.title, shortHash(b.Hash), b.Path, lineNum, b.Path,
+				),
+				// FilePath embeds the blob hash so each unique blob × line
+				// × pattern is its own finding (and survives upserts).
+				FilePath: fmt.Sprintf("history:%s:%d:%s", shortHash(b.Hash), lineNum, p.id),
+			})
 		}
 	}
 	for i := 0; i < len(data); i++ {

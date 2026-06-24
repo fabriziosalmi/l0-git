@@ -68,6 +68,13 @@ func checkDeadPlaceholders(ctx context.Context, root string, opts json.RawMessag
 		if options.shouldSkipContent(rel) {
 			continue
 		}
+		// Changelog / release-note files narrate past work — a line like
+		// "Removed the FIXME: markers" or a documented "TODO:" log prefix is
+		// historical prose, not a live placeholder. Same policy the
+		// connection_strings / markdown_lint gates already apply.
+		if isChangelogBasename(filepath.Base(rel)) {
+			continue
+		}
 		// Files whose name IS the tracking register for placeholders — scanning
 		// them produces 100% noise (every line would match).
 		if isPlaceholderRegistryFile(rel) {

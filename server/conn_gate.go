@@ -278,12 +278,13 @@ func scanConnectionLine(rel string, lineNum int, content []byte) []Finding {
 			if p.id == "http_remote" && httpHostExempt(text) {
 				continue
 			}
-			if p.id == "creds_in_url" && credsArePlaceholder(text) {
-				// scheme://${USER}:${PASS}@host — the maintainer has
-				// written the URL as a template; user/pass come from
-				// the environment at runtime. Not a leaked secret.
-				// Claim the span so a lower-severity pattern (e.g.
-				// db_uri) doesn't re-flag the same range.
+			if p.id == "creds_in_url" && credsAreNonSecret(text) {
+				// Not a leaked secret: the password is a runtime template
+				// placeholder (${PASS}), or BOTH user and password are
+				// canonical service defaults (postgres:postgres, guest:guest).
+				// These are docker-compose / quickstart URLs. Claim the span
+				// so a lower-severity pattern (e.g. db_uri) doesn't re-flag
+				// the same range.
 				claimed = append(claimed, claimedSpan{start, end})
 				continue
 			}
@@ -339,6 +340,46 @@ func credsArePlaceholder(url string) bool {
 	}
 	pass := rest[colon+1 : colon+1+at]
 	return placeholderTokenRe.MatchString(pass)
+}
+
+// knownDefaultCredentials are username/password values that are canonical
+// docker-compose / quickstart defaults. A URL where BOTH the user and the
+// password are drawn from this set (postgres:postgres, guest:guest,
+// root:example, …) grants access to nothing real — it's an example, not a leak.
+var knownDefaultCredentials = map[string]bool{
+	"postgres": true, "root": true, "admin": true, "guest": true,
+	"example": true, "password": true, "changeme": true, "test": true,
+	"user": true, "username": true, "mysql": true, "redis": true,
+	"mongo": true, "mongodb": true, "rabbitmq": true, "secret": true,
+}
+
+// credsAreNonSecret extends credsArePlaceholder with a both-sides default-
+// credential exemption: a URL where BOTH the user and the password are canonical
+// service defaults (postgres:postgres, guest:guest, root:example) is a docker-
+// compose / quickstart example, not a committed secret. The HOST is deliberately
+// NOT considered — per the gate's contract, real-looking credentials must fire
+// even on localhost or an RFC1918 address (committing real creds is a leak
+// regardless of host reachability); only a default:default pair is exempt.
+func credsAreNonSecret(rawURL string) bool {
+	if credsArePlaceholder(rawURL) {
+		return true
+	}
+	schemeEnd := strings.Index(rawURL, "://")
+	if schemeEnd < 0 {
+		return false
+	}
+	rest := rawURL[schemeEnd+3:]
+	colon := strings.Index(rest, ":")
+	if colon < 0 {
+		return false
+	}
+	at := strings.Index(rest[colon+1:], "@")
+	if at < 0 {
+		return false
+	}
+	user := strings.ToLower(rest[:colon])
+	pass := strings.ToLower(rest[colon+1 : colon+1+at])
+	return knownDefaultCredentials[user] && knownDefaultCredentials[pass]
 }
 
 type claimedSpan struct{ start, end int }

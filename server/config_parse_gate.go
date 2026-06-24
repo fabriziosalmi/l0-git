@@ -197,11 +197,16 @@ func yamlParseError(rel string, data []byte) (string, bool) {
 	}
 }
 
-// looksLikeTemplate detects Go-template/Helm/Jinja `{{ … }}` or ERB `<% … %>`
-// markers. Such files are rendered into YAML elsewhere, so they aren't valid
-// standalone YAML and must never be flagged.
+// looksLikeTemplate detects Go-template/Helm/Jinja `{{ … }}` expression markers,
+// Jinja/Salt/Ansible/GitLab-CI `{% … %}` control blocks, or ERB `<% … %>`.
+// Such files are rendered into YAML elsewhere, so they aren't valid standalone
+// YAML and must never be flagged. Salt states and Ansible vars routinely use
+// ONLY `{% if … %}`/`{% for … %}` blocks with no `{{ }}` expression, so the
+// `{%` marker is required, not just `{{`.
 func looksLikeTemplate(data []byte) bool {
-	return bytes.Contains(data, []byte("{{")) || bytes.Contains(data, []byte("<%"))
+	return bytes.Contains(data, []byte("{{")) ||
+		bytes.Contains(data, []byte("{%")) ||
+		bytes.Contains(data, []byte("<%"))
 }
 
 func oneLine(s string) string {

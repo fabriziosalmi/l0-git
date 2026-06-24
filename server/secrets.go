@@ -69,6 +69,38 @@ func shannonEntropy(s string) float64 {
 // be wasted I/O and any match would be noise.
 const secretsMaxFileSize = 2 * 1024 * 1024
 
+// secretMatchSuppressed reports whether a regex match for pattern p should be
+// treated as a non-secret and dropped. This is the single FP-suppression chain
+// shared by the working-tree gate (checkSecretsScan) and the history gate
+// (scanHistoryBlob) so both apply identical filtering — a doc example or
+// placeholder must not surface in history just because it was once committed.
+//
+//   - match:   the bytes the pattern matched
+//   - rel:     path of the file/blob (for source-literal detection)
+//   - content: the full line/segment the match sits in
+//   - at:      byte offset of the match start within content
+func secretMatchSuppressed(p secretPattern, match []byte, rel string, content []byte, at int) bool {
+	// Entropy floor: skip low-entropy matches (mock data, doc examples,
+	// placeholder strings that happen to satisfy the pattern syntax).
+	if p.minEntropy > 0 && shannonEntropy(string(match)) < p.minEntropy {
+		return true
+	}
+	// Known-non-secret filter: skip values that are publicly documented
+	// defaults, template placeholders, test key prefixes, or canonical
+	// documentation examples — they carry zero information advantage.
+	if isKnownNonSecret(string(match)) {
+		return true
+	}
+	// Structural marker patterns (private_key_header) match a header string,
+	// not a value. In source code that parses or matches keys, the header
+	// appears as a literal string — that's code, not a leak. Skip when the
+	// match sits immediately after an opening quote in a source file.
+	if p.id == "private_key_header" && isQuotedLiteralInSource(rel, content, at) {
+		return true
+	}
+	return false
+}
+
 func checkSecretsScan(ctx context.Context, root string, opts json.RawMessage) ([]Finding, error) {
 	if !isGitRepo(root) {
 		return []Finding{{
@@ -95,7 +127,11 @@ func checkSecretsScan(ctx context.Context, root string, opts json.RawMessage) ([
 	scan := parseScanOptions(opts)
 	out := []Finding{}
 	for _, rel := range files {
-		if scan.shouldSkip(rel) {
+		// Content-scan gate: honour the default data-file / backup-path
+		// skips too (shouldSkipContent), not just exclude_paths + fixtures.
+		// A credential-shaped column in a .csv export or a shelved .bak
+		// snapshot is the file's payload, not an embedded literal.
+		if scan.shouldSkipContent(rel) {
 			continue
 		}
 		// Detection-rule files (YARA, …) contain secret patterns as the
@@ -143,24 +179,7 @@ func checkSecretsScan(ctx context.Context, root string, opts json.RawMessage) ([
 					continue
 				}
 				match := content[idx[0]:idx[1]]
-				// Entropy floor: skip low-entropy matches (mock data, doc examples,
-				// placeholder strings that happen to satisfy the pattern syntax).
-				if p.minEntropy > 0 && shannonEntropy(string(match)) < p.minEntropy {
-					continue
-				}
-				// Known-non-secret filter: skip values that are publicly
-				// documented defaults, template placeholders, test key prefixes,
-				// or canonical documentation examples — they carry zero
-				// information advantage for an attacker.
-				if isKnownNonSecret(string(match)) {
-					continue
-				}
-				// Structural marker patterns (private_key_header) match a
-				// header string, not a value. In source code that parses
-				// or matches keys, the header appears as a literal string
-				// — that's code, not a leak. Skip when the match sits
-				// immediately after an opening quote in a source file.
-				if p.id == "private_key_header" && isQuotedLiteralInSource(relForLookup, content, idx[0]) {
+				if secretMatchSuppressed(p, match, relForLookup, content, idx[0]) {
 					continue
 				}
 				out = append(out, Finding{

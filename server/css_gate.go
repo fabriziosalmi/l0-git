@@ -207,8 +207,12 @@ func evaluateCssFile(rel, src string, disabled map[string]bool) []Finding {
 		// justified_text: text-align: justify on any selector.
 		// @media print is explicitly exempt — justified text is standard
 		// typographic practice in print layouts where hyphenation is
-		// controlled by the printer/renderer.
-		if !disabled["justified_text"] && !isPrintMediaQuery(b.selector) {
+		// controlled by the printer/renderer. Sass @mixin/@include/@function
+		// and %placeholder definitions are also exempt: their final applied
+		// selector is unknown at definition, so flagging the fragment is a
+		// context-free guess the zero-FP bar forbids.
+		if !disabled["justified_text"] && !isPrintMediaQuery(b.selector) &&
+			!isSassFragmentSelector(b.selector) {
 			if line, hit := findDeclaration(b, "text-align", "justify"); hit {
 				out = append(out, cssFinding(rel, line, cssRules["justified_text"], "text-align: justify", overrides))
 			}
@@ -262,6 +266,16 @@ func selectorContains(selector, needle string) bool {
 func isPrintMediaQuery(selector string) bool {
 	s := strings.ToLower(strings.TrimSpace(selector))
 	return strings.Contains(s, "@media") && strings.Contains(s, "print")
+}
+
+// isSassFragmentSelector reports whether the "selector" is actually a Sass/SCSS
+// reusable fragment definition (@mixin / @include / @function / %placeholder)
+// rather than a concrete selector. The fragment's final application context is
+// unknown, so declaration-level rules must not flag inside it.
+func isSassFragmentSelector(selector string) bool {
+	s := strings.ToLower(strings.TrimSpace(selector))
+	return strings.HasPrefix(s, "@mixin") || strings.HasPrefix(s, "@include") ||
+		strings.HasPrefix(s, "@function") || strings.HasPrefix(s, "%")
 }
 
 // bodyTextElements are element selectors that represent flowing document

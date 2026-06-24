@@ -96,6 +96,47 @@ func TestSecretsScan_NoFalsePositives(t *testing.T) {
 	}
 }
 
+// TestSecretsScan_DataFileSkipped locks in the FP fix (secrets.go now calls
+// shouldSkipContent): a credential-shaped value that is the PAYLOAD of a
+// tabular data file is skipped by default, and re-surfaces only when the
+// operator opts out with skip_default_data_files:false.
+func TestSecretsScan_DataFileSkipped(t *testing.T) {
+	key := "AKIA1A2B3C4D5E6F7G8H" // realistic, clears the entropy floor
+	root := initRepoWithFiles(t, map[string]string{
+		"export.csv": "user,access_key\nalice," + key + "\n",
+	})
+	ctx := context.Background()
+	fs, err := checkSecretsScan(ctx, root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if findingsContainPattern(fs, "aws_access_key") {
+		t.Fatalf("data-file payload must be skipped by default, got: %+v", fs)
+	}
+	fs, err = checkSecretsScan(ctx, root, []byte(`{"skip_default_data_files": false}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingsContainPattern(fs, "aws_access_key") {
+		t.Fatalf("skip_default_data_files:false must re-enable scanning, got: %+v", fs)
+	}
+}
+
+// TestSecretsScan_BackupPathSkipped locks in the backup-snapshot skip for the
+// content-scan secrets gate (a shelved .bak under backup/ is a stale echo).
+func TestSecretsScan_BackupPathSkipped(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"backup/config.conf.bak": "aws_key = AKIA1A2B3C4D5E6F7G8H\n",
+	})
+	fs, err := checkSecretsScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if findingsContainPattern(fs, "aws_access_key") {
+		t.Fatalf("backup-path snapshot must be skipped by default, got: %+v", fs)
+	}
+}
+
 // TestSecretsScan_TrackedEnvFile flags a tracked .env regardless of contents
 // but explicitly leaves .env.example alone.
 func TestSecretsScan_TrackedEnvFile(t *testing.T) {

@@ -163,6 +163,21 @@ var vendoredDirPrefixes = []string{
 	"bower_components/",
 }
 
+// ambiguousVendoredMarkers maps the directory names that double as ordinary
+// English words or hand-authored source/content dirs (build/, dist/, target/,
+// .cache/) to the build-tool marker files that prove the dir is really
+// rebuildable output. Unlike node_modules/ or __pycache__/, the bare name does
+// NOT prove bloat, so flagging on the name alone is a destructive false
+// positive (the remedy is `git rm -r --cached`). These are flagged only when a
+// marker is present at the repo root or alongside the directory; without one the
+// dir is treated as legitimate. A false negative here is far safer than an FP.
+var ambiguousVendoredMarkers = map[string][]string{
+	"target/": {"Cargo.toml", "pom.xml", "build.gradle", "build.gradle.kts", "build.sbt"},
+	"dist/":   {"package.json", "pyproject.toml", "setup.py", "setup.cfg"},
+	"build/":  {"package.json", "pyproject.toml", "setup.py", "setup.cfg", "build.gradle", "build.gradle.kts", "CMakeLists.txt"},
+	".cache/": {"package.json"},
+}
+
 func checkVendoredDirTracked(ctx context.Context, root string, opts json.RawMessage) ([]Finding, error) {
 	if skip, stop := requireGitRepo(root, "vendored_dir_tracked",
 		"This gate uses git ls-files to find committed vendored directories."); stop {
@@ -200,11 +215,21 @@ func checkVendoredDirTracked(ctx context.Context, root string, opts json.RawMess
 					break
 				}
 				seen[key] = true
-				// vendor/ of hand-committed web assets (self-hosted fonts/CSS/JS that
-				// kill third-party egress) is served, not rebuildable — never untrack it.
-				// Scoped to vendor/ so node_modules/bower_components stay flagged.
+				// vendor/, dist/, build/ of hand-committed web assets (self-hosted
+				// fonts/CSS/JS that kill third-party egress, or a committed CDN /
+				// GitHub-Pages bundle like docs/.vitepress/dist) are served, not
+				// rebuildable — `git rm` would 404 the deployed page, so never untrack.
+				// node_modules/bower_components are never web-served, so stay flagged.
+				servedAssetsExempt := prefix == "vendor/" || prefix == "dist/" || prefix == "build/"
 				if legitimateVendor[prefix] || underServedStaticRoot(key) ||
-					(prefix == "vendor/" && vendorHoldsServedWebAssets(root, key)) {
+					(servedAssetsExempt && vendorHoldsServedWebAssets(root, key)) {
+					break
+				}
+				// Ambiguous build-output names are only bloat when a matching
+				// build-tool marker proves the ecosystem; otherwise the dir is
+				// hand-authored source/content with a coincidental name.
+				if markers, ambiguous := ambiguousVendoredMarkers[prefix]; ambiguous &&
+					!anyMarkerPresent(root, key, markers) {
 					break
 				}
 				out = append(out, Finding{
@@ -249,6 +274,25 @@ func buildLegitimateVendorSet(root string) map[string]bool {
 		ok["vendor/"] = true
 	}
 	return ok
+}
+
+// anyMarkerPresent reports whether any marker filename exists at the repo root
+// or in the directory that contains the matched vendored dir — so a monorepo
+// crate's crates/foo/target is corroborated by crates/foo/Cargo.toml as well as
+// a root-level marker.
+func anyMarkerPresent(root, key string, markers []string) bool {
+	dirs := []string{root}
+	if parent := filepath.Dir(key); parent != "." && parent != "" {
+		dirs = append(dirs, filepath.Join(root, filepath.FromSlash(parent)))
+	}
+	for _, d := range dirs {
+		for _, m := range markers {
+			if _, err := os.Stat(filepath.Join(d, m)); err == nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // servedStaticRoots are web roots whose contents are served as-is. A vendored
