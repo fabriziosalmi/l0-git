@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.23] - 2026-06-24
+
 ### Fixed
 
 - **`secrets_scan` now actually honours the data-file / backup-path skips it documents.** The gate read file contents but called `shouldSkip` (exclude-paths + fixtures only) instead of `shouldSkipContent`, so the `.csv`/`.tsv`/`.jsonl` data-file skip and the `bak/`/`.bak`/`backup-YYYYMMDD` snapshot skip — announced in v0.1.16 — were never applied. A credential-shaped column in a `.csv` export or a shelved `.bak` produced an **error**-severity false positive. The lone content-scan gate calling the wrong helper; now aligned with the other seven. Opt back in with `"skip_default_data_files": false`.
