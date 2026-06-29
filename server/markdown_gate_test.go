@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -311,5 +312,73 @@ func TestMD_LinePinning(t *testing.T) {
 	}
 	if !strings.Contains(f.FilePath, ":6:") {
 		t.Errorf("expected line 6 (body of unlabelled fence), got %q", f.FilePath)
+	}
+}
+
+// codeblock_no_language is opt-in: silent by default, fires only when listed
+// in enabled_rules.
+func TestMD_CodeblockNoLanguage_OptIn(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"doc.md": "```\nplain text\n```\n",
+	})
+	fs, err := checkMarkdownLint(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if findFindingByRule(fs, "codeblock_no_language") != nil {
+		t.Errorf("codeblock_no_language must be off by default: %+v", fs)
+	}
+
+	fs, err = checkMarkdownLint(context.Background(), root,
+		[]byte(`{"enabled_rules":["codeblock_no_language"]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if findFindingByRule(fs, "codeblock_no_language") == nil {
+		t.Errorf("enabled_rules must turn codeblock_no_language back on: %+v", fs)
+	}
+}
+
+// Home-relative and filesystem/site-absolute links are not repo-relative
+// paths — resolving them yields a guaranteed-missing target, i.e. a false
+// "broken link". Only a genuinely missing repo-relative link should fire.
+func TestMD_LocalLink_NonRepoPathsNotFlagged(t *testing.T) {
+	src := "[a](~/.config/app/settings.md)\n" +
+		"[b](/etc/hosts.md)\n" +
+		"[c](/guide/intro)\n" +
+		"[d](./does-not-exist.md)\n"
+	fs := runMDRules(t, src)
+	broken := 0
+	for _, f := range fs {
+		if strings.HasSuffix(f.FilePath, ":link_local_broken") {
+			broken++
+			if !strings.Contains(f.Message, "does-not-exist") {
+				t.Errorf("only the repo-relative link should fire, got: %+v", f)
+			}
+		}
+	}
+	if broken != 1 {
+		t.Errorf("expected exactly 1 broken-link finding, got %d: %+v", broken, fs)
+	}
+}
+
+// A ```json block using documentation shorthand (ellipsis, line comments) is
+// illustrative, not a literal payload — it must not fire codeblock_invalid_payload.
+func TestMD_IllustrativeJSONNotFlagged(t *testing.T) {
+	cases := []string{
+		"```json\n{\n  \"name\": \"x\",\n  ...\n}\n```\n",
+		"```json\n{\n  // the API key\n  \"key\": \"abc\"\n}\n```\n",
+	}
+	for _, src := range cases {
+		fs := runMDRules(t, src)
+		if f := findFindingByRule(fs, "codeblock_invalid_payload"); f != nil {
+			t.Errorf("illustrative JSON must not fire: %+v", f)
+		}
+	}
+	// A URL inside a value must NOT be mistaken for a comment — real breakage
+	// still fires.
+	src := "```json\n{ \"u\": \"http://x.io\", bad }\n```\n"
+	if findFindingByRule(runMDRules(t, src), "codeblock_invalid_payload") == nil {
+		t.Errorf("genuinely invalid JSON (with a URL) must still fire")
 	}
 }

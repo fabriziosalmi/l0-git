@@ -96,6 +96,14 @@ func checkNetworkScan(ctx context.Context, root string, opts json.RawMessage) ([
 		if isBinary(data) {
 			continue
 		}
+		// A file whose lines are overwhelmingly bare IP/CIDR literals is an
+		// address list (blocklist, Tor exit dump, cache of resolved hosts) —
+		// the addresses ARE the payload, so every line is a self-evident FP.
+		// This catches the .txt/line-oriented lists that the extension-based
+		// isDefaultDataFile (.csv/.jsonl/…) does not. Honours the same knob.
+		if skipEnabled(scan.SkipDefaultDataFiles) && looksLikeAddressList(data) {
+			continue
+		}
 
 		line := 1
 		start := 0
@@ -176,6 +184,39 @@ func scanNetworkLine(rel string, lineNum int, content []byte) []Finding {
 		})
 	}
 	return out
+}
+
+// looksLikeAddressList reports whether data is a line-oriented list of bare
+// IP / CIDR literals (a blocklist, allowlist, resolver cache, …) rather than
+// source that happens to mention an address. Detection is exact: a line
+// qualifies only when, after stripping an inline comment and surrounding
+// whitespace, it parses as a single IP or CIDR — so "server 1.2.3.4:80;" or
+// "1.2.3.4 hostname" (multi-token) and "999.0.0.0" (invalid) never count.
+func looksLikeAddressList(data []byte) bool {
+	return looksLikeListFile(data, isBareAddress)
+}
+
+// stripInlineComment removes a trailing comment introduced by '#' or ';'
+// (the comment markers blocklist formats use). IP/CIDR literals contain
+// neither character, so this never truncates a real address.
+func stripInlineComment(line string) string {
+	if i := strings.IndexAny(line, "#;"); i >= 0 {
+		return line[:i]
+	}
+	return line
+}
+
+// isBareAddress reports whether s (after stripping an inline comment) is
+// exactly one IP (v4 or v6) or CIDR.
+func isBareAddress(s string) bool {
+	s = strings.TrimSpace(stripInlineComment(s))
+	if net.ParseIP(s) != nil {
+		return true
+	}
+	if _, _, err := net.ParseCIDR(s); err == nil {
+		return true
+	}
+	return false
 }
 
 func cidrAlreadyCoveredAtSameLine(ipText string, cidrs map[string]bool) bool {

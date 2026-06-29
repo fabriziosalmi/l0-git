@@ -26,6 +26,17 @@ import (
 type markdownLintOptions struct {
 	scanOptions
 	DisabledRules []string `json:"disabled_rules,omitempty"`
+	// EnabledRules opts IN to rules that are off by default. Currently only
+	// `codeblock_no_language` is opt-in: a fenced block without a language
+	// tag is a style preference, not a verifiable defect (an output/plain-text
+	// block legitimately has none), so it stays silent unless explicitly
+	// requested here.
+	EnabledRules []string `json:"enabled_rules,omitempty"`
+}
+
+// optInRules are rule IDs that fire only when listed in EnabledRules.
+var optInRules = map[string]bool{
+	"codeblock_no_language": true,
 }
 
 func checkMarkdownLint(ctx context.Context, root string, opts json.RawMessage) ([]Finding, error) {
@@ -48,6 +59,17 @@ func checkMarkdownLint(ctx context.Context, root string, opts json.RawMessage) (
 	disabled := map[string]bool{}
 	for _, id := range options.DisabledRules {
 		disabled[id] = true
+	}
+	// An opt-in rule is treated as disabled unless the user explicitly
+	// enabled it (and didn't also disable it).
+	enabled := map[string]bool{}
+	for _, id := range options.EnabledRules {
+		enabled[id] = true
+	}
+	for id := range optInRules {
+		if !enabled[id] {
+			disabled[id] = true
+		}
 	}
 
 	out := []Finding{}
@@ -234,6 +256,19 @@ func isLocalLink(dest string) bool {
 		return false
 	}
 	if strings.HasPrefix(dest, "#") {
+		return false
+	}
+	// Home-relative (`~/…`) and filesystem-absolute (`/…`, `C:\…`) links are
+	// not repository-relative paths: a doc that writes
+	// `~/.config/app/settings.md` or `/etc/hosts` is referencing a machine
+	// path, and a site-root-absolute `/guide/intro` is resolved by the static
+	// site generator, not by on-disk layout. Resolving either against the
+	// file's directory yields a guaranteed-missing target, i.e. a false
+	// "broken link". Leave them to the author.
+	if strings.HasPrefix(dest, "~") || strings.HasPrefix(dest, "/") {
+		return false
+	}
+	if len(dest) >= 2 && dest[1] == ':' { // Windows drive path, e.g. C:\docs
 		return false
 	}
 	return true
@@ -456,6 +491,15 @@ func fencedBlockBody(b *ast.FencedCodeBlock, source []byte) string {
 func validatePayload(lang, body string) string {
 	switch strings.ToLower(lang) {
 	case "json":
+		// Docs routinely abbreviate a JSON example with an ellipsis
+		// ("...": more fields here) or annotate it with // and /* */
+		// comments. Both are illegal in strict JSON but are universal
+		// "this is illustrative, not literal" markers — validating them as
+		// real JSON is a guaranteed false positive. Treat such a block as a
+		// documentation snippet and pass it through.
+		if isIllustrativeJSON(body) {
+			return ""
+		}
 		var v any
 		if err := json.Unmarshal([]byte(body), &v); err != nil {
 			return err.Error()
@@ -485,6 +529,29 @@ func validatePayload(lang, body string) string {
 		}
 	}
 	return ""
+}
+
+// isIllustrativeJSON reports whether a ```json block uses documentation
+// shorthand that strict JSON forbids: an ellipsis (`...`) standing in for
+// omitted content, or `//` / `/* */` comments. Such a block is an example,
+// not a literal payload, so the "does not parse" rule must not fire.
+func isIllustrativeJSON(body string) bool {
+	// Ellipsis: "more fields omitted" shorthand. A literal "..." inside a
+	// string value is rare and, if the rest is valid, the block parses anyway
+	// — so this only ever suppresses a genuine doc abbreviation.
+	if strings.Contains(body, "...") {
+		return true
+	}
+	// Comment markers, but only as a line lead — `//` and `/*` appear inside
+	// legitimate string values (URLs like http://… , glob patterns), so an
+	// anywhere-match would mask real parse errors.
+	for _, line := range strings.Split(body, "\n") {
+		t := strings.TrimSpace(line)
+		if strings.HasPrefix(t, "//") || strings.HasPrefix(t, "/*") || strings.HasPrefix(t, "*") {
+			return true
+		}
+	}
+	return false
 }
 
 func parseMarkdownOptions(opts json.RawMessage) markdownLintOptions {

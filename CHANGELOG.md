@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **`skip_default_data_dirs` (default on) — content gates skip dataset directories.** A file under a recognised dataset directory (`data/`, `datasets/`, `corpus/`, `corpora/`, `samples/`, `payloads/`, `wordlists/`) **and** carrying an ambiguous data extension (`.json`, `.txt`, `.xml`, `.cm`, `.nl`, `.list`, `.lst`, `.dat`) is the dataset payload, not authored source — every IP / URL / token inside is a self-evident false positive. The extension gate is deliberately data-only, so a real source file in the same tree (`data/loader.go`, `internal/data/store.py`) is never silenced, and the same extensions at the repo root (`config.json`, `notes.txt`) are still scanned. **`secrets_scan` and `secrets_scan_history` deliberately do NOT honour this** (they use a new `shouldSkipContentExceptDataDirs`): a credential committed into a dataset file is still a leak that must surface. Opt out for the other gates with `"skip_default_data_dirs": false`.
+
+### Fixed
+
+- **`network_scan` detects address-list files by content, not just by extension.** A file whose lines are overwhelmingly bare IP/CIDR literals — a Tor exit-node blocklist, a resolver cache (`cache/3.txt`), an ASN dump — is an address list whose payload IS the addresses, so every line was a false positive. Detection is exact (each line must parse as a single IP/CIDR via `net.ParseIP`/`ParseCIDR` after stripping an inline `#`/`;` comment; multi-token lines like `server 1.2.3.4:80;` and invalid octets never count) and gated on `skip_default_data_files`. The previous extension list (`.csv`/`.jsonl`/…) missed the `.txt` line-lists that dominate the noise — a single 8.5k-line IP cache produced 8.5k findings.
+- **`connection_strings` detects URL-list files by content** with the same heuristic shape — a file that is overwhelmingly bare `scheme://…` lines (a feed dump, seed list, crawl frontier) is skipped rather than flagged line-by-line.
+- **`connection_strings` exempts `.internal` hosts and `169.254.0.0/16` link-local.** `service.internal` / `pushgateway.internal` use the ICANN-reserved (2024) private-use TLD and resolve only inside a cluster; `169.254.169.254` is the cloud metadata endpoint, which is http-only by design and unreachable off-host. Flagging either as "cleartext HTTP MITM exposure" is pure noise.
+- **`markdown_lint` `codeblock_no_language` is now opt-in (off by default).** A fenced block without a language tag is a style preference, not a verifiable defect — an output/plain-text/ASCII-tree block legitimately has none — so it sat outside the project's "binary, unambiguous violation" charter while accounting for the bulk of markdown findings. Re-enable per-project with `"enabled_rules": ["codeblock_no_language"]`. The structural rules (broken link, broken anchor, unparseable payload, missing alt) are unchanged.
+- **`markdown_lint link_local_broken` no longer flags non-repository paths.** A link to a home-relative (`~/.config/app/settings.md`), filesystem-absolute (`/etc/hosts`), or site-root-absolute (`/guide/intro`) target is not a repo-relative path; resolving it against the file's directory always misses, producing a false "broken link". These are left to the author.
+- **`markdown_lint codeblock_invalid_payload` passes illustrative JSON.** A ` ```json ` block that uses an ellipsis (`...`, "more fields here") or line comments (`//`, `/* */`) is a documentation example, not a literal payload — strict-parsing it is a guaranteed false positive. Comment markers are matched only as a line lead so a `//` inside a string value (a URL) does not mask a real parse error.
+
 ## [0.1.23] - 2026-06-24
 
 ### Fixed

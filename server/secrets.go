@@ -128,10 +128,12 @@ func checkSecretsScan(ctx context.Context, root string, opts json.RawMessage) ([
 	out := []Finding{}
 	for _, rel := range files {
 		// Content-scan gate: honour the default data-file / backup-path
-		// skips too (shouldSkipContent), not just exclude_paths + fixtures.
-		// A credential-shaped column in a .csv export or a shelved .bak
-		// snapshot is the file's payload, not an embedded literal.
-		if scan.shouldSkipContent(rel) {
+		// skips too, not just exclude_paths + fixtures. A credential-shaped
+		// column in a .csv export or a shelved .bak snapshot is the file's
+		// payload, not an embedded literal. Deliberately uses the
+		// except-data-dirs variant: a real credential committed into a
+		// dataset directory (data/, corpus/) is still a leak we must report.
+		if scan.shouldSkipContentExceptDataDirs(rel) {
 			continue
 		}
 		// Detection-rule files (YARA, …) contain secret patterns as the

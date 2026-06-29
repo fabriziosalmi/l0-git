@@ -125,7 +125,10 @@ func httpHostExempt(url string) bool {
 		return true
 	}
 	if strings.HasPrefix(host, "127.") || strings.HasPrefix(host, "10.") ||
-		strings.HasPrefix(host, "192.168.") {
+		strings.HasPrefix(host, "192.168.") || strings.HasPrefix(host, "169.254.") {
+		// 169.254.0.0/16 is link-local: the cloud metadata endpoint
+		// (169.254.169.254) is http-only by design and unreachable off-host,
+		// so "cleartext HTTP MITM" never applies.
 		return true
 	}
 	if strings.HasPrefix(host, "172.") {
@@ -139,7 +142,11 @@ func httpHostExempt(url string) bool {
 	}
 	if host == "example.com" || strings.HasSuffix(host, ".example.com") ||
 		strings.HasSuffix(host, ".test") || strings.HasSuffix(host, ".localhost") ||
-		strings.HasSuffix(host, ".invalid") || strings.HasSuffix(host, ".local") {
+		strings.HasSuffix(host, ".invalid") || strings.HasSuffix(host, ".local") ||
+		host == "internal" || strings.HasSuffix(host, ".internal") {
+		// `.internal` is ICANN-reserved (2024) for private use — a
+		// service.internal / pushgateway.internal host resolves only inside
+		// the cluster, never on the public internet.
 		return true
 	}
 	// Single-label hostnames (no dot) are never reachable on the public
@@ -186,6 +193,23 @@ var httpSpecHosts = []string{
 	"www.ogc.org",
 	"opengis.net",
 	"www.opengis.net",
+}
+
+// bareURLRe matches a line that is exactly one URL: a scheme, "://", then a
+// run of non-space characters to end of line. Whitespace anywhere disqualifies
+// it (that would be a sentence mentioning a URL, not a list entry).
+var bareURLRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+\-.]*://\S+$`)
+
+// isBareURL reports whether s is a single URL token with no surrounding text.
+func isBareURL(s string) bool {
+	return bareURLRe.MatchString(strings.TrimSpace(s))
+}
+
+// looksLikeURLList reports whether data is a line-oriented list of bare URLs
+// (a feed dump, seed list, crawl frontier) rather than source that embeds the
+// occasional link.
+func looksLikeURLList(data []byte) bool {
+	return looksLikeListFile(data, isBareURL)
 }
 
 func atoiSafe(s string) int {
@@ -240,6 +264,13 @@ func checkConnectionStrings(ctx context.Context, root string, opts json.RawMessa
 			continue
 		}
 		if isBinary(data) {
+			continue
+		}
+		// A file whose lines are overwhelmingly bare URLs is a link list
+		// (feed dump, seed list, crawl frontier) — the URLs ARE the payload,
+		// so every line is a self-evident FP. Same heuristic shape and knob
+		// as network_scan's address-list detection.
+		if skipEnabled(scan.SkipDefaultDataFiles) && looksLikeURLList(data) {
 			continue
 		}
 

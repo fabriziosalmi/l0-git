@@ -62,9 +62,11 @@ func checkSecretsScanHistory(ctx context.Context, root string, opts json.RawMess
 			break
 		}
 		// Apply the same content-scan skips as the working-tree gate:
-		// data files / backup snapshots (shouldSkipContent), and
-		// detection-rule files (YARA) whose payload IS the pattern.
-		if options.shouldSkipContent(b.Path) {
+		// data files / backup snapshots, and detection-rule files (YARA)
+		// whose payload IS the pattern. Mirrors secrets_scan by using the
+		// except-data-dirs variant — a leaked credential inside a dataset
+		// directory must still surface in history.
+		if options.shouldSkipContentExceptDataDirs(b.Path) {
 			continue
 		}
 		if isDetectionRuleFile(b.Path) {

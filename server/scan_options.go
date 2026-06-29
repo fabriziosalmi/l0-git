@@ -36,6 +36,10 @@ type scanOptions struct {
 	// shouldSkipContent; metadata-only gates (large_file_tracked,
 	// vendored_dir_tracked, …) still see these files.
 	//
+	// Some content-scan gates additionally detect address lists by content
+	// (network_scan: a .txt/other file whose lines are overwhelmingly bare
+	// IP/CIDR literals) and gate that on this same flag.
+	//
 	// Default true — scanning a 100k-row blocklist CSV for "public IPs"
 	// is millions of findings against the file's reason to exist. Set
 	// to false in .l0git.json gate_options if you're treating data
@@ -65,6 +69,24 @@ type scanOptions struct {
 	//
 	// Default true. Set to false to scan generated files too.
 	SkipDefaultGeneratedFiles *bool `json:"skip_default_generated_files,omitempty"`
+
+	// SkipDefaultDataDirs controls whether content-scan gates skip files
+	// that live under a recognised *dataset directory* (data/, datasets/,
+	// corpus/, samples/, payloads/, wordlists/, …) AND carry an ambiguous
+	// data extension (.json/.txt/.xml/.cm/.list/.lst/.dat). Inside such a
+	// directory those extensions are the dataset payload — a JSON corpus of
+	// attack strings, a .txt of blocklist entries, an nl2bash .cm dump —
+	// not authored source, so every IP / URL / token inside is a
+	// self-evident FP. A code file in the same tree (.go/.py/.ts/…) is NOT
+	// skipped: the extension allowlist is deliberately data-only so a real
+	// source file under data/ is never silenced.
+	//
+	// Default true for the noisy content gates. secrets_scan and
+	// secrets_scan_history deliberately do NOT honour it (they call
+	// shouldSkipContentExceptDataDirs): a real credential committed into a
+	// dataset file is still a leak that must be reported. Set to false to
+	// scan dataset directories with the other gates too.
+	SkipDefaultDataDirs *bool `json:"skip_default_data_dirs,omitempty"`
 }
 
 func parseScanOptions(opts json.RawMessage) scanOptions {
@@ -88,6 +110,10 @@ func parseScanOptions(opts json.RawMessage) scanOptions {
 	if s.SkipDefaultGeneratedFiles == nil {
 		t := true
 		s.SkipDefaultGeneratedFiles = &t
+	}
+	if s.SkipDefaultDataDirs == nil {
+		t := true
+		s.SkipDefaultDataDirs = &t
 	}
 	return s
 }
@@ -122,6 +148,21 @@ func (s scanOptions) shouldSkip(rel string) bool {
 // (blocklists, fingerprint datasets) or local snapshot folders
 // (bak/, backup/, archive/ — stale echoes of the live tree).
 func (s scanOptions) shouldSkipContent(rel string) bool {
+	if s.shouldSkipContentExceptDataDirs(rel) {
+		return true
+	}
+	if skipEnabled(s.SkipDefaultDataDirs) && isDefaultDataDirFile(rel) {
+		return true
+	}
+	return false
+}
+
+// shouldSkipContentExceptDataDirs is shouldSkipContent without the
+// dataset-directory skip. secrets_scan and secrets_scan_history use it: a
+// credential committed into a dataset file (data/seed.json, corpus/dump.txt)
+// is still a real leak, so those gates must keep reading dataset directories
+// even though the noisy network/URL gates skip them.
+func (s scanOptions) shouldSkipContentExceptDataDirs(rel string) bool {
 	if s.shouldSkip(rel) {
 		return true
 	}
@@ -213,6 +254,88 @@ var dataFileExtensions = map[string]bool{
 // from dataFileExtensions. Case-insensitive on the extension.
 func isDefaultDataFile(rel string) bool {
 	return dataFileExtensions[strings.ToLower(filepath.Ext(rel))]
+}
+
+// dataDirNames are directory names that, when present anywhere in a file's
+// path, mark the file as living inside a dataset tree. Curated to names that
+// are rarely a source-code package: a repo's `data/` or `corpus/` holds
+// payloads, not authored code.
+var dataDirNames = map[string]bool{
+	"data":      true,
+	"datasets":  true,
+	"dataset":   true,
+	"corpus":    true,
+	"corpora":   true,
+	"samples":   true,
+	"payloads":  true,
+	"wordlists": true,
+}
+
+// dataDirExtensions are extensions that are ambiguous globally (a .json can
+// be config, a .txt can be docs) but are unmistakably dataset payload when
+// they live under a dataDirNames directory. Deliberately data-only — source
+// extensions (.go/.py/.ts/…) are absent so a real source file under data/ is
+// never silenced.
+var dataDirExtensions = map[string]bool{
+	".json": true,
+	".txt":  true,
+	".xml":  true,
+	".cm":   true, // command corpora (nl2bash bash side)
+	".nl":   true, // natural-language corpora (nl2bash NL side)
+	".list": true,
+	".lst":  true,
+	".dat":  true,
+}
+
+// isDefaultDataDirFile reports whether rel is an ambiguous-extension data file
+// nested under a recognised dataset directory. Both conditions are required:
+// the extension gate keeps it from skipping source code, the directory gate
+// keeps it from skipping a top-level config.json / notes.txt.
+func isDefaultDataDirFile(rel string) bool {
+	if !dataDirExtensions[strings.ToLower(filepath.Ext(rel))] {
+		return false
+	}
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	for i := 0; i < len(parts)-1; i++ {
+		if dataDirNames[strings.ToLower(parts[i])] {
+			return true
+		}
+	}
+	return false
+}
+
+// listMinLines / listRatio gate the "this file is a list of atoms" heuristic
+// shared by network_scan (IP/CIDR lists) and connection_strings (URL lists):
+// a file must have at least listMinLines content lines (blank and full-line
+// comment lines do not count) and at least listRatio of those must be a bare
+// item before the whole file is treated as a data payload. The floor keeps a
+// short config (a few pinned hosts/URLs) from being mistaken for a dump.
+const (
+	listMinLines = 10
+	listRatio    = 0.8
+)
+
+// looksLikeListFile reports whether data is a line-oriented list whose lines
+// are overwhelmingly a single bare item (as judged by isItem) rather than
+// source that happens to mention one. Blank lines and full-line comments
+// (`#`, `;`, `//`) are excluded from the denominator so a licence header or
+// section comments above a dump don't dilute the ratio.
+func looksLikeListFile(data []byte, isItem func(string) bool) bool {
+	considered, hits := 0, 0
+	for _, raw := range strings.Split(string(data), "\n") {
+		s := strings.TrimSpace(raw)
+		if s == "" || strings.HasPrefix(s, "#") || strings.HasPrefix(s, ";") || strings.HasPrefix(s, "//") {
+			continue
+		}
+		considered++
+		if isItem(s) {
+			hits++
+		}
+	}
+	if considered < listMinLines {
+		return false
+	}
+	return float64(hits) >= listRatio*float64(considered)
 }
 
 // backupDirNames are directory names that, when present anywhere in a

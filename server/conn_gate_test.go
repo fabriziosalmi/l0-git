@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -309,5 +310,104 @@ func TestConnectionStrings_SingleLabelHostExempt(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// `.internal` is ICANN-reserved for private use — http://service.internal
+// resolves only inside the cluster, never on the public internet.
+func TestConn_InternalTLDExempt(t *testing.T) {
+	for _, url := range []string{
+		"http://service.internal:8080/health",
+		"http://pushgateway.internal:9091/metrics",
+	} {
+		root := initRepoWithFiles(t, map[string]string{"conf.txt": "u = " + url + "\n"})
+		fs, err := checkConnectionStrings(context.Background(), root, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range fs {
+			if strings.HasSuffix(f.FilePath, ":http_remote") {
+				t.Errorf("%s must be exempt: %+v", url, f)
+			}
+		}
+	}
+}
+
+// 169.254.0.0/16 link-local (the cloud metadata endpoint) is http-only by
+// design and unreachable off-host — never a cleartext-HTTP finding.
+func TestConn_LinkLocalExempt(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"conf.txt": "meta = http://169.254.169.254/latest/meta-data/\n",
+	})
+	fs, err := checkConnectionStrings(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fs {
+		if strings.HasSuffix(f.FilePath, ":http_remote") {
+			t.Errorf("link-local must be exempt: %+v", f)
+		}
+	}
+}
+
+// A file that is overwhelmingly bare URLs is a link list — skipped by default,
+// scanned when skip_default_data_files is off.
+func TestConn_URLListSkippedByContent(t *testing.T) {
+	var b strings.Builder
+	for i := 0; i < 12; i++ {
+		fmt.Fprintf(&b, "http://feed%d.acme.io/rss\n", i)
+	}
+	root := initRepoWithFiles(t, map[string]string{"feeds.txt": b.String()})
+
+	fs, err := checkConnectionStrings(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fs {
+		if strings.HasPrefix(f.FilePath, "feeds.txt") {
+			t.Errorf("URL list must be skipped by default: %+v", f)
+		}
+	}
+
+	fs, err = checkConnectionStrings(context.Background(), root,
+		[]byte(`{"skip_default_data_files":false}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hit := false
+	for _, f := range fs {
+		if strings.HasPrefix(f.FilePath, "feeds.txt") {
+			hit = true
+		}
+	}
+	if !hit {
+		t.Errorf("with flag off the URL list must be scanned")
+	}
+}
+
+// A dataset under data/ is skipped; the same payload at the repo root is not.
+func TestConn_DataDirDatasetSkipped(t *testing.T) {
+	payload := `{"u":"http://api.acme.io/v1"}` + "\n"
+	root := initRepoWithFiles(t, map[string]string{
+		"data/unsafe/payloads.json": payload,
+		"config.json":               payload,
+	})
+	fs, err := checkConnectionStrings(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fs {
+		if strings.HasPrefix(f.FilePath, "data/unsafe/payloads.json") {
+			t.Errorf("dataset under data/ must be skipped: %+v", f)
+		}
+	}
+	rootHit := false
+	for _, f := range fs {
+		if strings.HasPrefix(f.FilePath, "config.json") {
+			rootHit = true
+		}
+	}
+	if !rootHit {
+		t.Errorf("top-level config.json must still be scanned: %+v", fs)
 	}
 }

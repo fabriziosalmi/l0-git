@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -123,6 +124,106 @@ func TestNetworkScan_SkipsDataFilesByDefault(t *testing.T) {
 				t.Errorf("expected net.txt to still be scanned, got: %+v", fs)
 			}
 		})
+	}
+}
+
+// A file whose lines are overwhelmingly bare IP/CIDR literals is an address
+// list (blocklist, Tor dump, resolver cache) — the addresses are the payload.
+// These have no structured data-file extension, so they must be caught by
+// content, not by isDefaultDataFile.
+func TestNetworkScan_SkipsBareAddressListByContent(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("# tor exit-node blocklist\n")
+	for i := 0; i < 50; i++ {
+		fmt.Fprintf(&b, "203.%d.%d.%d\n", i%200+1, i, i+1)
+	}
+	b.WriteString("10.0.0.0/8 ; private range\n")
+	root := initRepoWithFiles(t, map[string]string{
+		"tor_blacklist.txt": b.String(),
+		"main.go":           "addr := \"8.8.8.8\" // resolver\n",
+	})
+	fs, err := checkNetworkScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fs {
+		if strings.HasPrefix(f.FilePath, "tor_blacklist.txt") {
+			t.Errorf("address-list file must be skipped by content: %+v", f)
+		}
+	}
+	// The real source reference must still be reported.
+	srcHit := false
+	for _, f := range fs {
+		if strings.HasPrefix(f.FilePath, "main.go") {
+			srcHit = true
+		}
+	}
+	if !srcHit {
+		t.Errorf("expected main.go to still be scanned, got: %+v", fs)
+	}
+}
+
+// skip_default_data_files=false forces the address list to be scanned.
+func TestNetworkScan_BareAddressListScannedWhenFlagOff(t *testing.T) {
+	var b strings.Builder
+	for i := 0; i < 50; i++ {
+		fmt.Fprintf(&b, "203.0.%d.%d\n", i, i+1)
+	}
+	root := initRepoWithFiles(t, map[string]string{"list.txt": b.String()})
+	fs, err := checkNetworkScan(context.Background(), root,
+		[]byte(`{"skip_default_data_files":false}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hit := false
+	for _, f := range fs {
+		if strings.HasPrefix(f.FilePath, "list.txt") {
+			hit = true
+		}
+	}
+	if !hit {
+		t.Errorf("with skip_default_data_files=false the list must be scanned, got %d findings", len(fs))
+	}
+}
+
+// The heuristic must not fire on ordinary source: a file with a couple of
+// addresses among many non-address lines is NOT an address list.
+func TestNetworkScan_SourceWithFewAddressesNotSkipped(t *testing.T) {
+	src := "package main\n\nfunc main() {\n\tdial(\"8.8.8.8\")\n\tdial(\"1.1.1.1\")\n\tdoStuff()\n}\n"
+	root := initRepoWithFiles(t, map[string]string{"net.go": src})
+	fs, err := checkNetworkScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hits := 0
+	for _, f := range fs {
+		if strings.HasPrefix(f.FilePath, "net.go") {
+			hits++
+		}
+	}
+	if hits == 0 {
+		t.Errorf("source file with embedded IPs must still be scanned, got: %+v", fs)
+	}
+}
+
+// A short list under the line floor is still scanned — too few lines to be
+// confident it's a payload dump rather than a pinned-host config.
+func TestNetworkScan_ShortAddressListStillScanned(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"hosts.txt": "8.8.8.8\n1.1.1.1\n9.9.9.9\n",
+	})
+	fs, err := checkNetworkScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hit := false
+	for _, f := range fs {
+		if strings.HasPrefix(f.FilePath, "hosts.txt") {
+			hit = true
+		}
+	}
+	if !hit {
+		t.Errorf("short address list (< floor) must still be scanned, got: %+v", fs)
 	}
 }
 

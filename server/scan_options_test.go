@@ -209,3 +209,57 @@ func TestScanOptions_ShouldSkipContent(t *testing.T) {
 		t.Errorf("explicit false must not skip backup paths in content scan")
 	}
 }
+
+// Dataset-directory skip: ambiguous-extension files (.json/.txt/.cm/…) under a
+// recognised data directory are payload, not source — content gates skip them.
+// Source files (.go/.py/…) in the same tree, and the same extensions outside a
+// data directory, are NOT skipped.
+func TestIsDefaultDataDirFile(t *testing.T) {
+	skip := []string{
+		"data/mixed/kypo_heuristic_split.json",
+		"data/raw/payloads_all_the_things_1.txt",
+		"data/raw/nl2bash_all.cm",
+		"datasets/corpus.json",
+		"corpus/exit-nodes.txt",
+		"payloads/xss.list",
+		"wordlists/common.lst",
+		"a/b/samples/data.dat",
+	}
+	for _, rel := range skip {
+		if !isDefaultDataDirFile(rel) {
+			t.Errorf("expected %q to be a data-dir file", rel)
+		}
+	}
+	keep := []string{
+		"data/loader.go",          // source in a data dir
+		"internal/data/store.py",  // source in a data dir
+		"config.json",             // ambiguous ext, no data dir
+		"docs/notes.txt",          // ambiguous ext, no data dir
+		"src/app.ts",              // ordinary source
+		"data/schema.sql",         // non-data ext in a data dir
+	}
+	for _, rel := range keep {
+		if isDefaultDataDirFile(rel) {
+			t.Errorf("did NOT expect %q to be a data-dir file", rel)
+		}
+	}
+}
+
+// secrets must still see dataset directories (a real credential committed
+// there is a leak), while the noisy content gates skip them.
+func TestShouldSkipContentExceptDataDirs(t *testing.T) {
+	s := parseScanOptions(nil)
+	rel := "data/seed.json"
+	if !s.shouldSkipContent(rel) {
+		t.Errorf("content gates should skip %q", rel)
+	}
+	if s.shouldSkipContentExceptDataDirs(rel) {
+		t.Errorf("secrets variant must NOT skip %q", rel)
+	}
+	// Explicit opt-out restores scanning for the noisy gates too.
+	f := false
+	s.SkipDefaultDataDirs = &f
+	if s.shouldSkipContent(rel) {
+		t.Errorf("with skip_default_data_dirs=false %q must be scanned", rel)
+	}
+}
