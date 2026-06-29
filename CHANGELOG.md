@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.24] - 2026-06-29
+
 ### Added
 
 - **`skip_default_data_dirs` (default on) — content gates skip dataset directories.** A file under a recognised dataset directory (`data/`, `datasets/`, `corpus/`, `corpora/`, `samples/`, `payloads/`, `wordlists/`) **and** carrying an ambiguous data extension (`.json`, `.txt`, `.xml`, `.cm`, `.nl`, `.list`, `.lst`, `.dat`) is the dataset payload, not authored source — every IP / URL / token inside is a self-evident false positive. The extension gate is deliberately data-only, so a real source file in the same tree (`data/loader.go`, `internal/data/store.py`) is never silenced, and the same extensions at the repo root (`config.json`, `notes.txt`) are still scanned. **`secrets_scan` and `secrets_scan_history` deliberately do NOT honour this** (they use a new `shouldSkipContentExceptDataDirs`): a credential committed into a dataset file is still a leak that must surface. Opt out for the other gates with `"skip_default_data_dirs": false`.
