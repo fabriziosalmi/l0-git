@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **Content gates skip list/log payload files anywhere in the tree.** `.log` access logs, `.list`/`.lst` block/allow lists, and JSON-lines log dumps (`log.json`, `*.log.json`, `*.log.txt`) are payload, not authored source — a quoted-IP `dns/dns.list`, an `nginx-access.log`, or a 491-line `log.json` produced one finding per record. Extends the v0.1.24 dataset-directory skip beyond `data/`-style trees (these files are payload regardless of location) under the same `skip_default_data_dirs` knob. As with the dataset-dir skip, **`secrets_scan` / `secrets_scan_history` still read them** — logs are a real credential-leak vector.
+- **`network_scan` loopback findings are now opt-in (off by default).** A loopback literal (`127.0.0.0/8`, `::1`) is a local-dev default, never a security concern, and was the single largest info-noise category. Re-enable per-project with `"report_loopback": true`. The security-relevant unspecified address (`0.0.0.0` — bound to all interfaces, worth a review) stays on.
+
 ## [0.1.24] - 2026-06-29
 
 ### Added

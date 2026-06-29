@@ -19,7 +19,6 @@ func TestNetworkScan_Classification(t *testing.T) {
 		{"public_ipv4", "host = 8.8.8.8\n", SeverityWarning, "ipv4_public"},
 		{"private_192", "addr = 192.168.1.10\n", SeverityInfo, "ipv4_private"},
 		{"private_10", "addr = 10.0.0.5\n", SeverityInfo, "ipv4_private"},
-		{"loopback", "addr = 127.0.0.1\n", SeverityInfo, "ipv4_loopback"},
 		{"unspecified", "bind = 0.0.0.0\n", SeverityInfo, "ipv4_unspecified"},
 		{"public_cidr", "deny 1.1.1.0/24\n", SeverityWarning, "cidr_public"},
 		{"private_cidr", "allow 10.0.0.0/8\n", SeverityInfo, "cidr_private"},
@@ -124,6 +123,36 @@ func TestNetworkScan_SkipsDataFilesByDefault(t *testing.T) {
 				t.Errorf("expected net.txt to still be scanned, got: %+v", fs)
 			}
 		})
+	}
+}
+
+// Loopback (127.0.0.0/8, ::1) is opt-in: a local-dev default is never a
+// security concern, so it stays silent unless report_loopback is set.
+func TestNetworkScan_LoopbackOptIn(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{"net.txt": "addr = 127.0.0.1\n"})
+
+	fs, err := checkNetworkScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fs {
+		if strings.HasSuffix(f.FilePath, ":ipv4_loopback") {
+			t.Errorf("loopback must be off by default: %+v", f)
+		}
+	}
+
+	fs, err = checkNetworkScan(context.Background(), root, []byte(`{"report_loopback":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, f := range fs {
+		if strings.HasSuffix(f.FilePath, ":ipv4_loopback") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("report_loopback must re-enable loopback findings: %+v", fs)
 	}
 }
 

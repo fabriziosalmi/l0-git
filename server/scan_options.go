@@ -70,14 +70,15 @@ type scanOptions struct {
 	// Default true. Set to false to scan generated files too.
 	SkipDefaultGeneratedFiles *bool `json:"skip_default_generated_files,omitempty"`
 
-	// SkipDefaultDataDirs controls whether content-scan gates skip files
-	// that live under a recognised *dataset directory* (data/, datasets/,
-	// corpus/, samples/, payloads/, wordlists/, …) AND carry an ambiguous
-	// data extension (.json/.txt/.xml/.cm/.list/.lst/.dat). Inside such a
-	// directory those extensions are the dataset payload — a JSON corpus of
-	// attack strings, a .txt of blocklist entries, an nl2bash .cm dump —
-	// not authored source, so every IP / URL / token inside is a
-	// self-evident FP. A code file in the same tree (.go/.py/.ts/…) is NOT
+	// SkipDefaultDataDirs controls whether content-scan gates skip data
+	// payload files: those under a recognised *dataset directory* (data/,
+	// datasets/, corpus/, samples/, payloads/, wordlists/, …) carrying an
+	// ambiguous data extension (.json/.txt/.xml/.cm/.nl/.dat), PLUS list/log
+	// files anywhere in the tree (.log/.list/.lst and log dumps such as
+	// log.json). Inside a dataset dir those extensions are the payload — a
+	// JSON corpus of attack strings, a .txt blocklist, an nl2bash .cm dump —
+	// and a .log/.list is always payload, so every IP / URL / token inside is
+	// a self-evident FP. A code file in a dataset tree (.go/.py/.ts/…) is NOT
 	// skipped: the extension allowlist is deliberately data-only so a real
 	// source file under data/ is never silenced.
 	//
@@ -151,7 +152,7 @@ func (s scanOptions) shouldSkipContent(rel string) bool {
 	if s.shouldSkipContentExceptDataDirs(rel) {
 		return true
 	}
-	if skipEnabled(s.SkipDefaultDataDirs) && isDefaultDataDirFile(rel) {
+	if skipEnabled(s.SkipDefaultDataDirs) && isNoisyDataFile(rel) {
 		return true
 	}
 	return false
@@ -282,9 +283,43 @@ var dataDirExtensions = map[string]bool{
 	".xml":  true,
 	".cm":   true, // command corpora (nl2bash bash side)
 	".nl":   true, // natural-language corpora (nl2bash NL side)
+	".dat":  true,
+}
+
+// listLogExtensions are list/log payload files whose contents are the payload
+// anywhere in the tree (not just under a dataset dir): a `.log` access log, a
+// `.list`/`.lst` block/allow list. Never source. Skipped by the noisy content
+// gates but — like the dataset-dir skip — NOT by secrets, since logs and lists
+// are a real credential-leak vector.
+var listLogExtensions = map[string]bool{
+	".log":  true,
 	".list": true,
 	".lst":  true,
-	".dat":  true,
+}
+
+// isLogBasename catches log dumps that carry a generic extension: a JSON-lines
+// access log named `log.json`, a `service.log.json`, etc. Their lines are log
+// records full of IPs/URLs, not authored literals.
+func isLogBasename(rel string) bool {
+	base := strings.ToLower(filepath.Base(rel))
+	if base == "log.json" || base == "logs.json" {
+		return true
+	}
+	return strings.HasSuffix(base, ".log.json") || strings.HasSuffix(base, ".log.txt")
+}
+
+// isNoisyDataFile reports whether rel is dataset/list/log payload that the
+// noisy content gates (network_scan, connection_strings, …) should skip but
+// secrets_scan must still read. It unions the dataset-directory rule with the
+// always-data list/log extensions and log basenames.
+func isNoisyDataFile(rel string) bool {
+	if listLogExtensions[strings.ToLower(filepath.Ext(rel))] {
+		return true
+	}
+	if isLogBasename(rel) {
+		return true
+	}
+	return isDefaultDataDirFile(rel)
 }
 
 // isDefaultDataDirFile reports whether rel is an ambiguous-extension data file

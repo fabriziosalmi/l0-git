@@ -54,6 +54,26 @@ func mustParseNets(cidrs ...string) []*net.IPNet {
 	return out
 }
 
+// networkScanOptions extends the shared scan options with network_scan knobs.
+type networkScanOptions struct {
+	scanOptions
+	// ReportLoopback opts IN to loopback findings (127.0.0.0/8, ::1). Off by
+	// default: a loopback literal is a local-dev default, never a security
+	// concern, and was the single largest info-noise category. The
+	// security-relevant unspecified address (0.0.0.0 — "bound to all
+	// interfaces, review the bind") stays on.
+	ReportLoopback *bool `json:"report_loopback,omitempty"`
+}
+
+func parseNetworkOptions(opts json.RawMessage) networkScanOptions {
+	var o networkScanOptions
+	if len(opts) > 0 {
+		_ = json.Unmarshal(opts, &o)
+	}
+	o.scanOptions = parseScanOptions(opts)
+	return o
+}
+
 func checkNetworkScan(ctx context.Context, root string, opts json.RawMessage) ([]Finding, error) {
 	if skip, stop := requireGitRepo(root, "network_scan",
 		"Initialize git or run gates from inside a clone — this gate scans tracked files only."); stop {
@@ -69,7 +89,8 @@ func checkNetworkScan(ctx context.Context, root string, opts json.RawMessage) ([
 		}}, nil
 	}
 
-	scan := parseScanOptions(opts)
+	scan := parseNetworkOptions(opts)
+	reportLoopback := scan.ReportLoopback != nil && *scan.ReportLoopback
 	out := []Finding{}
 	for _, rel := range files {
 		if scan.shouldSkipContent(rel) {
@@ -108,7 +129,7 @@ func checkNetworkScan(ctx context.Context, root string, opts json.RawMessage) ([
 		line := 1
 		start := 0
 		emit := func(content []byte, lineNum int) {
-			out = append(out, scanNetworkLine(rel, lineNum, content)...)
+			out = append(out, scanNetworkLine(rel, lineNum, content, reportLoopback)...)
 		}
 		for i := 0; i < len(data); i++ {
 			if data[i] == '\n' {
@@ -132,9 +153,14 @@ func checkNetworkScan(ctx context.Context, root string, opts json.RawMessage) ([
 // category itself means "intended for documentation/testing", so emitting a
 // finding only generates noise — the maintainer already declared this is
 // not a real address by picking that range.
-func scanNetworkLine(rel string, lineNum int, content []byte) []Finding {
+func scanNetworkLine(rel string, lineNum int, content []byte, reportLoopback bool) []Finding {
 	out := []Finding{}
 	cidrSpans := map[string]bool{}
+	// suppressed reports whether a classified category should be dropped:
+	// doc-ranges are always noise, and loopback is opt-in.
+	suppressed := func(cat string) bool {
+		return cat == "doc-range" || (cat == "loopback" && !reportLoopback)
+	}
 
 	for _, m := range cidrRe.FindAll(content, -1) {
 		text := string(m)
@@ -145,7 +171,7 @@ func scanNetworkLine(rel string, lineNum int, content []byte) []Finding {
 			continue
 		}
 		sev, cat := classifyIPv4(ip)
-		if cat == "doc-range" {
+		if suppressed(cat) {
 			continue
 		}
 		out = append(out, networkFinding(rel, lineNum, "cidr", text, sev, cat))
@@ -163,7 +189,7 @@ func scanNetworkLine(rel string, lineNum int, content []byte) []Finding {
 			continue
 		}
 		sev, cat := classifyIPv4(ip)
-		if cat == "doc-range" {
+		if suppressed(cat) {
 			continue
 		}
 		out = append(out, networkFinding(rel, lineNum, "ipv4", text, sev, cat))

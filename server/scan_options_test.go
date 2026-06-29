@@ -221,8 +221,7 @@ func TestIsDefaultDataDirFile(t *testing.T) {
 		"data/raw/nl2bash_all.cm",
 		"datasets/corpus.json",
 		"corpus/exit-nodes.txt",
-		"payloads/xss.list",
-		"wordlists/common.lst",
+		"payloads/xss.txt",
 		"a/b/samples/data.dat",
 	}
 	for _, rel := range skip {
@@ -261,5 +260,41 @@ func TestShouldSkipContentExceptDataDirs(t *testing.T) {
 	s.SkipDefaultDataDirs = &f
 	if s.shouldSkipContent(rel) {
 		t.Errorf("with skip_default_data_dirs=false %q must be scanned", rel)
+	}
+}
+
+// List/log payload files are skipped by the noisy content gates anywhere in the
+// tree, but secrets must still read them (logs are a leak vector).
+func TestNoisyDataFile_ListAndLog(t *testing.T) {
+	noisy := []string{
+		"dns/dns.list",                     // quoted-IP list outside a data dir
+		"wordlists/x.lst",                  // .lst
+		"use-cases/sample-logs/nginx-access.log", // .log
+		"log.json",                         // log dump w/ generic ext
+		"service.log.json",                 // *.log.json
+	}
+	for _, rel := range noisy {
+		if !isNoisyDataFile(rel) {
+			t.Errorf("expected %q to be noisy data", rel)
+		}
+	}
+	keep := []string{
+		"server/main.go",   // source
+		"config.json",      // not a log/list, not under a data dir
+		"docs/guide.md",    // docs
+		"catalog.json",     // generic json at root
+	}
+	for _, rel := range keep {
+		if isNoisyDataFile(rel) {
+			t.Errorf("did NOT expect %q to be noisy data", rel)
+		}
+	}
+	// secrets variant must still read a .log; the noisy gates skip it.
+	s := parseScanOptions(nil)
+	if !s.shouldSkipContent("app.log") {
+		t.Errorf("noisy gates should skip app.log")
+	}
+	if s.shouldSkipContentExceptDataDirs("app.log") {
+		t.Errorf("secrets must still scan app.log")
 	}
 }
