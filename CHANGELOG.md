@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **Remediation prompts now name a verification surface that actually exists in the session.** Every `claude_prompt` unconditionally told the agent to *both* run `lgit check …` *and* "use the l0-git MCP tools", regardless of which — if either — was present: `lgit` is never on `PATH` (it ships only as `server/lgit` and the extension-bundled binary), and the MCP tools exist only when the l0-git server is registered for that Claude Code session. An agent remediating in a repo where neither was wired up had no working way to confirm a fix. The prompt is now built per delivery channel: delivered via the `findings_remediate` MCP tool it verifies with the `gates_check` MCP tool (guaranteed present — the agent just called one) and never mentions `lgit check`; delivered via `lgit fix` on the CLI it verifies with `lgit check <project> <gate>` (guaranteed present — the user just ran `lgit`) and never mentions the MCP tools. `RemediationFor` takes an explicit `Channel`; each caller passes the one matching how it delivers the prompt.
+
 ## [0.1.25] - 2026-06-29
 
 ### Fixed

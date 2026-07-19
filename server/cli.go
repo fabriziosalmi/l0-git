@@ -147,7 +147,7 @@ func runFixCommand(ctx context.Context, store *Store, rest []string) error {
 	if err != nil {
 		return fmt.Errorf("finding #%d: %w", id, err)
 	}
-	rem := RemediationFor(*f)
+	rem := RemediationFor(*f, ChannelCLI)
 	if asJSON {
 		return writeJSON(os.Stdout, map[string]any{
 			"finding":     f,

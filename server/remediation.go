@@ -73,10 +73,38 @@ const (
 	ConfidenceGuided    = "guided"
 )
 
+// Channel identifies how a remediation is being delivered, so the prompt's
+// verification step can reference only the surface guaranteed to be present
+// in that context. Delivering via the findings_remediate MCP tool means the
+// agent already holds the l0-git MCP tools (it just called one), so it can
+// verify with gates_check; delivering via `lgit fix` on the CLI means the
+// user has `lgit` on their PATH (they just ran it), so it can verify with
+// `lgit check`. Promising the wrong surface is the whole point of this
+// split — an agent session frequently has one but not the other.
+type Channel int
+
+const (
+	// ChannelMCP: delivered through the findings_remediate MCP tool.
+	ChannelMCP Channel = iota
+	// ChannelCLI: delivered through `lgit fix` on the command line.
+	ChannelCLI
+)
+
 // RemediationFor dispatches by gate_id and returns the remediation for the
 // given finding. Always returns a non-zero Remediation — the ClaudePrompt
-// is always usable even when no deterministic recipe exists.
-func RemediationFor(f Finding) Remediation {
+// is always usable even when no deterministic recipe exists. The channel
+// determines which verification surface the ClaudePrompt points at (see
+// Channel); pass the one matching how you're delivering the prompt.
+func RemediationFor(f Finding, ch Channel) Remediation {
+	rem := remediationBody(f)
+	rem.ClaudePrompt += verificationBlock(f, ch)
+	return rem
+}
+
+// remediationBody builds the channel-agnostic remediation: recipe, summary,
+// confidence, and the framing prompt. The verification step is appended by
+// RemediationFor once the delivery channel is known.
+func remediationBody(f Finding) Remediation {
 	switch f.GateID {
 	case "vendored_dir_tracked":
 		return remediateVendoredDir(f)
@@ -379,7 +407,6 @@ func buildClaudePrompt(f Finding, extra string, recipe *Recipe) string {
 	fmt.Fprintf(&b, "Detected: %s\n\n", f.Message)
 	b.WriteString("Constraints:\n")
 	b.WriteString("- Do not touch files unrelated to this finding.\n")
-	b.WriteString("- After applying the fix, run `lgit check " + shellQuote(f.Project) + " " + f.GateID + "` to confirm the finding is resolved.\n")
 	b.WriteString("- For changes that touch git history (filter-repo, force-push), confirm with the user before running.\n")
 	if extra != "" {
 		b.WriteString("- " + extra + "\n")
@@ -404,8 +431,27 @@ func buildClaudePrompt(f Finding, extra string, recipe *Recipe) string {
 			}
 		}
 	}
-	b.WriteString("\nUse the l0-git MCP tools (`findings_remediate`, `gates_check`) for full context if needed.\n")
 	return b.String()
+}
+
+// verificationBlock returns the closing "how to confirm this is fixed" step,
+// naming only the surface guaranteed present for the delivery channel (see
+// Channel). This is the fix for the mismatch where every prompt promised both
+// `lgit check` (absent unless lgit is on PATH) and the MCP tools (absent
+// unless the l0-git MCP server is registered for the session) regardless of
+// which — if either — the recipient actually had.
+func verificationBlock(f Finding, ch Channel) string {
+	switch ch {
+	case ChannelCLI:
+		return "\nVerify: after applying the fix, run `lgit check " +
+			shellQuote(f.Project) + " " + f.GateID +
+			"` to confirm the finding is resolved.\n"
+	default: // ChannelMCP
+		return "\nVerify: after applying the fix, re-run this gate with the l0-git `gates_check` MCP tool (project=" +
+			shellQuote(f.Project) + ", gate_id=" + f.GateID +
+			"). The finding is resolved when the re-run no longer reports it. " +
+			"Use `findings_remediate` to re-fetch this context if needed.\n"
+	}
 }
 
 func indent(s, prefix string) string {

@@ -19,7 +19,7 @@ func TestRemediationFor_VendoredDir(t *testing.T) {
 		Severity: SeverityWarning,
 		Title:    "Vendored directory tracked in git",
 		FilePath: "node_modules",
-	})
+	}, ChannelMCP)
 	if r.Confidence != ConfidenceDeter {
 		t.Fatalf("want deterministic, got %q", r.Confidence)
 	}
@@ -44,7 +44,7 @@ func TestRemediationFor_IdeArtifactPicksDirGlob(t *testing.T) {
 	r := RemediationFor(Finding{
 		GateID:   "ide_artifact_tracked",
 		FilePath: ".vscode/settings.json",
-	})
+	}, ChannelMCP)
 	if r.Recipe == nil {
 		t.Fatal("expected recipe")
 	}
@@ -60,7 +60,7 @@ func TestRemediationFor_IdeArtifactSkipsRedundantIgnore(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("node_modules/\n.vscode/\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	r := RemediationFor(Finding{GateID: "ide_artifact_tracked", Project: dir, FilePath: ".vscode/settings.json"})
+	r := RemediationFor(Finding{GateID: "ide_artifact_tracked", Project: dir, FilePath: ".vscode/settings.json"}, ChannelMCP)
 	if r.Recipe == nil {
 		t.Fatal("expected recipe")
 	}
@@ -81,7 +81,7 @@ func TestRemediationFor_IdeArtifactAddsIgnoreWhenMissing(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("node_modules/\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	r := RemediationFor(Finding{GateID: "ide_artifact_tracked", Project: dir, FilePath: ".vscode/settings.json"})
+	r := RemediationFor(Finding{GateID: "ide_artifact_tracked", Project: dir, FilePath: ".vscode/settings.json"}, ChannelMCP)
 	if r.Recipe == nil || len(r.Recipe.FileEdits) != 1 || !strings.Contains(r.Recipe.FileEdits[0].Content, ".vscode/") {
 		t.Errorf("expected a .vscode/ .gitignore edit when not covered, got %+v", r.Recipe)
 	}
@@ -92,7 +92,7 @@ func TestRemediationFor_VendoredDirSkipsRedundantIgnore(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("node_modules/\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	r := RemediationFor(Finding{GateID: "vendored_dir_tracked", Project: dir, FilePath: "node_modules"})
+	r := RemediationFor(Finding{GateID: "vendored_dir_tracked", Project: dir, FilePath: "node_modules"}, ChannelMCP)
 	if r.Recipe == nil || len(r.Recipe.FileEdits) != 0 {
 		t.Errorf("expected no .gitignore edit (node_modules already covered), got %+v", r.Recipe)
 	}
@@ -108,7 +108,7 @@ func TestRemediationFor_GitignoreCoveragePullsPattern(t *testing.T) {
 	r := RemediationFor(Finding{
 		GateID:   "gitignore_coverage",
 		FilePath: ".gitignore:node_modules",
-	})
+	}, ChannelMCP)
 	if r.Recipe == nil {
 		t.Fatal("expected recipe")
 	}
@@ -124,7 +124,7 @@ func TestRemediationFor_ExecBitUsesPortableCommand(t *testing.T) {
 	r := RemediationFor(Finding{
 		GateID:   "unexpected_executable_bit",
 		FilePath: "README.md",
-	})
+	}, ChannelMCP)
 	if r.Recipe == nil || len(r.Recipe.Commands) == 0 {
 		t.Fatal("expected commands")
 	}
@@ -137,7 +137,7 @@ func TestRemediationFor_EnvExampleParsesLineAndKey(t *testing.T) {
 	r := RemediationFor(Finding{
 		GateID:   "env_example_uncommented",
 		FilePath: ".env.example:7:DATABASE_URL",
-	})
+	}, ChannelMCP)
 	if r.Recipe == nil || len(r.Recipe.FileEdits) != 1 {
 		t.Fatalf("expected single edit, got %+v", r.Recipe)
 	}
@@ -159,7 +159,7 @@ func TestRemediationFor_MergeConflictIsGuided(t *testing.T) {
 	r := RemediationFor(Finding{
 		GateID:   "merge_conflict_markers",
 		FilePath: "src/main.go",
-	})
+	}, ChannelMCP)
 	if r.Confidence != ConfidenceGuided || r.Recipe != nil {
 		t.Errorf("merge conflict should be guided (no recipe), got %+v", r)
 	}
@@ -168,7 +168,7 @@ func TestRemediationFor_MergeConflictIsGuided(t *testing.T) {
 func TestRemediationFor_SecretsHistoryFlagsRotation(t *testing.T) {
 	r := RemediationFor(Finding{
 		GateID: "secrets_scan_history",
-	})
+	}, ChannelMCP)
 	if r.Recipe == nil || len(r.Recipe.Caveats) == 0 {
 		t.Fatal("expected recipe with caveats")
 	}
@@ -184,7 +184,7 @@ func TestRemediationFor_UnknownGateFallsBackToGuided(t *testing.T) {
 	r := RemediationFor(Finding{
 		GateID: "secrets_scan", // no deterministic recipe — needs rotation
 		Title:  "API key in source",
-	})
+	}, ChannelMCP)
 	if r.Confidence != ConfidenceGuided {
 		t.Errorf("expected guided, got %q", r.Confidence)
 	}
@@ -220,22 +220,42 @@ func TestShellQuote_NoEscapeNeeded(t *testing.T) {
 // ClaudePrompt content
 // =============================================================================
 
-func TestClaudePrompt_ReferencesMCPTools(t *testing.T) {
-	r := RemediationFor(Finding{
-		ID:      99,
-		GateID:  "vendored_dir_tracked",
-		Project: "/srv/proj",
+// The verification step must name only the surface guaranteed present for
+// the delivery channel: gates_check (MCP) vs `lgit check` (CLI). Promising
+// the other one is exactly the mismatch this split fixes — an agent session
+// often has one but not the other.
+func TestClaudePrompt_VerificationIsChannelAware(t *testing.T) {
+	find := Finding{
+		ID:       99,
+		GateID:   "vendored_dir_tracked",
+		Project:  "/srv/proj",
 		FilePath: "vendor",
 		Title:    "x",
-	})
-	if !strings.Contains(r.ClaudePrompt, "findings_remediate") {
-		t.Error("prompt should mention findings_remediate so the agent can re-fetch context")
 	}
-	if !strings.Contains(r.ClaudePrompt, "lgit check") {
-		t.Error("prompt should include the verification step")
+
+	mcp := RemediationFor(find, ChannelMCP).ClaudePrompt
+	if !strings.Contains(mcp, "gates_check") {
+		t.Error("MCP prompt should verify via the gates_check MCP tool")
 	}
-	if !strings.Contains(r.ClaudePrompt, "/srv/proj") {
-		t.Error("prompt should include the project path")
+	if !strings.Contains(mcp, "findings_remediate") {
+		t.Error("MCP prompt should mention findings_remediate so the agent can re-fetch context")
+	}
+	if strings.Contains(mcp, "lgit check") {
+		t.Error("MCP prompt must NOT tell the agent to run `lgit check` — lgit is not guaranteed on PATH in an MCP session")
+	}
+	if !strings.Contains(mcp, "/srv/proj") {
+		t.Error("MCP prompt should include the project path")
+	}
+
+	cli := RemediationFor(find, ChannelCLI).ClaudePrompt
+	if !strings.Contains(cli, "lgit check") {
+		t.Error("CLI prompt should verify via `lgit check` — lgit is on PATH in a `lgit fix` session")
+	}
+	if strings.Contains(cli, "gates_check") {
+		t.Error("CLI prompt must NOT reference gates_check — the MCP server may not be registered for a CLI user")
+	}
+	if !strings.Contains(cli, "/srv/proj") {
+		t.Error("CLI prompt should include the project path")
 	}
 }
 
@@ -250,7 +270,7 @@ func TestRenderRemediationText_DeterministicHasAllSections(t *testing.T) {
 		FilePath: "node_modules", Message: "node_modules is tracked.",
 	}
 	var sb strings.Builder
-	RenderRemediationText(&sb, f, RemediationFor(f))
+	RenderRemediationText(&sb, f, RemediationFor(f, ChannelCLI))
 	out := sb.String()
 	for _, want := range []string{
 		"l0-git finding #1",
@@ -271,7 +291,7 @@ func TestRenderRemediationText_GuidedSkipsRunSection(t *testing.T) {
 		FilePath: "src/x.go", Message: "src/x.go:14 has markers.",
 	}
 	var sb strings.Builder
-	RenderRemediationText(&sb, f, RemediationFor(f))
+	RenderRemediationText(&sb, f, RemediationFor(f, ChannelCLI))
 	out := sb.String()
 	// "Run" header should not appear when there are no commands.
 	if strings.Contains(out, "\nRun\n") {

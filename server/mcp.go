@@ -331,7 +331,7 @@ func (s *mcpServer) dispatchTool(name string, args json.RawMessage) (any, error)
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"finding": f, "remediation": RemediationFor(*f)}, nil
+		return map[string]any{"finding": f, "remediation": RemediationFor(*f, ChannelMCP)}, nil
 	default:
 		return nil, fmt.Errorf("unknown tool: %s", name)
 	}
