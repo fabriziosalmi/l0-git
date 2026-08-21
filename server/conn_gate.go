@@ -476,19 +476,29 @@ func credsAreNonSecret(rawURL string) bool {
 	if schemeEnd < 0 {
 		return false
 	}
-	rawUser, rawPass, ok := splitUserInfo(rawURL[schemeEnd+3:])
+	rest := rawURL[schemeEnd+3:]
+	rawUser, rawPass, ok := splitUserInfo(rest)
 	if !ok {
 		return false
+	}
+	// The host follows the userinfo section.
+	if at := strings.IndexByte(rest, '@'); at >= 0 {
+		rest = rest[at+1:]
 	}
 	user := strings.ToLower(rawUser)
 	pass := strings.ToLower(rawPass)
 	if knownDefaultCredentials[user] && knownDefaultCredentials[pass] {
 		return true
 	}
-	// `portal:portal`, `hattrick:hattrick` — a user repeated as its own
-	// password is a scaffold default nobody chose, the same class as
-	// postgres:postgres but with a project-specific name.
-	if user != "" && user == pass {
+	// `portal:portal`, `hattrick:hattrick`, `acmedns:acmedns` — a user
+	// repeated as its own password is a scaffold default nobody chose.
+	//
+	// Unlike the closed knownDefaultCredentials list above, this rule is
+	// open-ended, so it is bounded by the HOST: every instance of it in a
+	// 220-repository sweep pointed at localhost or a container-internal
+	// service name. A repeated pair against a REAL host (`svc:svc@db.acme.io`)
+	// is a weak credential, not an example, and still fires.
+	if user != "" && user == pass && urlHostExempt(rest) {
 		return true
 	}
 	// Structural markers disqualify the whole URL: a regex metacharacter

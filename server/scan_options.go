@@ -97,8 +97,11 @@ type scanOptions struct {
 	// the one actionable statement about the tree ("this shouldn't be
 	// committed") is already made once by vendored_dir_tracked.
 	//
-	// Default true, honoured by every content gate including secrets_scan.
-	// Set to false to audit vendored dependency code as if it were yours.
+	// Default true. Deliberately NOT honoured by secrets_scan or
+	// secrets_scan_history: a credential committed under vendor/ is still a
+	// committed credential, and vendored_dir_tracked does not always emit a
+	// compensating finding (a legitimate Go vendor/ is exempt from it).
+	// Set to false to let the other gates read dependency code too.
 	SkipDefaultDependencyPaths *bool `json:"skip_default_dependency_paths,omitempty"`
 
 	// SkipDefaultGeneratedDirs controls whether content-scan gates skip
@@ -191,6 +194,29 @@ func (s scanOptions) shouldSkipContent(rel string) bool {
 	if skipEnabled(s.SkipDefaultGeneratedFiles) && isMinifiedBundle(rel) {
 		return true
 	}
+	// The next three deliberately live HERE and not in the shared base, so
+	// secrets_scan and secrets_scan_history keep reading these paths.
+	//
+	// The first draft put them in the base helper on the reasoning that
+	// "vendored_dir_tracked already says the one actionable thing about the
+	// tree". That reasoning is wrong exactly where it matters: a legitimate
+	// Go `vendor/` (go.mod + vendor/modules.txt) is EXEMPT from that gate, so
+	// a credential committed there would have produced no finding at all —
+	// silently breaking the secrets gate's contract over tracked files.
+	// The noise these remove is address/URL/TODO noise, and only those gates
+	// need protecting from it.
+	if skipEnabled(s.SkipDefaultDependencyPaths) && isDependencyPath(rel) {
+		return true
+	}
+	if skipEnabled(s.SkipDefaultGeneratedDirs) && isGeneratedDirPath(rel) {
+		return true
+	}
+	// Binary payloads are never source. isBinary (NUL byte in the first
+	// 8 KiB) misses formats with an ASCII header — PDFs above all — so the
+	// extension check runs first.
+	if isBinaryPath(rel) {
+		return true
+	}
 	return false
 }
 
@@ -210,18 +236,6 @@ func (s scanOptions) shouldSkipContentExceptDataDirs(rel string) bool {
 		return true
 	}
 	if skipEnabled(s.SkipDefaultGeneratedFiles) && isDefaultGeneratedFile(rel) {
-		return true
-	}
-	if skipEnabled(s.SkipDefaultDependencyPaths) && isDependencyPath(rel) {
-		return true
-	}
-	if skipEnabled(s.SkipDefaultGeneratedDirs) && isGeneratedDirPath(rel) {
-		return true
-	}
-	// Binary payloads are never source. isBinary (NUL byte in the first
-	// 8 KiB) misses formats with an ASCII header — PDFs above all — so the
-	// extension check runs first and is not optional.
-	if isBinaryPath(rel) {
 		return true
 	}
 	return false

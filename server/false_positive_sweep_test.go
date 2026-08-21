@@ -1176,3 +1176,83 @@ func TestSecretsScan_PemBodyIsNotAnyLongIdentifier(t *testing.T) {
 		t.Fatalf("real key material must fire; got: %+v", fs)
 	}
 }
+
+// The dependency / generated / binary skips must NOT reach secrets_scan.
+// The first draft put them in the shared base helper on the reasoning that
+// vendored_dir_tracked already reports the tree — but a legitimate Go
+// `vendor/` (go.mod + vendor/modules.txt) is exempt from that gate, so a
+// credential committed there would have produced no finding at all.
+func TestSecretsScan_StillReadsVendoredAndGeneratedTrees(t *testing.T) {
+	key := "AKIA1A2B3C4D5E6F7G8H"
+	files := map[string]string{
+		"go.mod":                                      "module x\n",
+		"vendor/modules.txt":                          "# github.com/x/y v1.0.0\n",
+		"vendor/github.com/x/y/client.go":             "const k = \"" + key + "\"\n",
+		"webapp/node_modules/leaky/index.js":          "var k = '" + key + "';\n",
+		".venv/lib/python3.9/site-packages/a/conf.py": "K = '" + key + "'\n",
+		"docs/.vitepress/dist/assets/app.js":          "var k='" + key + "';\n",
+	}
+	root := initRepoWithFiles(t, files)
+	fs, err := checkSecretsScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, f := range fs {
+		seen[strings.SplitN(f.FilePath, ":", 2)[0]] = true
+	}
+	for path := range files {
+		if strings.HasSuffix(path, ".go") && !strings.Contains(path, "vendor") {
+			continue
+		}
+		if path == "go.mod" || path == "vendor/modules.txt" {
+			continue
+		}
+		if !seen[path] {
+			t.Errorf("secrets_scan must still read %s; got: %+v", path, fs)
+		}
+	}
+	// …while the noisy gates keep skipping them.
+	cs, err := checkConnectionStrings(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cs) != 0 {
+		t.Errorf("connection_strings must still skip these trees; got: %+v", cs)
+	}
+}
+
+// The open-ended equal-pair exemption is bounded by the host. Every instance
+// in the corpus pointed at localhost or a container-internal service name;
+// a repeated pair against a real host is a weak credential, not an example.
+func TestConnectionStrings_EqualPairExemptOnlyOnLocalHosts(t *testing.T) {
+	quiet := []string{
+		"postgres://portal:portal@localhost:5432/portal",
+		"postgres://hattrick:hattrick@db:5432/hattrick",
+		"postgres://acmedns:acmedns@acmedns-pg:5432/acmedns",
+	}
+	for _, u := range quiet {
+		fs := scanConnectionLine("conf.py", 1, []byte(u+"\n"))
+		for _, f := range fs {
+			if strings.HasSuffix(f.FilePath, ":creds_in_url") {
+				t.Errorf("scaffold default on a local host must stay quiet: %s :: %+v", u, f)
+			}
+		}
+	}
+	fires := []string{
+		"postgres://svc:svc@db.acme.io:5432/app",
+		"mongodb://build:build@cluster0.example.net:27017/app",
+	}
+	for _, u := range fires {
+		fs := scanConnectionLine("conf.py", 1, []byte(u+"\n"))
+		found := false
+		for _, f := range fs {
+			if strings.HasSuffix(f.FilePath, ":creds_in_url") {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("repeated pair against a real host must fire: %s :: %+v", u, fs)
+		}
+	}
+}
