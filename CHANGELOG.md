@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.29] - 2026-08-21
+
 ### Fixed
 
 - **`findings_remediate` returned a `summary` that restated `title`.** v0.1.28 fixed this for `lgit fix`'s text output; the `Remediation` struct was untouched, so MCP clients and `--json` still received both fields carrying the same sentence — which cost an agent tokens and told it nothing it did not already have in the same payload. Seven call sites were assembling `Remediation{Summary: f.Title, …}` by hand; they now share one helper, and the sentence lives in a single exported constant both channels read. Deterministic summaries are unchanged: *"Untrack .idea/workspace.xml and ignore it going forward."* is real guidance and stays.
