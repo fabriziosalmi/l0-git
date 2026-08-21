@@ -172,7 +172,7 @@ make status       # binary version + MCP registration state
 ```
 
 361 tests, 736 including subtests. CI runs the suite on Linux, macOS and
-Windows × Go 1.22 and 1.23.
+Windows × Go 1.25 and 1.26.
 
 l0-git scans clean against itself with the bundled
 [`.l0git.json`](.l0git.json).
