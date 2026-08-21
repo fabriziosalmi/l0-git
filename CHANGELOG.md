@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.27] - 2026-08-21
+
 ### Fixed
 
 Adversarial false-positive sweep against 220 real repositories (28,531 findings
