@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.28] - 2026-08-21
+
 ### Security
 
 - **`golang.org/x/net` 0.27.0 → 0.58.0.** Three advisories were open on this dependency. The one that mattered here is [GHSA-5cv4-jp36-h3mw](https://github.com/advisories/GHSA-5cv4-jp36-h3mw) (CVSS 6.5), first patched in **0.55.0**: *parsing arbitrary HTML can consume excessive CPU time, possibly leading to denial of service*. `golang.org/x/net/html` is the only package of x/net this project imports, and parsing arbitrary HTML out of third-party repositories is exactly what `html_lint` does — so this was reachable on the one code path where it counts. Dependabot's open PR proposed 0.38.0, which would have closed the proxy-bypass and XSS advisories and left this one. The other two are closed as well.
