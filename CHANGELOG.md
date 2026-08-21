@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **Mistyped gate options were ignored in silence.** Every gate parsed its own `gate_options` sub-tree with `_ = json.Unmarshal(opts, &o)`: a decode failure — a typo'd key, a string where a number belongs, a string where a list belongs — was discarded and the gate ran on its defaults. `"threshold_mb": "20"` left the threshold at 5. `"exclude_path"` excluded nothing. No error, no warning, exit 0, valid JSON. The config file did not do what it said and there was no way to notice. Roughly nineteen option keys across twenty gates were affected, `exclude_paths` among them.
+
+  `gate_options` is now validated before any gate runs, strictly — unknown keys and wrong types both rejected — against the gate that owns it. An unknown gate id, or options on a gate that takes none, are reported too. In keeping with the existing decision for top-level config errors, problems are **surfaced, never fatal**: the run continues, the exit code stays `0`, and the text lands in `config_error` as before.
+
+- **A rejected `gate_options` sub-tree no longer applies in part.** Reporting the problem was not enough on its own: the gate still received the raw sub-tree, and its lenient parser applied whatever happened to decode — so `{"threshold_mb": 20, "treshold_mb": 1}` warned about the typo and then used 20 anyway. A config half-obeyed is the same class of problem as one silently ignored. A gate whose options are rejected now runs on its defaults; the project-level `exclude_paths` still apply, since those parsed fine and have nothing to do with the gate's mistake.
+- **A `gate_options` sub-tree of `null` is reported.** JSON `null` decodes into any pointer without error, so it slipped past the strict check and left the gate on defaults with nothing said.
+- **`lgit check` prints config problems to stderr.** `config_error` had existed for some time but only ever appeared in the JSON, which hides it from the most common use of the command — `lgit check . | jq '.findings | length'` in CI. stdout stays a clean JSON document.
+
 ## [0.1.29] - 2026-08-21
 
 ### Fixed

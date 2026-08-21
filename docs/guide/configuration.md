@@ -132,19 +132,32 @@ no user-level or global config file, and no merging: one project, one file.
 An unparseable `.l0git.json` is itself reported, by the
 [config parse error](/gates/config-parse-error) gate.
 
-### Unknown keys are a hard error
+### A typo is reported, not absorbed
 
-The config is decoded with unknown fields disallowed, and severity values are
-validated against `error` / `warning` / `info`. A typo does not fall back to the
-default — it fails loudly:
+Every key is validated — the top-level fields, and each `gate_options` sub-tree
+against the gate that owns it. Unknown keys and wrong types are both rejected:
 
 ```json
-{ "ignroe": ["changelog_present"] }
+{ "gate_options": { "large_file_tracked": { "treshold_mb": 20 } } }
 ```
 
 ```text
-parse .l0git.json: json: unknown field "ignroe"
+warning: gate_options.large_file_tracked: json: unknown field "treshold_mb"
 ```
 
-That is deliberate. A config that silently does nothing is worse than one that
-refuses to load.
+The warning goes to **stderr**, and the same text appears in the `config_error`
+field of `lgit check`'s JSON. This matters because the failure it replaces was
+invisible: a mistyped option key used to be discarded and the gate ran on its
+defaults, so `"threshold_mb": "20"` quietly stayed 5 and `"exclude_path"`
+excluded nothing — with no error, no warning, and exit 0.
+
+::: warning A bad key discards more than itself
+A problem in the **top level** (`ignore`, `severity`, `gate_options`) means the
+whole file fails to parse, so *none* of your configuration applies — not just
+the offending key. A problem inside one `gate_options` sub-tree is contained:
+only that gate falls back to its defaults.
+
+Either way the run continues and the exit code stays `0`. A broken config
+should not take a whole CI job with it, but it should never be silent, so
+check stderr — or `config_error` — if a setting seems not to be taking effect.
+:::

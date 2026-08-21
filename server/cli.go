@@ -53,6 +53,14 @@ func runCLI(args []string) error {
 		if err != nil {
 			return err
 		}
+		// A config problem is non-fatal by design, but putting it only in the
+		// JSON hides it from the most common way this command is used:
+		// `lgit check . | jq '.findings | length'` in CI. stderr keeps stdout
+		// a clean JSON document while making sure a config that is being
+		// ignored says so somewhere a human or a build log will see it.
+		if res.ConfigError != "" {
+			fmt.Fprintf(os.Stderr, "warning: %s\n", res.ConfigError)
+		}
 		return writeJSON(os.Stdout, res)
 	case "list":
 		// lgit list [-project=…] [-status=…] [-severity=…] [-gate=…]
