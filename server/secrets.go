@@ -38,7 +38,12 @@ var secretPatterns = []secretPattern{
 	{id: "openai_key", title: "OpenAI API key", re: regexp.MustCompile(`sk-[A-Za-z0-9]{48}`), minEntropy: 3.5},
 	{id: "anthropic_key", title: "Anthropic API key", re: regexp.MustCompile(`sk-ant-[A-Za-z0-9_\-]{40,}`), minEntropy: 3.5},
 	{id: "google_api_key", title: "Google API key", re: regexp.MustCompile(`AIza[0-9A-Za-z_\-]{35}`), minEntropy: 3.5},
-	{id: "slack_token", title: "Slack token", re: regexp.MustCompile(`xox[abprs]-[0-9A-Za-z\-]{10,}`), minEntropy: 3.5},
+	// Real Slack tokens are `xox<kind>-<digits>-<digits>[-<digits>]-<hex/alnum secret>`.
+	// The previous shape (`xox[abprs]-[0-9A-Za-z-]{10,}`) matched any hyphenated
+	// word salad after the prefix, so documentation lines like
+	// `SLACK_BOT_TOKEN=xoxb-workspace1-token` and a test's
+	// `"xoxb-1234567890-1234567890-"` literal both reported as leaked tokens.
+	{id: "slack_token", title: "Slack token", re: regexp.MustCompile(`xox[abprs]-[0-9]{10,13}-[0-9]{10,13}(?:-[0-9]{10,13})?-[A-Za-z0-9]{24,}`), minEntropy: 3.5},
 	{id: "stripe_live", title: "Stripe live secret key", re: regexp.MustCompile(`sk_live_[0-9A-Za-z]{24,}`), minEntropy: 3.5},
 	{id: "jwt", title: "JWT-like token", re: regexp.MustCompile(`eyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}`), minEntropy: 3.5},
 	{id: "private_key_header", title: "Private key", re: regexp.MustCompile(`-----BEGIN [A-Z ]*PRIVATE KEY-----`)},
@@ -75,11 +80,13 @@ const secretsMaxFileSize = 2 * 1024 * 1024
 // (scanHistoryBlob) so both apply identical filtering — a doc example or
 // placeholder must not surface in history just because it was once committed.
 //
-//   - match:   the bytes the pattern matched
-//   - rel:     path of the file/blob (for source-literal detection)
-//   - content: the full line/segment the match sits in
-//   - at:      byte offset of the match start within content
-func secretMatchSuppressed(p secretPattern, match []byte, rel string, content []byte, at int) bool {
+//   - match:     the bytes the pattern matched
+//   - rel:       path of the file/blob (for source-literal detection)
+//   - content:   the full line/segment the match sits in
+//   - at:        byte offset of the match start within content
+//   - following: everything after this line, used to check whether a PEM
+//     header is actually followed by key material
+func secretMatchSuppressed(p secretPattern, match []byte, rel string, content []byte, at int, following []byte) bool {
 	// Entropy floor: skip low-entropy matches (mock data, doc examples,
 	// placeholder strings that happen to satisfy the pattern syntax).
 	if p.minEntropy > 0 && shannonEntropy(string(match)) < p.minEntropy {
@@ -91,12 +98,81 @@ func secretMatchSuppressed(p secretPattern, match []byte, rel string, content []
 	if isKnownNonSecret(string(match)) {
 		return true
 	}
+	// Synthetic filler that the entropy floor cannot catch: a token body
+	// spelled out as a monotone character run (`abcdefghijklmnopqrstuvwxyz`,
+	// `0123456789`) scores maximal entropy precisely because every character
+	// is distinct.
+	if p.minEntropy > 0 && hasSequentialRun(string(match)) {
+		return true
+	}
 	// Structural marker patterns (private_key_header) match a header string,
 	// not a value. In source code that parses or matches keys, the header
 	// appears as a literal string — that's code, not a leak. Skip when the
 	// match sits immediately after an opening quote in a source file.
 	if p.id == "private_key_header" && isQuotedLiteralInSource(rel, content, at) {
 		return true
+	}
+	// A PEM header with no key material after it is a MENTION of the format,
+	// not a key: an error message, a README explaining what to paste, a
+	// changelog entry describing this very rule. A real key always puts a
+	// base64 body on the next line — that is what makes the file a key.
+	if p.id == "private_key_header" && !isKeyFileName(rel) &&
+		!pemBodyFollows(content, at+len(match), following) {
+		return true
+	}
+	return false
+}
+
+// keyFileExtensions / keyFileBasenames name a file whose whole reason to
+// exist is to hold a private key. In one of those the header is proof enough
+// — the body check is skipped so an unusually-wrapped or truncated key still
+// fires.
+var keyFileExtensions = map[string]bool{
+	".pem": true, ".key": true, ".p8": true, ".pkcs8": true, ".pk8": true,
+	".priv": true, ".ppk": true, ".jks": true, ".p12": true, ".pfx": true,
+}
+
+var keyFileBasenames = map[string]bool{
+	"id_rsa": true, "id_dsa": true, "id_ecdsa": true, "id_ed25519": true,
+	"server.key": true, "client.key": true, "privkey.pem": true,
+}
+
+// isKeyFileName reports whether rel names a private-key file.
+func isKeyFileName(rel string) bool {
+	base := strings.ToLower(filepath.Base(rel))
+	if keyFileBasenames[base] {
+		return true
+	}
+	return keyFileExtensions[strings.ToLower(filepath.Ext(base))]
+}
+
+// pemBase64LineRe matches a full line of PEM key material: at least 40
+// base64 characters and nothing else. Real PEM bodies wrap at 64.
+var pemBase64LineRe = regexp.MustCompile(`^[A-Za-z0-9+/]{40,}={0,2}$`)
+
+// pemBodyFollows reports whether key material follows a PEM header. It looks
+// at the remainder of the header's own line first (a one-line PEM blob) and
+// then at the next few non-empty lines, which is where a normally-formatted
+// key puts its first base64 row.
+func pemBodyFollows(content []byte, afterMatch int, following []byte) bool {
+	if afterMatch < len(content) && pemBase64LineRe.Match(bytes.TrimSpace(content[afterMatch:])) {
+		return true
+	}
+	checked := 0
+	for _, raw := range bytes.Split(following, []byte("\n")) {
+		line := bytes.TrimSpace(raw)
+		if len(line) == 0 {
+			continue
+		}
+		if pemBase64LineRe.Match(line) {
+			return true
+		}
+		checked++
+		// Only the first couple of non-empty lines can hold the body; past
+		// that we are reading unrelated content.
+		if checked >= 2 {
+			return false
+		}
 	}
 	return false
 }
@@ -174,14 +250,14 @@ func checkSecretsScan(ctx context.Context, root string, opts json.RawMessage) ([
 		relForLookup := rel
 		line := 1
 		start := 0
-		emit := func(content []byte, lineNum int) {
+		emit := func(content []byte, lineNum int, following []byte) {
 			for _, p := range secretPatterns {
 				idx := p.re.FindIndex(content)
 				if idx == nil {
 					continue
 				}
 				match := content[idx[0]:idx[1]]
-				if secretMatchSuppressed(p, match, relForLookup, content, idx[0]) {
+				if secretMatchSuppressed(p, match, relForLookup, content, idx[0], following) {
 					continue
 				}
 				out = append(out, Finding{
@@ -194,13 +270,13 @@ func checkSecretsScan(ctx context.Context, root string, opts json.RawMessage) ([
 		}
 		for i := 0; i < len(data); i++ {
 			if data[i] == '\n' {
-				emit(data[start:i], line)
+				emit(data[start:i], line, data[i+1:])
 				line++
 				start = i + 1
 			}
 		}
 		if start < len(data) {
-			emit(data[start:], line)
+			emit(data[start:], line, nil)
 		}
 	}
 	return out, nil
@@ -282,8 +358,34 @@ func gitLsFilesWithMode(ctx context.Context, root string) ([]gitFileEntry, error
 // every security/detection toolkit repo.
 func isDetectionRuleFile(rel string) bool {
 	switch strings.ToLower(filepath.Ext(rel)) {
-	case ".yar", ".yara":
+	case ".yar", ".yara", ".sigma":
 		return true
+	}
+	// A YAML/JSON/Markdown file under a detection-rule directory carries the
+	// pattern as its payload: a placeholder marker quoted as a regex in
+	// `rules/VBC-056.yaml`, a cleartext-protocol probe in
+	// `rules/vulnerability.json`, the prose describing either in
+	// `docs/rules/VBC-056.md`. The marker is what the file is ABOUT.
+	//
+	// Requires both the directory and a rule-carrying extension, so a real
+	// source file under rules/ (`rules/engine.go`) is never silenced.
+	switch strings.ToLower(filepath.Ext(rel)) {
+	case ".yml", ".yaml", ".json", ".md", ".toml", ".conf":
+	default:
+		return false
+	}
+	// A file NAMED for the rule set is the same thing without the directory:
+	// `rules.md`, `config/rules.yaml`, `signatures.json`.
+	switch strings.TrimSuffix(strings.ToLower(filepath.Base(rel)), filepath.Ext(rel)) {
+	case "rules", "ruleset", "signatures", "detections", "patterns":
+		return true
+	}
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	for i := 0; i < len(parts)-1; i++ {
+		switch strings.ToLower(parts[i]) {
+		case "rules", "signatures", "detections", "detection-rules", "sigs", "yara":
+			return true
+		}
 	}
 	return false
 }
@@ -342,9 +444,9 @@ var sourceCodeExtensions = map[string]bool{
 // in a literal context — not committed key material. Three signatures:
 //
 //  1. Quote-preceded (any file): the char immediately before `at` is
-//     `"`, `'`, or `` ` ``. Covers TS/Go/Py string literals, YAML
+//     `"`, `'`, or “ ` “. Covers TS/Go/Py string literals, YAML
 //     `- "-----BEGIN …"`, Astro/HTML `placeholder="…"`, and Markdown
-//     inline code `` `-----BEGIN …` ``. Cross-language.
+//     inline code “ `-----BEGIN …` “. Cross-language.
 //
 //  2. Comment-line in a source file: the line up to `at`, after
 //     trimming whitespace, starts with a comment marker (`//`, `#`,
@@ -363,6 +465,14 @@ func isQuotedLiteralInSource(rel string, content []byte, at int) bool {
 	}
 	if !sourceCodeExtensions[strings.ToLower(filepath.Ext(rel))] {
 		return false
+	}
+	// The marker can sit anywhere inside the literal, not just at its
+	// start — an error message reads
+	// `"Private key must be PEM with -----BEGIN PRIVATE KEY----- (PKCS#8)."`
+	// and a Rust test builds `"head -----BEGIN RSA PRIVATE KEY-----\n…"`.
+	// Both are code that mentions the header, not a key.
+	if insideStringLiteral(content, at) {
+		return true
 	}
 	// Comment-line check: scan the line prefix and see whether it
 	// opens with a comment marker.
@@ -390,3 +500,72 @@ func isBinary(data []byte) bool {
 	return bytes.IndexByte(data[:n], 0) >= 0
 }
 
+// insideStringLiteral reports whether byte offset at sits inside a quoted
+// string literal on its line. It counts unescaped quotes of each flavour
+// before the offset: an odd count means the offset is inside an open literal.
+//
+// Deliberately per-line and per-flavour, which keeps it cheap and makes the
+// failure mode a miss (no suppression) rather than an over-suppression.
+func insideStringLiteral(content []byte, at int) bool {
+	lineStart := bytes.LastIndexByte(content[:at], '\n') + 1
+	prefix := content[lineStart:at]
+	counts := map[byte]int{'"': 0, '\'': 0, '`': 0}
+	for i := 0; i < len(prefix); i++ {
+		c := prefix[i]
+		if c == '\\' {
+			i++ // skip the escaped byte
+			continue
+		}
+		if _, tracked := counts[c]; tracked {
+			counts[c]++
+		}
+	}
+	for _, n := range counts {
+		if n%2 == 1 {
+			return true
+		}
+	}
+	return false
+}
+
+// syntheticRunRe is not usable here (Go's RE2 has no backreferences), so
+// hasSequentialRun does the work directly.
+
+// sequentialRunFloor is how many consecutive characters make a string
+// obviously hand-typed filler. Eight is long enough that no real credential
+// has ever contained such a run by chance (probability ~62^-7 per position)
+// and short enough to catch `abcdefgh…` and `01234567…`.
+const sequentialRunFloor = 8
+
+// hasSequentialRun reports whether s contains a run of at least
+// sequentialRunFloor characters whose code points step by exactly +1 or -1.
+//
+// This is the hole the Shannon-entropy floor cannot cover: a fake token like
+// `ghp_abcdefghijklmnopqrstuvwxyz0123456789` uses 36 distinct characters and
+// therefore scores the MAXIMUM possible entropy (~5.17 bits/char), sailing
+// past a 3.5 floor — while being the most obviously synthetic string a
+// developer could type. Real credentials are drawn at random and effectively
+// never contain a monotone run this long.
+func hasSequentialRun(s string) bool {
+	runes := []rune(s)
+	if len(runes) < sequentialRunFloor {
+		return false
+	}
+	asc, desc := 1, 1
+	for i := 1; i < len(runes); i++ {
+		switch runes[i] - runes[i-1] {
+		case 1:
+			asc++
+			desc = 1
+		case -1:
+			desc++
+			asc = 1
+		default:
+			asc, desc = 1, 1
+		}
+		if asc >= sequentialRunFloor || desc >= sequentialRunFloor {
+			return true
+		}
+	}
+	return false
+}

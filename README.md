@@ -27,6 +27,7 @@ project never blocks on probabilistic signals.
 - **`.l0git.json`** per-project config: ignore gates, override severity,
   pass per-gate options (`exclude_paths`, `skip_default_fixture_paths`,
   `skip_default_data_files`, `skip_default_backup_paths`,
+  `skip_default_dependency_paths`, `skip_default_generated_dirs`,
   `disabled_rules`, thresholds, …) without touching code.
 - **Inline overrides** via `# l0git: ignore <rule_id> reason: …` (and the
   YAML / HTML / CSS / Markdown comment variants) — every override emits
@@ -168,6 +169,42 @@ typos don't silently no-op.
 | `ignore`       | List of gate IDs to skip entirely. Pre-existing open findings auto-resolve on next run.            |
 | `severity`     | Override default severity per gate. Allowed values: `error`, `warning`, `info`.                    |
 | `gate_options` | Per-gate JSON sub-tree; schemas are gate-specific (`disabled_rules`, `disabled_patterns`, `exclude_paths`, `threshold_mb`, `suggest_when_missing`, `enabled`, …). |
+
+#### Shared content-scan options
+
+Every gate that reads file contents (`secrets_scan`, `network_scan`,
+`connection_strings`, `dead_placeholders`, `markdown_lint`, `html_lint`,
+`css_lint`, …) accepts the same skip switches. All default to `true`; set one
+to `false` to widen the scan.
+
+| Option | Skips | Rationale |
+|--------|-------|-----------|
+| `skip_default_fixture_paths` | `test/`, `tests/`, `spec/`, `testdata/`, `fixtures/`, `*_test.go`, `<Product>Tests/`, … | Fixtures legitimately carry mock secrets and fake addresses. |
+| `skip_default_dependency_paths` | `node_modules/`, `vendor/`, `site-packages/`, `.venv/`, `Pods/`, `.yarn/`, `third_party/`, … | Nothing there was authored here. The one actionable statement about the tree is the single `vendored_dir_tracked` finding. |
+| `skip_default_generated_dirs` | `.next/`, `.nuxt/`, `.vitepress/`, `_site/`, `__pycache__/`, `htmlcov/`, `*_cache/`, … | Regenerated on the next build — a finding there cannot be fixed where it is reported. Ambiguous names (`dist/`, `build/`, `out/`, `target/`) are deliberately **not** included. |
+| `skip_default_generated_files` | lockfiles, `.map`, `.pb.go`, and (for non-secret gates) `*.min.js` / `*.min.css` | Tool bookkeeping. `secrets_scan` still reads minified bundles — a build-injected key lives nowhere else. |
+| `skip_default_data_files` | `.csv`, `.tsv`, `.jsonl`, `.ndjson`, `.parquet`, … | The addresses and keys **are** the payload. |
+| `skip_default_data_dirs` | data-extension files under `data/`, `corpus/`, `examples/`, `mocks/`, `__snapshots__/`, plus `.log`/`.list` anywhere | Same reason. `secrets_scan` deliberately ignores this one: a real credential in a dataset is still a leak. |
+| `skip_default_backup_paths` | `bak/`, `backup/`, `archive/`, `*.bak`, `*-backup-YYYYMMDD` | Shelved snapshots are stale echoes of the live tree. |
+
+Detection-rule files are always skipped by the content gates and have no
+switch: a `.yar`/`.yara`/`.sigma` file, or a YAML/JSON/Markdown file under
+`rules/` / `signatures/` / `detections/` (or named `rules.yaml`,
+`signatures.json`), carries the pattern as its payload — the marker is what
+the file is *about*. `config_parse_error` still reads them.
+
+Binary payloads (`.pdf`, `.png`, `.woff`, `.safetensors`, …) are never
+content-scanned and have no switch: a PDF's first 8 KiB is ASCII, so the
+NUL-byte heuristic passes it through and the byte-scan lifts "URLs" out of
+compressed streams.
+
+`network_scan` adds two opt-**in** switches, both off by default because the
+literal is a deployment fact rather than a violation:
+
+| Option | Turns on |
+|--------|----------|
+| `report_loopback` | findings for `127.0.0.0/8` and `::1` |
+| `report_unspecified` | findings for `0.0.0.0` / `::` |
 
 A malformed config does **not** abort the run; the parse error surfaces in
 the response's `config_error` field and in the extension's output channel.

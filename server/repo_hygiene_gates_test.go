@@ -40,10 +40,10 @@ func initRepoWithMode(t *testing.T, files map[string]string, executable []string
 func TestUnexpectedExecutableBit_FlagsTextFiles(t *testing.T) {
 	root := initRepoWithMode(t,
 		map[string]string{
-			"README.md":           "# x\n",
-			"config.yaml":         "x: 1\n",
-			"scripts/build.sh":    "#!/usr/bin/env bash\n",
-			"package-lock.json":   "{}\n",
+			"README.md":         "# x\n",
+			"config.yaml":       "x: 1\n",
+			"scripts/build.sh":  "#!/usr/bin/env bash\n",
+			"package-lock.json": "{}\n",
 		},
 		[]string{"README.md", "config.yaml", "scripts/build.sh", "package-lock.json"},
 	)
@@ -78,11 +78,11 @@ func TestUnexpectedExecutableBit_NoFalsePositiveOnRegularFile(t *testing.T) {
 // not trigger unexpected_executable_bit regardless of extension.
 func TestUnexpectedExecutableBit_ScriptDirExempt(t *testing.T) {
 	root := initRepoWithMode(t, map[string]string{
-		"bin/deploy":          "#!/bin/sh\necho deploy\n",
-		"scripts/bootstrap":   "#!/bin/bash\necho bootstrap\n",
-		"tools/lint.sh":       "#!/bin/sh\necho lint\n",
-		"hack/update.py":      "#!/usr/bin/env python3\n",
-		"cmd/run":             "#!/bin/sh\n",
+		"bin/deploy":        "#!/bin/sh\necho deploy\n",
+		"scripts/bootstrap": "#!/bin/bash\necho bootstrap\n",
+		"tools/lint.sh":     "#!/bin/sh\necho lint\n",
+		"hack/update.py":    "#!/usr/bin/env python3\n",
+		"cmd/run":           "#!/bin/sh\n",
 	}, []string{
 		"bin/deploy", "scripts/bootstrap", "tools/lint.sh", "hack/update.py", "cmd/run",
 	})
@@ -185,10 +185,10 @@ func TestVendoredDirTracked_DeduplicatesByDir(t *testing.T) {
 
 func TestVendoredDirTracked_SilentForGoVendor(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
-		"go.mod":                    "module example.com/m\ngo 1.22\n",
-		"vendor/modules.txt":        "# github.com/pkg/errors v0.9.1\n",
+		"go.mod":                                 "module example.com/m\ngo 1.22\n",
+		"vendor/modules.txt":                     "# github.com/pkg/errors v0.9.1\n",
 		"vendor/github.com/pkg/errors/errors.go": "package errors",
-		"main.go":                   "package main",
+		"main.go":                                "package main",
 	})
 	fs, err := checkVendoredDirTracked(context.Background(), root, nil)
 	if err != nil {
@@ -206,10 +206,10 @@ func TestVendoredDirTracked_SilentForGoVendor(t *testing.T) {
 // (untracking would delete served files nothing rebuilds).
 func TestVendoredDirTracked_SkipsServedStaticAssets(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
-		"ui/public/vendor/chart.min.js":       "x",
-		"ui/public/vendor/fonts/inter.woff2":  "y",
-		"src/static/vendor/lib.js":            "z",
-		"vendor/foo/foo.go":                   "package foo", // root vendor still flagged
+		"ui/public/vendor/chart.min.js":      "x",
+		"ui/public/vendor/fonts/inter.woff2": "y",
+		"src/static/vendor/lib.js":           "z",
+		"vendor/foo/foo.go":                  "package foo", // root vendor still flagged
 	})
 	fs, err := checkVendoredDirTracked(context.Background(), root, nil)
 	if err != nil {
@@ -235,10 +235,10 @@ func TestVendoredDirTracked_SkipsServedStaticAssets(t *testing.T) {
 func TestVendoredDirTracked_SkipsHandVendoredWebAssets(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
 		"vendor/font-awesome/all.min.css":        "x",
-		"vendor/font-awesome/fa-solid-900.woff2":  "y",
-		"docs/vendor/chart.umd.min.js":            "z",
-		"src/internal/thing.go":                   "package internal",
-		"node_modules/react/index.js":             "m",
+		"vendor/font-awesome/fa-solid-900.woff2": "y",
+		"docs/vendor/chart.umd.min.js":           "z",
+		"src/internal/thing.go":                  "package internal",
+		"node_modules/react/index.js":            "m",
 	})
 	fs, err := checkVendoredDirTracked(context.Background(), root, nil)
 	if err != nil {
@@ -282,10 +282,10 @@ func TestVendoredDirTracked_FlagsVendorWithoutModulesTxt(t *testing.T) {
 
 func TestIdeArtifactTracked_FlagsArtefacts(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
-		".vscode/settings.json": "{}",
-		".DS_Store":             "x",
-		"src/foo.go.swp":        "x",
-		"src/main.go":           "package main",
+		".vscode/ipch/cache.bin": "x",
+		".DS_Store":              "x",
+		"src/foo.go.swp":         "x",
+		"src/main.go":            "package main",
 	})
 	fs, err := checkIdeArtifactTracked(context.Background(), root, nil)
 	if err != nil {
@@ -295,7 +295,7 @@ func TestIdeArtifactTracked_FlagsArtefacts(t *testing.T) {
 	for _, f := range fs {
 		flagged[f.FilePath] = true
 	}
-	if !flagged[".vscode/settings.json"] || !flagged[".DS_Store"] || !flagged["src/foo.go.swp"] {
+	if !flagged[".vscode/ipch/cache.bin"] || !flagged[".DS_Store"] || !flagged["src/foo.go.swp"] {
 		t.Errorf("expected all 3 artefacts flagged, got: %v", flagged)
 	}
 	if flagged["src/main.go"] {
@@ -306,25 +306,33 @@ func TestIdeArtifactTracked_FlagsArtefacts(t *testing.T) {
 func TestFilenameQuality_Classifications(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
 		"file with spaces.md": "x",
-		"café.txt":       "x", // non-ASCII (é)
-		"plain.go":            "package x",
+		// Bidi override: the name renders as something other than what it is.
+		"invoice\u202Efdp.txt": "x",
+		// Zero-width joiner: indistinguishable from "shadow.go" in any UI.
+		"shadow\u200D.go": "x",
+		// A correctly-spelled word in the project's own language is NOT a
+		// defect — `à` word-splits exactly as `a` does.
+		"café.txt":         "x",
+		"sostenibilità.md": "x",
+		"plain.go":         "package x",
 	})
 	fs, err := checkFilenameQuality(context.Background(), root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	flaggedKinds := map[string][]string{}
+	flagged := map[string]string{}
 	for _, f := range fs {
-		flaggedKinds[f.FilePath] = []string{f.Title}
+		flagged[f.FilePath] = f.Title
 	}
-	if _, ok := flaggedKinds["file with spaces.md"]; !ok {
-		t.Errorf("expected spaces flag on 'file with spaces.md', got: %v", flaggedKinds)
+	for _, want := range []string{"file with spaces.md", "invoice\u202Efdp.txt", "shadow\u200D.go"} {
+		if _, ok := flagged[want]; !ok {
+			t.Errorf("expected %q to be flagged, got: %v", want, flagged)
+		}
 	}
-	if _, ok := flaggedKinds["café.txt"]; !ok {
-		t.Errorf("expected non-ASCII flag, got: %v", flaggedKinds)
-	}
-	if _, ok := flaggedKinds["plain.go"]; ok {
-		t.Errorf("plain.go must not fire: %v", flaggedKinds)
+	for _, unwanted := range []string{"café.txt", "sostenibilità.md", "plain.go"} {
+		if title, ok := flagged[unwanted]; ok {
+			t.Errorf("%q must not fire (%s): %v", unwanted, title, flagged)
+		}
 	}
 }
 
@@ -464,12 +472,11 @@ func TestGitLsFilesWithMode_ReturnsMode(t *testing.T) {
 	}
 }
 
-
 // vendor/ in a Ruby project with Gemfile + vendor/bundle/ is legitimate.
 func TestVendoredDirTracked_SilentForRubyBundlerDeployment(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
-		"Gemfile":                       "source 'https://rubygems.org'\ngem 'sinatra'\n",
-		"vendor/bundle/ruby/gems/x.rb":  "# gem\n",
+		"Gemfile":                      "source 'https://rubygems.org'\ngem 'sinatra'\n",
+		"vendor/bundle/ruby/gems/x.rb": "# gem\n",
 	})
 	fs, err := checkVendoredDirTracked(context.Background(), root, nil)
 	if err != nil {

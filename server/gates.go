@@ -47,7 +47,7 @@ func gateRegistry() []Gate {
 			Description: "Project root should declare a license (LICENSE / LICENSE.md / LICENSE.txt / COPYING).",
 			Severity:    SeverityWarning,
 			Tags:        "project-hygiene",
-			Check:       presenceGate("license", presenceArgs{names: []string{"license", "copying", "unlicense"}, prefixes: []string{"license.", "copying."}, message: "No LICENSE file at the project root. Pick a license (e.g. MIT, Apache-2.0) and add it as LICENSE."}),
+			Check:       presenceGate("license", presenceArgs{rootOnly: true, names: []string{"license", "copying", "unlicense"}, prefixes: []string{"license.", "copying."}, message: "No LICENSE file at the project root. Pick a license (e.g. MIT, Apache-2.0) and add it as LICENSE."}),
 		},
 		{
 			ID:          "contributing_present",
@@ -79,7 +79,7 @@ func gateRegistry() []Gate {
 			Description: "A .gitignore at the project root prevents accidental commits of build artefacts and secrets.",
 			Severity:    SeverityWarning,
 			Tags:        "project-hygiene,git-hygiene",
-			Check:       presenceGate("gitignore", presenceArgs{names: []string{".gitignore"}, message: "No .gitignore at the project root. Add one to keep build artefacts and secrets out of the repo."}),
+			Check:       presenceGate("gitignore", presenceArgs{rootOnly: true, names: []string{".gitignore"}, message: "No .gitignore at the project root. Add one to keep build artefacts and secrets out of the repo."}),
 		},
 		{
 			ID:          "ci_workflow_present",
@@ -358,11 +358,11 @@ func gateRegistryMarshallable() []gateMetadata {
 // CheckResult is what RunChecks returns: the findings written and the gates
 // that ran cleanly. Useful for the CLI/MCP response shape.
 type CheckResult struct {
-	Project     string    `json:"project"`
-	GatesRun    []string  `json:"gates_run"`
-	GatesIgnored []string `json:"gates_ignored,omitempty"`
-	Findings    []Finding `json:"findings"`
-	ConfigError string    `json:"config_error,omitempty"`
+	Project      string    `json:"project"`
+	GatesRun     []string  `json:"gates_run"`
+	GatesIgnored []string  `json:"gates_ignored,omitempty"`
+	Findings     []Finding `json:"findings"`
+	ConfigError  string    `json:"config_error,omitempty"`
 }
 
 // RunChecks runs every registered gate (or only gateID if non-empty) against
@@ -461,28 +461,49 @@ type presenceArgs struct {
 	names    []string
 	prefixes []string
 	message  string
+	// rootOnly restricts the search to the project root. Set for LICENSE and
+	// .gitignore: GitHub's licensee reads only the root, so a licence filed
+	// anywhere else leaves the repository showing no license at all — which
+	// is exactly what the gate should keep saying — and git only honours a
+	// .gitignore where it sits.
+	rootOnly bool
 }
 
+// communityHealthDirs are the directories GitHub documents as valid homes for
+// community health files: "You can create default community health files in
+// the root, .github, or docs folder." A CONTRIBUTING.md under docs/ is found
+// and rendered by GitHub, so telling its author to add one is simply wrong.
+// codeowners_present already searched all three; the rest looked only at the
+// root.
+var communityHealthDirs = []string{"", ".github", "docs"}
+
 func presenceGate(_ string, args presenceArgs) func(context.Context, string, json.RawMessage) ([]Finding, error) {
-	return func(_ context.Context, root string, _ json.RawMessage) ([]Finding, error) {
-		hit, err := dirContainsFile(root, func(name string) bool {
-			for _, n := range args.names {
-				if name == n {
-					return true
-				}
+	match := func(name string) bool {
+		for _, n := range args.names {
+			if name == n {
+				return true
 			}
-			for _, p := range args.prefixes {
-				if strings.HasPrefix(name, p) {
-					return true
-				}
-			}
-			return false
-		})
-		if err != nil {
-			return nil, err
 		}
-		if hit {
-			return nil, nil
+		for _, p := range args.prefixes {
+			if strings.HasPrefix(name, p) {
+				return true
+			}
+		}
+		return false
+	}
+	return func(_ context.Context, root string, _ json.RawMessage) ([]Finding, error) {
+		dirs := communityHealthDirs
+		if args.rootOnly {
+			dirs = []string{""}
+		}
+		for _, d := range dirs {
+			hit, err := dirContainsFile(filepath.Join(root, d), match)
+			if err != nil {
+				return nil, err
+			}
+			if hit {
+				return nil, nil
+			}
 		}
 		return []Finding{{Message: args.message}}, nil
 	}
@@ -510,33 +531,80 @@ func dirContainsFile(dir string, predicate func(lowerName string) bool) (bool, e
 	return false, nil
 }
 
+// ciWorkflowDirs are directories whose *.yml / *.yaml contents are a CI
+// pipeline definition. GitHub Actions is one of several; Gitea and Forgejo
+// deliberately mirror its layout.
+var ciWorkflowDirs = []string{
+	filepath.Join(".github", "workflows"),
+	filepath.Join(".gitea", "workflows"),
+	filepath.Join(".forgejo", "workflows"),
+	".circleci",
+	".buildkite",
+	".woodpecker",
+}
+
+// ciWorkflowFiles are single-file pipeline definitions from the other major
+// providers. A project with a working .gitlab-ci.yml has CI; telling it to
+// "add a CI workflow" is false, and it was 23% of this gate's findings across
+// a 220-repository sweep — at warning severity.
+var ciWorkflowFiles = []string{
+	".gitlab-ci.yml", ".gitlab-ci.yaml",
+	".travis.yml",
+	"Jenkinsfile", "jenkinsfile",
+	"azure-pipelines.yml", "azure-pipelines.yaml",
+	".drone.yml", ".drone.yaml",
+	"bitbucket-pipelines.yml", "bitbucket-pipelines.yaml",
+	".woodpecker.yml", ".woodpecker.yaml",
+	".appveyor.yml", "appveyor.yml",
+	"cloudbuild.yaml", "cloudbuild.yml",
+	".cirrus.yml", ".cirrus.yaml",
+	"wercker.yml",
+}
+
 func checkCIWorkflow(_ context.Context, root string, _ json.RawMessage) ([]Finding, error) {
-	dir := filepath.Join(root, ".github", "workflows")
-	hit, err := dirContainsFile(dir, func(name string) bool {
+	isYAML := func(name string) bool {
 		return strings.HasSuffix(name, ".yml") || strings.HasSuffix(name, ".yaml")
-	})
-	if err != nil {
-		return nil, err
 	}
-	if hit {
-		return nil, nil
+	for _, d := range ciWorkflowDirs {
+		hit, err := dirContainsFile(filepath.Join(root, d), isYAML)
+		if err != nil {
+			return nil, err
+		}
+		if hit {
+			return nil, nil
+		}
+	}
+	for _, f := range ciWorkflowFiles {
+		if exists(filepath.Join(root, f)) {
+			return nil, nil
+		}
 	}
 	return []Finding{{
-		Message:  "No workflow files found under .github/workflows/. Add a CI workflow (e.g. ci.yml) so tests run on push and pull requests.",
+		Message:  "No CI pipeline found (.github/workflows/, .gitlab-ci.yml, .circleci/, Jenkinsfile, …). Add one so tests run on push and pull requests.",
 		FilePath: ".github/workflows",
 	}}, nil
 }
 
 func checkPRTemplate(_ context.Context, root string, _ json.RawMessage) ([]Finding, error) {
-	githubDir := filepath.Join(root, ".github")
-	hit, err := dirContainsFile(githubDir, func(name string) bool {
-		return name == "pull_request_template.md"
-	})
-	if err != nil {
-		return nil, err
+	// GitHub accepts PULL_REQUEST_TEMPLATE in the root, .github/, or docs/,
+	// with a .md / .txt / no extension — plus a PULL_REQUEST_TEMPLATE/
+	// directory holding several named templates.
+	match := func(name string) bool {
+		return name == "pull_request_template.md" ||
+			name == "pull_request_template.txt" ||
+			name == "pull_request_template"
 	}
-	if hit {
-		return nil, nil
+	for _, d := range communityHealthDirs {
+		hit, err := dirContainsFile(filepath.Join(root, d), match)
+		if err != nil {
+			return nil, err
+		}
+		if hit {
+			return nil, nil
+		}
+		if info, err := os.Stat(filepath.Join(root, d, "PULL_REQUEST_TEMPLATE")); err == nil && info.IsDir() {
+			return nil, nil
+		}
 	}
 	return []Finding{{
 		Message:  "No .github/PULL_REQUEST_TEMPLATE.md. Add one so PR descriptions follow a consistent shape.",
@@ -554,6 +622,19 @@ func checkIssueTemplates(_ context.Context, root string, _ json.RawMessage) ([]F
 	}
 	if hit {
 		return nil, nil
+	}
+	// The legacy single-file form is still fully supported by GitHub.
+	legacy := func(name string) bool {
+		return name == "issue_template.md" || name == "issue_template.txt" || name == "issue_template"
+	}
+	for _, d := range communityHealthDirs {
+		hit, err := dirContainsFile(filepath.Join(root, d), legacy)
+		if err != nil {
+			return nil, err
+		}
+		if hit {
+			return nil, nil
+		}
 	}
 	return []Finding{{
 		Message:  "No .github/ISSUE_TEMPLATE/. Add at least one bug_report.md / feature_request.md template.",

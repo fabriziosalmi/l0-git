@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -109,7 +110,14 @@ var connectionPatterns = []connectionPattern{
 // one we shouldn't bother flagging (local dev, RFC docs, internal
 // reserved suffixes).
 func httpHostExempt(url string) bool {
-	rest := strings.TrimPrefix(url, "http://")
+	return urlHostExempt(strings.TrimPrefix(url, "http://"))
+}
+
+// urlHostExempt takes the post-scheme remainder of a URL and reports whether
+// its host is one we shouldn't flag: local dev, RFC1918/link-local, an
+// RFC-reserved documentation domain, a single-label container/service name,
+// or a standards-body host.
+func urlHostExempt(rest string) bool {
 	end := len(rest)
 	for i, c := range rest {
 		if c == '/' || c == ':' || c == '?' || c == '#' {
@@ -130,6 +138,18 @@ func httpHostExempt(url string) bool {
 		// (169.254.169.254) is http-only by design and unreachable off-host,
 		// so "cleartext HTTP MITM" never applies.
 		return true
+	}
+	if strings.HasPrefix(host, "100.") {
+		// 100.64.0.0/10 — RFC 6598 shared address space, which is what
+		// Tailscale hands out. A `http://100.102.64.123:8000` service URL is
+		// reachable only from inside the tailnet, so cleartext there is no
+		// more exposed than loopback. network_scan already treats the range
+		// as a doc/private range for the same reason.
+		if parts := strings.Split(host, "."); len(parts) == 4 {
+			if n := atoiSafe(parts[1]); n >= 64 && n <= 127 {
+				return true
+			}
+		}
 	}
 	if strings.HasPrefix(host, "172.") {
 		// 172.16.0.0/12 — second octet 16..31.
@@ -193,6 +213,10 @@ var httpSpecHosts = []string{
 	"www.ogc.org",
 	"opengis.net",
 	"www.opengis.net",
+	// DOI resolvers: a `http://dx.doi.org/10.18653/...` in a bibliography is
+	// a persistent identifier, not a service the project talks to.
+	"doi.org",
+	"dx.doi.org",
 }
 
 // bareURLRe matches a line that is exactly one URL: a scheme, "://", then a
@@ -249,6 +273,16 @@ func checkConnectionStrings(ctx context.Context, root string, opts json.RawMessa
 		// listed there are quotations of past behaviour, not current
 		// configuration. Same rationale as network_scan.
 		if isChangelogBasename(filepath.Base(rel)) {
+			continue
+		}
+		// Licence texts are verbatim boilerplate. Every Apache-2.0 file in
+		// existence carries `http://www.apache.org/licenses/`, and no author
+		// may edit it.
+		if isLicenseBasename(filepath.Base(rel)) {
+			continue
+		}
+		// Detection-rule files carry the address / URL as the rule's payload.
+		if isDetectionRuleFile(rel) {
 			continue
 		}
 		abs := filepath.Join(root, rel)
@@ -309,6 +343,23 @@ func scanConnectionLine(rel string, lineNum int, content []byte) []Finding {
 			if p.id == "http_remote" && httpHostExempt(text) {
 				continue
 			}
+			// An XML/SGML system identifier or namespace URI is an
+			// identifier, not an endpoint: nothing is fetched over it, and
+			// the string is fixed by the format's own specification.
+			//   <!DOCTYPE plist PUBLIC "…" "http://www.apple.com/DTDs/…">
+			//   <svg xmlns="http://www.w3.org/2000/svg">
+			if p.id == "http_remote" && isMarkupIdentifierURL(content, start) {
+				continue
+			}
+			// A database URI naming a local or container-internal host with
+			// no credentials (`redis://redis:6379/0`,
+			// `postgres://localhost:5432/app`) states only that the project
+			// uses a database. It carries no secret and no coupling to
+			// external infrastructure — the same reasoning that already
+			// exempts http://kafka for http_remote.
+			if (p.id == "db_uri" || p.id == "jdbc") && dbURIHostExempt(text) {
+				continue
+			}
 			if p.id == "creds_in_url" && credsAreNonSecret(text) {
 				// Not a leaked secret: the password is a runtime template
 				// placeholder (${PASS}), or BOTH user and password are
@@ -344,6 +395,46 @@ var placeholderTokenRe = regexp.MustCompile(
 		`)$`,
 )
 
+// splitUserInfo splits the post-scheme remainder of a URL into its username
+// and password. It skips over `${…}` and `{{…}}` template groups when looking
+// for the `user:pass` separator, because a compose-style URL puts a colon
+// INSIDE the placeholder:
+//
+//	${POSTGRES_USER:-secdata}:${POSTGRES_PASSWORD:?err}@postgres:5432/db
+//
+// A naive IndexByte(':') lands inside `${POSTGRES_USER:-…}` and yields a
+// nonsense password, which is why every such compose URL used to be reported
+// as a committed credential.
+func splitUserInfo(rest string) (user, pass string, ok bool) {
+	colon := -1
+	for i := 0; i < len(rest); i++ {
+		if strings.HasPrefix(rest[i:], "${") {
+			if j := strings.Index(rest[i:], "}"); j >= 0 {
+				i += j
+				continue
+			}
+		}
+		if strings.HasPrefix(rest[i:], "{{") {
+			if j := strings.Index(rest[i:], "}}"); j >= 0 {
+				i += j + 1
+				continue
+			}
+		}
+		switch rest[i] {
+		case ':':
+			if colon < 0 {
+				colon = i
+			}
+		case '@':
+			if colon < 0 {
+				return "", "", false
+			}
+			return rest[:colon], rest[colon+1 : i], true
+		}
+	}
+	return "", "", false
+}
+
 // credsArePlaceholder returns true when the password segment of a URL
 // is entirely a single template placeholder. The username is treated
 // as non-sensitive: account names rarely qualify as secrets, and
@@ -357,19 +448,10 @@ func credsArePlaceholder(url string) bool {
 	if schemeEnd < 0 {
 		return false
 	}
-	rest := url[schemeEnd+3:]
-	// User ends at the first ':'; password ends at the first '@'. The
-	// creds_in_url regex guarantees both delimiters exist within the
-	// captured span.
-	colon := strings.Index(rest, ":")
-	if colon < 0 {
+	_, pass, ok := splitUserInfo(url[schemeEnd+3:])
+	if !ok {
 		return false
 	}
-	at := strings.Index(rest[colon+1:], "@")
-	if at < 0 {
-		return false
-	}
-	pass := rest[colon+1 : colon+1+at]
 	return placeholderTokenRe.MatchString(pass)
 }
 
@@ -399,18 +481,102 @@ func credsAreNonSecret(rawURL string) bool {
 	if schemeEnd < 0 {
 		return false
 	}
-	rest := rawURL[schemeEnd+3:]
-	colon := strings.Index(rest, ":")
-	if colon < 0 {
+	rawUser, rawPass, ok := splitUserInfo(rawURL[schemeEnd+3:])
+	if !ok {
 		return false
 	}
-	at := strings.Index(rest[colon+1:], "@")
-	if at < 0 {
+	user := strings.ToLower(rawUser)
+	pass := strings.ToLower(rawPass)
+	if knownDefaultCredentials[user] && knownDefaultCredentials[pass] {
+		return true
+	}
+	// `portal:portal`, `hattrick:hattrick` — a user repeated as its own
+	// password is a scaffold default nobody chose, the same class as
+	// postgres:postgres but with a project-specific name.
+	if user != "" && user == pass {
+		return true
+	}
+	// Structural markers disqualify the whole URL: a regex metacharacter
+	// means this is a detection rule, and a one- or two-character segment is
+	// prose shorthand in a doc comment (`scheme://u:p@host`).
+	if isStructuralNonCredential(rawUser) || isStructuralNonCredential(rawPass) {
+		return true
+	}
+	// Vocabulary rules apply to the PASSWORD only. The username is not the
+	// secret, and a real password may well contain a word from the list —
+	// `minerva_ro:readonly_dev_pass@…` is a credential, not a placeholder.
+	return isPlaceholderPassword(rawPass)
+}
+
+// regexMetaRe matches the characters that only appear in a pattern, never in
+// a credential a server would accept. Their presence means the "URL" is a
+// detection rule or a format string:
+//
+//	(?i)(mongodb(\+srv)?://|postgres(ql)?://)(\S+:)?\S+@
+var regexMetaRe = regexp.MustCompile(`[\\()|?*+\[\]^$]`)
+
+// placeholderWordRe matches a credential segment that is a stand-in word
+// rather than a value: `pass`, `password`, `secret`, `token`, `xxx`, `***`,
+// `changeme`, `your_password`, `CHANGE_DATABASE_PASSWORD`, `REPLACE_ME`.
+var placeholderWordRe = regexp.MustCompile(`^(?:` +
+	`pass|passwd|pwd|password|secret|token|apikey|api_key|key|` +
+	`changeme|change_me|changethis|dummy|fake|example|placeholder|redacted|` +
+	`hidden|value|string|somepassword|supersecret|` +
+	`x{2,}|\*{2,}|\.{2,}|_{2,}|-{2,}` +
+	`)$`)
+
+// placeholderPrefixes start a credential the author is telling you to
+// replace: `your-token`, `my_password`, `change_this`, `replace-me`,
+// `insert_key`, `enter-password`, `add_your_...`.
+//
+// Deliberately prefix-only. A SUFFIX rule (`*_pass`, `*_password`) was tried
+// and rejected: it swallowed `readonly_dev_pass`, a real credential. Every
+// env-var-shaped stand-in it caught (`CHANGE_DATABASE_PASSWORD`,
+// `YOUR_DB_PASSWORD`) is already covered by the prefix and
+// SCREAMING_SNAKE_CASE rules below.
+var placeholderPrefixes = []string{
+	"your", "my", "change", "replace", "insert", "enter", "add_", "add-", "todo",
+}
+
+// isStructuralNonCredential reports whether a userinfo segment cannot be a
+// credential at all, judged by shape alone and applied to BOTH the username
+// and the password.
+func isStructuralNonCredential(seg string) bool {
+	if seg == "" {
 		return false
 	}
-	user := strings.ToLower(rest[:colon])
-	pass := strings.ToLower(rest[colon+1 : colon+1+at])
-	return knownDefaultCredentials[user] && knownDefaultCredentials[pass]
+	// Regex metacharacters: this is a pattern, not a URL.
+	if regexMetaRe.MatchString(seg) {
+		return true
+	}
+	// `u:p`, `x:ghp_abc` — one- and two-character segments are prose
+	// shorthand in a doc comment, never an issued credential.
+	return len(seg) <= 2
+}
+
+// isPlaceholderPassword reports whether the password segment is documentation
+// scaffolding. Every rule is about the SHAPE of the value, so a real password
+// — high-entropy and carrying none of these markers — is never silenced.
+func isPlaceholderPassword(seg string) bool {
+	if seg == "" {
+		return false
+	}
+	lower := strings.ToLower(seg)
+	if placeholderWordRe.MatchString(lower) {
+		return true
+	}
+	for _, p := range placeholderPrefixes {
+		if strings.HasPrefix(lower, p) {
+			return true
+		}
+	}
+	// SCREAMING_SNAKE_CASE is env-var notation, i.e. a slot to fill, not a
+	// value: CHANGE_DATABASE_PASSWORD, DB_PASS, SUPABASE_SERVICE_KEY.
+	if seg == strings.ToUpper(seg) && strings.ContainsAny(seg, "_-") &&
+		!strings.ContainsAny(seg, "abcdefghijklmnopqrstuvwxyz") {
+		return true
+	}
+	return false
 }
 
 type claimedSpan struct{ start, end int }
@@ -422,4 +588,50 @@ func overlapsClaimed(a, b int, spans []claimedSpan) bool {
 		}
 	}
 	return false
+}
+
+// dbURIHostExempt reports whether a database/JDBC URI points at a local or
+// container-internal host and carries no inline credentials. Such a URI is
+// the docker-compose default every project ships; flagging it is a statement
+// that the project uses a database, not a finding.
+//
+// A URI with inline credentials is never exempt here — creds_in_url claims
+// that span first, at error severity, and must keep doing so.
+func dbURIHostExempt(rawURL string) bool {
+	schemeEnd := strings.Index(rawURL, "://")
+	if schemeEnd < 0 {
+		// jdbc:postgresql://host/db — strip the outer `jdbc:` and retry.
+		if rest := strings.TrimPrefix(rawURL, "jdbc:"); rest != rawURL {
+			return dbURIHostExempt(rest)
+		}
+		return false
+	}
+	rest := rawURL[schemeEnd+3:]
+	// Strip a userinfo section without a password (`user@host`); a
+	// `user:pass@host` is handled by creds_in_url and must not land here.
+	if at := strings.IndexByte(rest, '@'); at >= 0 {
+		if strings.ContainsRune(rest[:at], ':') {
+			return false
+		}
+		rest = rest[at+1:]
+	}
+	return urlHostExempt(rest)
+}
+
+// markupIdentifierRe matches the declaration keywords that introduce a URI
+// used as a NAME rather than as an address. Checked against the text before
+// the match on the same line.
+var markupIdentifierRe = regexp.MustCompile(`(?i)<!DOCTYPE\b|<!ENTITY\b|\bxmlns(?::[a-z0-9_.-]+)?=|\bschemaLocation=|\bsystemId=|\bnamespace=`)
+
+// isMarkupIdentifierURL reports whether the URL starting at offset `at` is an
+// XML/SGML system identifier or namespace URI. `xmlns="http://www.w3.org/…"`
+// declares a namespace name; a DOCTYPE's system identifier names a DTD. In
+// neither case does anything connect over http, so "cleartext MITM" cannot
+// apply — yet every .plist, .svg, and XML document in existence carries one.
+func isMarkupIdentifierURL(content []byte, at int) bool {
+	lineStart := 0
+	if i := bytes.LastIndexByte(content[:at], '\n'); i >= 0 {
+		lineStart = i + 1
+	}
+	return markupIdentifierRe.Match(content[lineStart:at])
 }

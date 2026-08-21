@@ -170,6 +170,12 @@ func checkLargeFileTracked(ctx context.Context, root string, opts json.RawMessag
 		if parsed.shouldSkip(rel) {
 			continue
 		}
+		// A 9 MiB esbuild binary under node_modules/ is not a separate
+		// problem from "node_modules is tracked" — vendored_dir_tracked
+		// already says that once, about the directory.
+		if isSubsumedByVendoredFinding(rel) {
+			continue
+		}
 		if matchesLFSPatterns(rel, lfsPatterns) {
 			continue
 		}
@@ -316,4 +322,3 @@ func humanSize(n int64) string {
 		return fmt.Sprintf("%d B", n)
 	}
 }
-
