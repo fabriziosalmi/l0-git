@@ -378,11 +378,19 @@ var htmlRules = map[string]htmlRule{
 		title:    "<video autoplay> without muted",
 		advice:   "Modern browsers refuse to autoplay video with sound. Add `muted`, or trigger playback from user interaction.",
 	},
+	// Severity is info, not warning, and the advice no longer claims a
+	// vulnerability. Every evergreen browser has implied rel="noopener" for
+	// target="_blank" since 2021 (Chrome 88, Firefox 79, Safari 12.1,
+	// WHATWG HTML #4078), so reverse tabnabbing is not reachable and the
+	// old wording asserted a hazard that does not exist. What is left —
+	// suppressing the Referer header with noreferrer, and supporting
+	// pre-2021 browsers — is a preference, so the rule reports rather
+	// than warns.
 	"target_blank_no_rel": {
 		id:       "target_blank_no_rel",
-		severity: SeverityWarning,
+		severity: SeverityInfo,
 		title:    `target="_blank" without rel="noopener"`,
-		advice:   `Without rel="noopener", the new tab can read window.opener and run reverse-tabnabbing attacks. Add rel="noopener noreferrer".`,
+		advice:   `Evergreen browsers imply rel="noopener" here, so this is not a tabnabbing hole. Add rel="noopener noreferrer" if you also want to withhold the Referer header or to cover pre-2021 browsers.`,
 	},
 	"mystery_meat_nav": {
 		id:       "mystery_meat_nav",

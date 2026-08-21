@@ -74,6 +74,12 @@ func checkUnexpectedExecutableBit(ctx context.Context, root string, opts json.Ra
 		if scan.shouldSkip(e.Path) {
 			continue
 		}
+		// Mode bits inside a vendored/build tree came from the package
+		// manager, not the author; vendored_dir_tracked already reports
+		// the tree itself.
+		if isSubsumedByVendoredFinding(e.Path) {
+			continue
+		}
 		if e.Mode != "100755" {
 			continue
 		}
@@ -147,7 +153,14 @@ func looksLikeLockfile(base string) bool {
 // is bloat (and a merge-conflict factory). We list the well-known names
 // rather than infer from `.gitignore` so the gate is fully deterministic.
 
+// Order matters: the gate reports the FIRST prefix that matches a path and
+// stops, so the outermost / most specific containers must come first. A file
+// at `.venv/lib/python3.9/site-packages/pip/_internal/operations/build/x.py`
+// must be reported as `.venv`, not as the `build` directory buried inside it.
 var vendoredDirPrefixes = []string{
+	".venv/",
+	"venv/",
+	"site-packages/",
 	"node_modules/",
 	"vendor/", // Go modules vendored, PHP vendor/, etc.
 	"target/", // Cargo, Maven, Gradle
@@ -375,8 +388,8 @@ func vendoredKey(rel, prefix string) string {
 // Editor and OS-generated artefacts never belong in shared history.
 
 var ideArtifactBasenames = map[string]bool{
-	".DS_Store": true,
-	"Thumbs.db": true,
+	".DS_Store":   true,
+	"Thumbs.db":   true,
 	"desktop.ini": true,
 }
 
@@ -386,6 +399,32 @@ var ideArtifactDirPrefixes = []string{
 	".vs/",
 	".sublime-project/",
 	".sublime-workspace/",
+}
+
+// sharedVscodeBasenames are the .vscode/ files that VS Code itself defines as
+// project-level and shareable. The canonical GitHub `VisualStudioCode.gitignore`
+// ignores `.vscode/*` and then explicitly un-ignores exactly these — committing
+// them is the documented convention (agreed debug configs, recommended
+// extensions, shared tasks), not an accident. Flagging them told users to
+// delete files their editor expects the repo to carry.
+var sharedVscodeBasenames = map[string]bool{
+	"settings.json":   true,
+	"tasks.json":      true,
+	"launch.json":     true,
+	"extensions.json": true,
+	"mcp.json":        true,
+}
+
+// isSharedEditorConfig reports whether rel is one of the deliberately-shared
+// project-level editor config files.
+func isSharedEditorConfig(rel string) bool {
+	slash := filepath.ToSlash(rel)
+	parts := strings.Split(slash, "/")
+	if len(parts) < 2 || !strings.EqualFold(parts[len(parts)-2], ".vscode") {
+		return false
+	}
+	base := strings.ToLower(parts[len(parts)-1])
+	return sharedVscodeBasenames[base] || strings.HasSuffix(base, ".code-snippets")
 }
 
 // Suffixes that indicate editor scratch/swap files anywhere in the tree.
@@ -418,6 +457,9 @@ func checkIdeArtifactTracked(ctx context.Context, root string, opts json.RawMess
 		base := filepath.Base(rel)
 		if ideArtifactBasenames[base] || matchesAnySuffix(base, ideArtifactSuffixes) {
 			out = append(out, ideArtifactFinding(rel))
+			continue
+		}
+		if isSharedEditorConfig(rel) {
 			continue
 		}
 		for _, prefix := range ideArtifactDirPrefixes {
@@ -480,7 +522,7 @@ func checkFilenameQuality(ctx context.Context, root string, opts json.RawMessage
 
 	out := []Finding{}
 	for _, rel := range files {
-		if scan.shouldSkip(rel) {
+		if scan.shouldSkip(rel) || isSubsumedByVendoredFinding(rel) {
 			continue
 		}
 		base := filepath.Base(rel)
@@ -501,19 +543,67 @@ func checkFilenameQuality(ctx context.Context, root string, opts json.RawMessage
 	return out, nil
 }
 
+// isBidiControl reports whether r is a Unicode bidirectional formatting
+// character. These reorder how text is DISPLAYED without changing its bytes,
+// so a file name can render as something other than what it is — the
+// "Trojan Source" class (CVE-2021-42574) applied to paths.
+func isBidiControl(r rune) bool {
+	switch r {
+	case 0x061C, // ARABIC LETTER MARK
+		0x200E, 0x200F, // LRM, RLM
+		0x202A, 0x202B, 0x202C, 0x202D, 0x202E, // LRE, RLE, PDF, LRO, RLO
+		0x2066, 0x2067, 0x2068, 0x2069: // LRI, RLI, FSI, PDI
+		return true
+	}
+	return false
+}
+
+// isInvisible reports whether r renders as nothing at all. Two file names
+// that differ only by one of these are indistinguishable in every UI, so one
+// can silently shadow the other in a review.
+func isInvisible(r rune) bool {
+	switch r {
+	case 0x200B, 0x200C, 0x200D, // ZWSP, ZWNJ, ZWJ
+		0x2060,         // WORD JOINER
+		0xFEFF,         // ZERO WIDTH NO-BREAK SPACE / BOM
+		0x00AD,         // SOFT HYPHEN
+		0x180E, 0x2800: // MONGOLIAN VOWEL SEPARATOR, BRAILLE BLANK
+		return true
+	}
+	return false
+}
+
+// classifyFilename names the properties of a file name that actually break
+// something.
+//
+// A blanket "non-ASCII" rule used to live here and was removed: it accounted
+// for 82% of this gate's output across a 220-repository sweep, and every hit
+// was a correctly-spelled word in the project's own language
+// (`it_esperto_di_sostenibilità_….txt`). The gate's stated harm — shell
+// pipelines that don't quote argv — follows from WHITESPACE, not from an
+// accent; `à` word-splits exactly as `a` does. Flagging a project for writing
+// its own language is not a defect report.
+//
+// What remains is the set of characters that genuinely misbehave: whitespace
+// (word splitting), C0/C1 controls (including a newline in a path), bidi
+// overrides (the name renders as something other than what it is), and
+// zero-width characters (two names look identical).
 func classifyFilename(base string) []string {
 	out := []string{}
 	hasSpace := false
 	hasControl := false
-	hasNonASCII := false
+	hasBidi := false
+	hasInvisible := false
 	for _, r := range base {
 		switch {
-		case r == ' ':
+		case r == ' ' || r == '\t':
 			hasSpace = true
-		case r < 0x20 || r == 0x7f:
+		case r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f):
 			hasControl = true
-		case r > 0x7f:
-			hasNonASCII = true
+		case isBidiControl(r):
+			hasBidi = true
+		case isInvisible(r):
+			hasInvisible = true
 		}
 	}
 	if hasSpace {
@@ -522,8 +612,11 @@ func classifyFilename(base string) []string {
 	if hasControl {
 		out = append(out, "control chars")
 	}
-	if hasNonASCII {
-		out = append(out, "non-ASCII chars")
+	if hasBidi {
+		out = append(out, "bidi override chars")
+	}
+	if hasInvisible {
+		out = append(out, "zero-width chars")
 	}
 	return out
 }

@@ -11,22 +11,29 @@ import (
 // suffix) pair the gate is supposed to emit.
 func TestNetworkScan_Classification(t *testing.T) {
 	cases := []struct {
-		name        string
-		content     string
+		name         string
+		content      string
 		wantSeverity string
-		wantSuffix  string // suffix of FilePath (after the line number)
+		wantSuffix   string // suffix of FilePath (after the line number)
 	}{
-		{"public_ipv4", "host = 8.8.8.8\n", SeverityWarning, "ipv4_public"},
+		{"public_ipv4", "host = 93.184.216.34\n", SeverityWarning, "ipv4_public"},
 		{"private_192", "addr = 192.168.1.10\n", SeverityInfo, "ipv4_private"},
 		{"private_10", "addr = 10.0.0.5\n", SeverityInfo, "ipv4_private"},
-		{"unspecified", "bind = 0.0.0.0\n", SeverityInfo, "ipv4_unspecified"},
-		{"public_cidr", "deny 1.1.1.0/24\n", SeverityWarning, "cidr_public"},
+		{"public_cidr", "deny 93.184.216.0/24\n", SeverityWarning, "cidr_public"},
 		{"private_cidr", "allow 10.0.0.0/8\n", SeverityInfo, "cidr_private"},
 		{"asn", "AS15169 routes everything\n", SeverityInfo, "asn"},
 	}
+	// net.txt is prose; ASN detection is code/config-only, so the ASN row
+	// needs a config extension.
+	fileFor := func(name string) string {
+		if name == "asn" {
+			return "net.conf"
+		}
+		return "net.txt"
+	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			root := initRepoWithFiles(t, map[string]string{"net.txt": tc.content})
+			root := initRepoWithFiles(t, map[string]string{fileFor(tc.name): tc.content})
 			fs, err := checkNetworkScan(context.Background(), root, nil)
 			if err != nil {
 				t.Fatal(err)
@@ -100,8 +107,8 @@ func TestNetworkScan_SkipsDataFilesByDefault(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			root := initRepoWithFiles(t, map[string]string{
-				name:        "8.8.8.8\n1.1.1.1\n",
-				"net.txt":   "see 9.9.9.9 in source\n",
+				name:      "8.8.8.8\n1.1.1.1\n",
+				"net.txt": "see 9.9.9.9 in source\n",
 			})
 			fs, err := checkNetworkScan(context.Background(), root, nil)
 			if err != nil {
@@ -153,6 +160,37 @@ func TestNetworkScan_LoopbackOptIn(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("report_loopback must re-enable loopback findings: %+v", fs)
+	}
+}
+
+// The unspecified address is opt-in for the same reason loopback is: inside
+// a container `--host 0.0.0.0` is the only correct bind, so the literal is a
+// deployment fact the gate cannot distinguish from a real exposure.
+func TestNetworkScan_UnspecifiedOptIn(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{"net.txt": "bind = 0.0.0.0\n"})
+
+	fs, err := checkNetworkScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fs {
+		if strings.HasSuffix(f.FilePath, ":ipv4_unspecified") {
+			t.Errorf("unspecified must be off by default: %+v", f)
+		}
+	}
+
+	fs, err = checkNetworkScan(context.Background(), root, []byte(`{"report_unspecified":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, f := range fs {
+		if strings.HasSuffix(f.FilePath, ":ipv4_unspecified") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("report_unspecified must re-enable the finding: %+v", fs)
 	}
 }
 

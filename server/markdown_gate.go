@@ -275,6 +275,11 @@ func isLocalLink(dest string) bool {
 }
 
 func splitPathAndAnchor(dest string) (string, string) {
+	// A query string belongs to the URL, never to the on-disk name:
+	// `../../discussions/new?category=ideas`, `image.png?raw=true`.
+	if i := strings.IndexByte(dest, '?'); i >= 0 {
+		dest = dest[:i]
+	}
 	if i := strings.Index(dest, "#"); i >= 0 {
 		return dest[:i], dest[i+1:]
 	}
@@ -445,7 +450,22 @@ func computeLineStarts(source []byte) []int {
 // nodeLine looks up the 1-based line number of a node by walking up to
 // the nearest block ancestor that has Lines(), then mapping the first
 // segment's start offset to a line via the precomputed lineStarts.
+// nodeLine returns the 1-based source line for n.
+//
+// Inline nodes (links, images) carry no position of their own in goldmark, so
+// a naive walk to the enclosing block reports the line the BLOCK starts on.
+// For a multi-line paragraph — or a GFM table, which goldmark parses as one
+// paragraph when the table extension is off — that puts every link in the
+// block on the same wrong line: a README with a 30-row link table reported
+// thirty findings all pointing at the table header. Descending to the first
+// positioned descendant fixes that, and falls back to the block start only
+// when the inline node genuinely has no text (e.g. `[](target.md)`).
 func nodeLine(n ast.Node, lineStarts []int) int {
+	if n.Type() == ast.TypeInline {
+		if off, ok := firstInlineOffset(n); ok {
+			return offsetToLine(off, lineStarts)
+		}
+	}
 	for cur := n; cur != nil; cur = cur.Parent() {
 		if cur.Type() != ast.TypeBlock {
 			continue
@@ -502,6 +522,18 @@ func validatePayload(lang, body string) string {
 		}
 		var v any
 		if err := json.Unmarshal([]byte(body), &v); err != nil {
+			// Documentation routinely quotes an EXCERPT of a larger
+			// document — the members of an object without its braces:
+			//
+			//	```json
+			//	"meta": { "objective": "O1", "split": "test" }
+			//	```
+			//
+			// Wrapping is an exact test, not a heuristic: it succeeds only
+			// when the body is a well-formed fragment of a real document.
+			if isJSONFragment(body) {
+				return ""
+			}
 			return err.Error()
 		}
 	// JSON supersets: pass through — stdlib json.Unmarshal rejects
@@ -525,6 +557,13 @@ func validatePayload(lang, body string) string {
 	case "yaml", "yml":
 		var v any
 		if err := yaml.Unmarshal([]byte(body), &v); err != nil {
+			// A single block showing two alternative spellings of the same
+			// key ("# String format" … "# List format" …) repeats that key
+			// deliberately. YAML forbids it, documentation does it
+			// constantly, and the reader is never confused by it.
+			if isYAMLDuplicateKeyOnly(err) {
+				return ""
+			}
 			return err.Error()
 		}
 	}
@@ -561,4 +600,61 @@ func parseMarkdownOptions(opts json.RawMessage) markdownLintOptions {
 	var o markdownLintOptions
 	_ = json.Unmarshal(opts, &o)
 	return o
+}
+
+// firstInlineOffset returns the source byte offset of the first positioned
+// descendant of an inline node — the link/image label text, which always sits
+// on the same line as the opening bracket. Returns ok=false when the subtree
+// carries no text segment.
+func firstInlineOffset(n ast.Node) (int, bool) {
+	for child := n.FirstChild(); child != nil; child = child.NextSibling() {
+		if t, ok := child.(*ast.Text); ok {
+			return t.Segment.Start, true
+		}
+		if off, ok := firstInlineOffset(child); ok {
+			return off, true
+		}
+	}
+	return 0, false
+}
+
+// isJSONFragment reports whether body is a well-formed excerpt of a JSON
+// document rather than a document: object members without their enclosing
+// braces, or array elements without their brackets. Both wrap-and-reparse
+// attempts are exact — a genuinely malformed block fails them too.
+func isJSONFragment(body string) bool {
+	trimmed := strings.TrimSpace(body)
+	if trimmed == "" {
+		return false
+	}
+	var v any
+	if json.Unmarshal([]byte("{"+trimmed+"}"), &v) == nil {
+		return true
+	}
+	return json.Unmarshal([]byte("["+trimmed+"]"), &v) == nil
+}
+
+// yamlDuplicateKeyRe matches gopkg.in/yaml.v3's duplicate-mapping-key error,
+// which is the only YAML violation documentation commits on purpose.
+var yamlDuplicateKeyRe = regexp.MustCompile(`mapping key .* already defined`)
+
+// isYAMLDuplicateKeyOnly reports whether every problem yaml.v3 found is a
+// duplicate key. A block with any other error still fails.
+func isYAMLDuplicateKeyOnly(err error) bool {
+	if err == nil {
+		return false
+	}
+	lines := strings.Split(err.Error(), "\n")
+	sawDup := false
+	for _, l := range lines {
+		l = strings.TrimSpace(l)
+		if l == "" || l == "yaml: unmarshal errors:" {
+			continue
+		}
+		if !yamlDuplicateKeyRe.MatchString(l) {
+			return false
+		}
+		sawDup = true
+	}
+	return sawDup
 }

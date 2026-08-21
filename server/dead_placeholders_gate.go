@@ -75,6 +75,11 @@ func checkDeadPlaceholders(ctx context.Context, root string, opts json.RawMessag
 		if isChangelogBasename(filepath.Base(rel)) {
 			continue
 		}
+		// Detection-rule files carry the marker as the rule's payload
+		// (`regex: 'TODO:'`) or as the prose describing it.
+		if isDetectionRuleFile(rel) {
+			continue
+		}
 		// Files whose name IS the tracking register for placeholders — scanning
 		// them produces 100% noise (every line would match).
 		if isPlaceholderRegistryFile(rel) {
@@ -139,17 +144,17 @@ func scanForDeadPlaceholders(rel string, data []byte, disabled map[string]bool) 
 // placeholderRegistryBasenames are filenames that ARE the tracking register
 // for placeholder items — scanning them is 100% noise.
 var placeholderRegistryBasenames = map[string]bool{
-	"todo.md":     true,
-	"todos.md":    true,
-	"fixme.md":    true,
-	"fixmes.md":   true,
-	"hack.md":     true,
-	"hacks.md":    true,
-	"notes.md":    true,
-	"todo.txt":    true,
-	"fixme.txt":   true,
-	"todo":        true,
-	"fixme":       true,
+	"todo.md":   true,
+	"todos.md":  true,
+	"fixme.md":  true,
+	"fixmes.md": true,
+	"hack.md":   true,
+	"hacks.md":  true,
+	"notes.md":  true,
+	"todo.txt":  true,
+	"fixme.txt": true,
+	"todo":      true,
+	"fixme":     true,
 }
 
 // isPlaceholderRegistryFile returns true when the file's basename (lowercased)

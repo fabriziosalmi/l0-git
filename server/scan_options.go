@@ -88,6 +88,34 @@ type scanOptions struct {
 	// dataset file is still a leak that must be reported. Set to false to
 	// scan dataset directories with the other gates too.
 	SkipDefaultDataDirs *bool `json:"skip_default_data_dirs,omitempty"`
+
+	// SkipDefaultDependencyPaths controls whether content-scan gates skip
+	// third-party dependency trees installed by a package manager
+	// (node_modules/, vendor/, site-packages/, .venv/, Pods/, …). Nothing
+	// under those paths was authored here, so every TODO, http:// URL, mock
+	// credential, or IP literal inside is upstream's, not the user's — and
+	// the one actionable statement about the tree ("this shouldn't be
+	// committed") is already made once by vendored_dir_tracked.
+	//
+	// Default true. Deliberately NOT honoured by secrets_scan or
+	// secrets_scan_history: a credential committed under vendor/ is still a
+	// committed credential, and vendored_dir_tracked does not always emit a
+	// compensating finding (a legitimate Go vendor/ is exempt from it).
+	// Set to false to let the other gates read dependency code too.
+	SkipDefaultDependencyPaths *bool `json:"skip_default_dependency_paths,omitempty"`
+
+	// SkipDefaultGeneratedDirs controls whether content-scan gates skip
+	// unambiguous tool-output directories (.next/, .vitepress/, _site/,
+	// __pycache__/, htmlcov/, …). Findings there describe a build artefact
+	// that is regenerated on the next run, so fixing them is impossible —
+	// the fix belongs in the source the tool consumed.
+	//
+	// Deliberately does NOT cover dist/, build/, out/ or target/: those
+	// names are hand-authored content directories often enough that skipping
+	// them by name would silence real source.
+	//
+	// Default true.
+	SkipDefaultGeneratedDirs *bool `json:"skip_default_generated_dirs,omitempty"`
 }
 
 func parseScanOptions(opts json.RawMessage) scanOptions {
@@ -115,6 +143,14 @@ func parseScanOptions(opts json.RawMessage) scanOptions {
 	if s.SkipDefaultDataDirs == nil {
 		t := true
 		s.SkipDefaultDataDirs = &t
+	}
+	if s.SkipDefaultDependencyPaths == nil {
+		t := true
+		s.SkipDefaultDependencyPaths = &t
+	}
+	if s.SkipDefaultGeneratedDirs == nil {
+		t := true
+		s.SkipDefaultGeneratedDirs = &t
 	}
 	return s
 }
@@ -153,6 +189,32 @@ func (s scanOptions) shouldSkipContent(rel string) bool {
 		return true
 	}
 	if skipEnabled(s.SkipDefaultDataDirs) && isNoisyDataFile(rel) {
+		return true
+	}
+	if skipEnabled(s.SkipDefaultGeneratedFiles) && isMinifiedBundle(rel) {
+		return true
+	}
+	// The next three deliberately live HERE and not in the shared base, so
+	// secrets_scan and secrets_scan_history keep reading these paths.
+	//
+	// The first draft put them in the base helper on the reasoning that
+	// "vendored_dir_tracked already says the one actionable thing about the
+	// tree". That reasoning is wrong exactly where it matters: a legitimate
+	// Go `vendor/` (go.mod + vendor/modules.txt) is EXEMPT from that gate, so
+	// a credential committed there would have produced no finding at all —
+	// silently breaking the secrets gate's contract over tracked files.
+	// The noise these remove is address/URL/TODO noise, and only those gates
+	// need protecting from it.
+	if skipEnabled(s.SkipDefaultDependencyPaths) && isDependencyPath(rel) {
+		return true
+	}
+	if skipEnabled(s.SkipDefaultGeneratedDirs) && isGeneratedDirPath(rel) {
+		return true
+	}
+	// Binary payloads are never source. isBinary (NUL byte in the first
+	// 8 KiB) misses formats with an ASCII header — PDFs above all — so the
+	// extension check runs first.
+	if isBinaryPath(rel) {
 		return true
 	}
 	return false
@@ -270,6 +332,16 @@ var dataDirNames = map[string]bool{
 	"samples":   true,
 	"payloads":  true,
 	"wordlists": true,
+	// Sample/mock trees: an `examples/feed.xml` or `__snapshots__/page.json`
+	// is illustrative payload. Only the data extensions below are skipped,
+	// so an `examples/main.go` is still scanned as the source it is.
+	"examples":      true,
+	"example":       true,
+	"mocks":         true,
+	"mock":          true,
+	"stubs":         true,
+	"snapshots":     true,
+	"__snapshots__": true,
 }
 
 // dataDirExtensions are extensions that are ambiguous globally (a .json can
@@ -443,6 +515,228 @@ func isDefaultFixturePath(rel string) bool {
 	for i := 0; i < len(parts)-1; i++ {
 		if fixtureDirNames[strings.ToLower(parts[i])] {
 			return true
+		}
+		if isCamelCaseTestDir(parts[i]) {
+			return true
+		}
+	}
+	return false
+}
+
+// isCamelCaseTestDir recognises the Xcode / .NET / Java convention of naming
+// a test target `<Product>Tests` (`proxymateTests/`, `AppKitTests/`,
+// `Acme.Web.Tests/`). Matching requires the capital `T` of the convention, so
+// an ordinary lower-case word that merely ends in "tests" (`contests/`) is
+// left alone.
+func isCamelCaseTestDir(name string) bool {
+	// Deliberately no "Spec"/"Specs": Ruby's lower-case `spec/` is already an
+	// exact match above, and a CamelCase `OpenApiSpec/` is an API definition,
+	// not a test target — silencing it could hide a real credential.
+	for _, suffix := range []string{"Tests", "Test"} {
+		if len(name) > len(suffix) && strings.HasSuffix(name, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// =============================================================================
+// dependency trees, generated output, binary payloads
+// =============================================================================
+
+// dependencyDirNames are directory names that, anywhere in a path, mark the
+// file as third-party dependency code installed by a package manager. Nothing
+// under them was authored in this repository: a TODO, an http:// URL, a mock
+// AWS key, or an IP literal inside `node_modules/` belongs to upstream, and
+// the only actionable finding about the tree as a whole is the one
+// vendored_dir_tracked already emits ("don't commit node_modules").
+//
+// Curated to names that cannot plausibly be hand-authored source: `lib/`,
+// `packages/`, `external/` and friends are deliberately absent because
+// first-party code lives under those names all the time.
+var dependencyDirNames = map[string]bool{
+	"node_modules":     true,
+	"bower_components": true,
+	"jspm_packages":    true,
+	"site-packages":    true,
+	"dist-packages":    true,
+	".venv":            true,
+	"venv":             true,
+	"virtualenv":       true,
+	".tox":             true,
+	".pnpm-store":      true,
+	".gradle":          true,
+	".terraform":       true,
+	".pub-cache":       true,
+	// NOTE: CocoaPods' "Pods" is deliberately absent from this map and
+	// matched case-sensitively below — a lower-case `pods/` is a normal
+	// Kubernetes manifest directory, and skipping it would hide real
+	// findings in hand-written YAML.
+	"third_party": true,
+	"thirdparty":  true,
+	"vendor":      true, // Go -mod=vendor, PHP Composer, vendored web assets
+}
+
+// dependencySubtrees covers tool directories that mix a first-party config
+// file with a third-party cache. `.cargo/config.toml` and `.bundle/config`
+// are hand-written — the first commonly holds registry and mirror URLs and can
+// hold credentials — so only the named cache subtrees below count as
+// dependency code. Anything else under these directories is still scanned.
+var dependencySubtrees = map[string]map[string]bool{
+	".cargo":  {"registry": true, "git": true, "bin": true},
+	".bundle": {}, // only ever holds a hand-written `config`
+	".yarn":   {"cache": true, "unplugged": true, "releases": true, "plugins": true, "sdks": true, "berry": true},
+}
+
+// isDependencyPath reports whether rel traverses a third-party dependency
+// directory. The basename is excluded from the walk so a file *named*
+// `vendor` (rare, but legal) is not mistaken for a directory.
+func isDependencyPath(rel string) bool {
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	for i := 0; i < len(parts)-1; i++ {
+		lower := strings.ToLower(parts[i])
+		if dependencyDirNames[lower] {
+			return true
+		}
+		// CocoaPods always capitalises; `pods/` in lower case is a
+		// Kubernetes manifest directory.
+		if parts[i] == "Pods" {
+			return true
+		}
+		if subtrees, ok := dependencySubtrees[lower]; ok {
+			if i+1 < len(parts)-1 && subtrees[strings.ToLower(parts[i+1])] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// generatedDirNames are directory names that, anywhere in a path, mark the
+// file as build/tool output rather than source. Every one of these is created
+// by a tool and is unambiguous: unlike `dist/`, `build/`, `out/` or `target/`
+// — which are routinely hand-authored content directories and are therefore
+// deliberately absent here — no project hand-writes a `.next/` or a
+// `__pycache__/`.
+var generatedDirNames = map[string]bool{
+	".next":              true,
+	".nuxt":              true,
+	".output":            true,
+	".svelte-kit":        true,
+	".astro":             true,
+	".docusaurus":        true,
+	".vitepress":         true,
+	".vuepress":          true,
+	".parcel-cache":      true,
+	".turbo":             true,
+	".angular":           true,
+	"_site":              true, // Jekyll
+	".jekyll-cache":      true,
+	"__pycache__":        true,
+	".pytest_cache":      true,
+	".mypy_cache":        true,
+	".ruff_cache":        true,
+	".ipynb_checkpoints": true,
+	"htmlcov":            true,
+	".nyc_output":        true,
+	".sass-cache":        true,
+	".serverless":        true,
+}
+
+// isGeneratedDirPath reports whether rel traverses a tool-output directory.
+// Beyond the fixed names, any directory called `cache`/`caches` or ending in
+// `_cache`/`-cache`/`.cache` is a tool's scratch space by universal
+// convention (`.stargazer_cache/`, `.gradle_cache/`).
+func isGeneratedDirPath(rel string) bool {
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	for i := 0; i < len(parts)-1; i++ {
+		p := strings.ToLower(parts[i])
+		if generatedDirNames[p] {
+			return true
+		}
+		// Only the decorated forms. A bare `cache/` is a perfectly ordinary
+		// source package (`internal/cache/redis.go`), and skipping it would
+		// hide real credentials and addresses in first-party code.
+		if strings.HasSuffix(p, "_cache") || strings.HasSuffix(p, "-cache") ||
+			strings.HasSuffix(p, ".cache") {
+			return true
+		}
+	}
+	return false
+}
+
+// isMinifiedBundle reports whether rel is a minified frontend bundle. These
+// are excluded from secrets_scan's skip list on purpose (a build-time-injected
+// key lives there and nowhere else) but are pure noise for the address/URL
+// gates, where every match came from the library that was bundled.
+func isMinifiedBundle(rel string) bool {
+	base := strings.ToLower(filepath.Base(rel))
+	return strings.HasSuffix(base, ".min.js") || strings.HasSuffix(base, ".min.css") ||
+		strings.HasSuffix(base, ".min.mjs") || strings.HasSuffix(base, ".bundle.js")
+}
+
+// binaryFileExtensions are extensions whose payload is binary even when the
+// first 8 KiB happens to contain no NUL byte — the case isBinary misses. A
+// PDF in particular starts with an ASCII header and an uncompressed object
+// table, so a byte-scan of one yields "IPv4 addresses" and "http:// URLs"
+// lifted out of compressed streams and font tables.
+var binaryFileExtensions = map[string]bool{
+	".pdf": true, ".ps": true, ".eps": true,
+	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".bmp": true,
+	".tif": true, ".tiff": true, ".webp": true, ".ico": true, ".icns": true,
+	".avif": true, ".heic": true, ".psd": true, ".ai": true, ".sketch": true,
+	".mp3": true, ".wav": true, ".flac": true, ".ogg": true, ".m4a": true,
+	".aac": true, ".opus": true, ".mid": true, ".midi": true,
+	".mp4": true, ".mkv": true, ".mov": true, ".avi": true, ".webm": true,
+	".wmv": true, ".flv": true, ".m4v": true,
+	".zip": true, ".gz": true, ".tgz": true, ".bz2": true, ".xz": true,
+	".zst": true, ".7z": true, ".rar": true, ".tar": true, ".lz4": true,
+	".jar": true, ".war": true, ".ear": true, ".apk": true, ".ipa": true,
+	".deb": true, ".rpm": true, ".pkg": true, ".dmg": true, ".msi": true,
+	".exe": true, ".dll": true, ".so": true, ".dylib": true, ".a": true,
+	".o": true, ".obj": true, ".class": true, ".wasm": true, ".bin": true,
+	".pyc": true, ".pyo": true, ".pyd": true,
+	".doc": true, ".docx": true, ".xls": true, ".xlsx": true, ".ppt": true,
+	".pptx": true, ".odt": true, ".ods": true, ".odp": true, ".rtf": true,
+	".woff": true, ".woff2": true, ".ttf": true, ".otf": true, ".eot": true,
+	".db": true, ".sqlite": true, ".sqlite3": true, ".mdb": true,
+	".safetensors": true, ".onnx": true, ".pt": true, ".pth": true,
+	".ckpt": true, ".h5": true, ".pb": true, ".tflite": true, ".gguf": true,
+	".pkl": true, ".pickle": true, ".npy": true, ".npz": true, ".bson": true,
+}
+
+// isBinaryPath reports whether rel carries a known-binary extension. Content
+// gates check this before reading so a PDF or a model checkpoint is never
+// byte-scanned for credentials, addresses, or TODO markers.
+func isBinaryPath(rel string) bool {
+	return binaryFileExtensions[strings.ToLower(filepath.Ext(rel))]
+}
+
+// buildOutputSubPaths are two-segment path prefixes that are unambiguous
+// build output even though their first segment (`target/`) is ambiguous on
+// its own. Cargo and Maven both write `target/debug` / `target/release`; no
+// project hand-authors one.
+var buildOutputSubPaths = [][2]string{
+	{"target", "debug"},
+	{"target", "release"},
+}
+
+// isSubsumedByVendoredFinding reports whether a per-file finding about rel
+// would merely restate what vendored_dir_tracked already says once about the
+// whole directory. `node_modules/typescript/lib/typescript.js is 8.7 MiB` and
+// `node_modules/didyoumean/package.json is mode 100755` are not separate
+// problems from "node_modules is tracked" — they are the same problem,
+// itemised. Metadata gates use this so the actionable finding stays alone.
+func isSubsumedByVendoredFinding(rel string) bool {
+	if isDependencyPath(rel) || isGeneratedDirPath(rel) {
+		return true
+	}
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	for i := 0; i+2 < len(parts); i++ {
+		for _, sub := range buildOutputSubPaths {
+			if strings.EqualFold(parts[i], sub[0]) && strings.EqualFold(parts[i+1], sub[1]) {
+				return true
+			}
 		}
 	}
 	return false

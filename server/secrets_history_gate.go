@@ -13,9 +13,9 @@ import (
 //     have to actively choose to surface those findings
 type secretsHistoryOptions struct {
 	scanOptions
-	Enabled        bool `json:"enabled,omitempty"`
-	MaxBlobs       int  `json:"max_blobs,omitempty"`
-	MaxBlobSizeMB  int  `json:"max_blob_size_mb,omitempty"`
+	Enabled       bool `json:"enabled,omitempty"`
+	MaxBlobs      int  `json:"max_blobs,omitempty"`
+	MaxBlobSizeMB int  `json:"max_blob_size_mb,omitempty"`
 }
 
 func checkSecretsScanHistory(ctx context.Context, root string, opts json.RawMessage) ([]Finding, error) {
@@ -108,7 +108,7 @@ func scanHistoryBlob(b blobInfo, data []byte) []Finding {
 	out := []Finding{}
 	line := 1
 	start := 0
-	emit := func(content []byte, lineNum int) {
+	emit := func(content []byte, lineNum int, following []byte) {
 		for _, p := range secretPatterns {
 			idx := p.re.FindIndex(content)
 			if idx == nil {
@@ -119,7 +119,7 @@ func scanHistoryBlob(b blobInfo, data []byte) []Finding {
 			// floor, known-non-secret allowlist, source-literal private keys.
 			// History blobs are immutable, so an un-suppressed FP would
 			// re-surface on every scan forever with a destructive remedy.
-			if secretMatchSuppressed(p, match, b.Path, content, idx[0]) {
+			if secretMatchSuppressed(p, match, b.Path, content, idx[0], following) {
 				continue
 			}
 			out = append(out, Finding{
@@ -137,13 +137,13 @@ func scanHistoryBlob(b blobInfo, data []byte) []Finding {
 	}
 	for i := 0; i < len(data); i++ {
 		if data[i] == '\n' {
-			emit(data[start:i], line)
+			emit(data[start:i], line, data[i+1:])
 			line++
 			start = i + 1
 		}
 	}
 	if start < len(data) {
-		emit(data[start:], line)
+		emit(data[start:], line, nil)
 	}
 	return out
 }

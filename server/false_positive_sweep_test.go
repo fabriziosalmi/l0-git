@@ -1,0 +1,1258 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"testing"
+)
+
+// The cases in this file were all harvested from a sweep of 220 real
+// repositories. Each one is a finding the gates used to emit that no
+// maintainer could ever act on. They are locked in here so a future rule
+// change cannot quietly reintroduce them.
+
+// -----------------------------------------------------------------------
+// network_scan
+// -----------------------------------------------------------------------
+
+// Inline SVG path data was, by itself, 54% of every finding produced across
+// the corpus (15,402 of 28,531). SVG packs decimals — `1.08.58 1.23.82.72`
+// is five numbers — so a GitHub icon embedded in a page reports as five
+// hardcoded public IPv4 addresses, once per page.
+func TestNetworkScan_SvgPathDataIsNotAnAddress(t *testing.T) {
+	const githubIcon = `<a href="/x"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">` +
+		`<path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95.29.25.54.73.54 1.48z"/></svg></a>`
+	root := initRepoWithFiles(t, map[string]string{"index.html": githubIcon + "\n"})
+	fs, err := checkNetworkScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) != 0 {
+		t.Fatalf("SVG path data must produce no address findings; got: %+v", fs)
+	}
+}
+
+// A standalone .svg made only of geometry produces nothing — not because the
+// file is skipped (it is not; see TestNetworkScan_SvgKeepsNonGeometryContent)
+// but because every coordinate attribute is blanked before matching.
+func TestNetworkScan_SvgGeometryOnlyIsSilent(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"icon.svg": `<svg viewBox="0 0 16 16"><path d="M2.2.82.64 1.23.82.72"/></svg>` + "\n",
+	})
+	fs, err := checkNetworkScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) != 0 {
+		t.Fatalf("SVG geometry must produce no address findings; got: %+v", fs)
+	}
+}
+
+// A four-component version is byte-identical to a dotted quad. Without
+// context these all reported as hardcoded public addresses — the User-Agent
+// case (`Chrome/120.0.0.0`) appears in almost every scraper ever written.
+func TestNetworkScan_VersionLiteralsAreNotAddresses(t *testing.T) {
+	cases := map[string]string{
+		"user_agent": `headers = {'User-Agent': 'Mozilla/5.0 AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'}`,
+		"pin":        `dependencies = ["brotlicffi==1.2.0.1", "aiohttp==3.13.3"]`,
+		"attribute":  `<assemblyIdentity version="0.0.1.0" name="setup"/>`,
+		"assignment": `version: 4.18.2.1`,
+		// NB: no `@1.2.3.4` row. An npm spec and `user@host` are
+		// indistinguishable, and the bare `@` rule was removed because it
+		// silenced `ssh root@192.168.0.136`. A row asserting silence here
+		// would only pass by accident — which is exactly how it read before.
+		// Prose versions without a `:`/`=` ("# build 4.18.2.1") are likewise
+		// out of scope: widening the rule to reach them brings the `@` false
+		// negative straight back.
+		"oid_prefix": `oid = 1.3.6.1.4.1.311`,
+		"tag":        `git checkout v9.8.7.6`,
+	}
+	for name, content := range cases {
+		t.Run(name, func(t *testing.T) {
+			root := initRepoWithFiles(t, map[string]string{"conf.yaml": content + "\n"})
+			fs, err := checkNetworkScan(context.Background(), root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, f := range fs {
+				if strings.Contains(f.FilePath, "ipv4") {
+					t.Errorf("version literal reported as address: %+v", f)
+				}
+			}
+		})
+	}
+}
+
+// A real hardcoded address in the same shapes must still fire, so the
+// version suppression cannot be papering over the rule.
+func TestNetworkScan_RealPublicAddressStillFires(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"conf.yaml": "upstream: 51.222.140.163\nfallback: 93.184.216.34\n",
+	})
+	fs, err := checkNetworkScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := 0
+	for _, f := range fs {
+		if strings.HasSuffix(f.FilePath, ":ipv4_public") && f.Severity == SeverityWarning {
+			got++
+		}
+	}
+	if got != 2 {
+		t.Fatalf("expected 2 public-address warnings, got %d: %+v", got, fs)
+	}
+}
+
+// Public resolver constants and 1.2.3.4-style stand-ins are deliberate, not
+// accidental infrastructure coupling: information, never a warning.
+func TestNetworkScan_ResolversAndPlaceholdersAreInfo(t *testing.T) {
+	cases := map[string]string{
+		"google":     "8.8.8.8",
+		"cloudflare": "1.1.1.1",
+		"quad9":      "9.9.9.9",
+		"sequential": "1.2.3.4",
+		"descending": "4.3.2.1",
+		"broadcast":  "255.255.255.255",
+		"multicast":  "224.0.0.251",
+	}
+	for name, addr := range cases {
+		t.Run(name, func(t *testing.T) {
+			root := initRepoWithFiles(t, map[string]string{"conf.yaml": "dns: " + addr + "\n"})
+			fs, err := checkNetworkScan(context.Background(), root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Assert the finding EXISTS at info. "no warning" alone is also
+			// satisfied by a finding that was dropped outright — which is how
+			// a category routed into the suppressed `doc-range` bucket got
+			// past review. The classification is the point, not silence.
+			if len(fs) != 1 {
+				t.Fatalf("%s must produce exactly one informational finding, got: %+v", addr, fs)
+			}
+			if fs[0].Severity != SeverityInfo {
+				t.Errorf("%s must be info, got %s: %+v", addr, fs[0].Severity, fs[0])
+			}
+		})
+	}
+}
+
+// RFC-designated documentation ranges stay suppressed outright — they are
+// reserved for the purpose, so there is nothing to tell the reader.
+// Consecutive-octet placeholders are NOT the same thing: those ranges are
+// really allocated, so they are reported at info instead of dropped.
+func TestNetworkScan_DocRangeDroppedButPlaceholderReported(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"rfc.yaml":         "addr: 192.0.2.42\n",
+		"placeholder.yaml": "addr: 1.2.3.4\n",
+	})
+	fs, err := checkNetworkScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) != 1 {
+		t.Fatalf("expected exactly the placeholder finding, got: %+v", fs)
+	}
+	if !strings.HasPrefix(fs[0].FilePath, "placeholder.yaml") ||
+		!strings.HasSuffix(fs[0].FilePath, ":ipv4_doc-placeholder") {
+		t.Errorf("unexpected finding: %+v", fs[0])
+	}
+}
+
+// An SVG can carry a real endpoint alongside its geometry. Stripping the
+// coordinate attributes is what kills the false positive; skipping the whole
+// file also threw away anything real in it.
+func TestNetworkScan_SvgKeepsNonGeometryContent(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"icon.svg": `<svg viewBox="0 0 16 16"><path d="M2.2.82.64 1.23.82.72"/>` +
+			`<image href="http://93.184.216.34/logo.png"/></svg>` + "\n",
+	})
+	fs, err := checkNetworkScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) != 1 {
+		t.Fatalf("expected the <image> address and nothing from the path data, got: %+v", fs)
+	}
+	if !strings.Contains(fs[0].Message, "93.184.216.34") {
+		t.Errorf("wrong address reported: %+v", fs[0])
+	}
+}
+
+// An ASN in a documentation table is describing routing, not wiring it.
+func TestNetworkScan_AsnInProseSkipped(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"docs/providers.md": "| Cloudflare | ~19% | AS13335 |\n| Hetzner | AS24940 |\n",
+		"routes.conf":       "peer AS13335\n",
+	})
+	fs, err := checkNetworkScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prose, code := 0, 0
+	for _, f := range fs {
+		switch {
+		case strings.HasPrefix(f.FilePath, "docs/providers.md"):
+			prose++
+		case strings.HasPrefix(f.FilePath, "routes.conf"):
+			code++
+		}
+	}
+	if prose != 0 {
+		t.Errorf("ASN in prose must not be reported; got %d findings", prose)
+	}
+	if code != 1 {
+		t.Errorf("ASN in config must still be reported; got %d findings: %+v", code, fs)
+	}
+}
+
+// -----------------------------------------------------------------------
+// connection_strings
+// -----------------------------------------------------------------------
+
+// Every one of these fired at ERROR severity across the corpus. None is a
+// committed credential.
+func TestConnectionStrings_PlaceholderCredentialsSuppressed(t *testing.T) {
+	cases := map[string]string{
+		"compose_interpolation": `DATABASE_URL=postgresql://${POSTGRES_USER:-secdata}:${POSTGRES_PASSWORD:?err}@postgres:5432/db`,
+		"doc_userpass":          "Check format: `postgresql+asyncpg://user:pass@host:port/db`",
+		"screaming_snake":       `DATABASE_URL=postgresql+asyncpg://fleet:CHANGE_DATABASE_PASSWORD@postgres:5432/fleet`,
+		"your_prefix":           `DATABASE_URL=postgresql+asyncpg://postgres:YOUR_DB_PASSWORD@postgres:5432/identity`,
+		"scaffold_default":      `sqlalchemy.url = postgresql+asyncpg://portal:portal@localhost:5432/portal`,
+		"doc_shorthand":         `/// Redact user:pass from a URL: scheme://u:p@host -> scheme://***@host`,
+		"regex_rule":            "r(\"DLP-007\", `(?i)(mongodb(\\+srv)?://|postgres(ql)?://)(\\S+:)?\\S+@`, 7, 3),",
+		"token_suffix":          `Format: https://user:TOKEN@gitlab.example.net`,
+	}
+	for name, line := range cases {
+		t.Run(name, func(t *testing.T) {
+			fs := scanConnectionLine("conf.txt", 1, []byte(line+"\n"))
+			for _, f := range fs {
+				if strings.HasSuffix(f.FilePath, ":creds_in_url") {
+					t.Errorf("placeholder must not fire creds_in_url: %+v", f)
+				}
+			}
+		})
+	}
+}
+
+// A database URI with no credentials pointing at a container-internal or
+// local host says only "this project uses a database".
+func TestConnectionStrings_LocalDbUriSuppressed(t *testing.T) {
+	cases := []string{
+		"redis://redis:6379/0",
+		"redis://localhost:6379/0",
+		"postgres://internet_admin@localhost:5432/internet_core",
+		"amqp://mq_admin@localhost:5672/",
+		"jdbc:postgresql://db/app",
+	}
+	for _, uri := range cases {
+		t.Run(uri, func(t *testing.T) {
+			fs := scanConnectionLine("conf.txt", 1, []byte("URL = "+uri+"\n"))
+			if len(fs) != 0 {
+				t.Errorf("credential-free local DB URI must be silent; got: %+v", fs)
+			}
+		})
+	}
+}
+
+// …but a remote database host is still worth surfacing.
+func TestConnectionStrings_RemoteDbUriStillFires(t *testing.T) {
+	fs := scanConnectionLine("conf.txt", 1, []byte("URL = mongodb://cluster0.acme.io:27017/app\n"))
+	if len(fs) == 0 {
+		t.Fatalf("remote DB URI must still be reported")
+	}
+}
+
+// Licence texts are verbatim boilerplate carrying http:// URLs nobody may edit.
+func TestConnectionStrings_LicenseBoilerplateSkipped(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"LICENSE": "Apache License\nhttp://www.apache.org/licenses/\n",
+	})
+	fs, err := checkConnectionStrings(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) != 0 {
+		t.Fatalf("licence boilerplate must be skipped; got: %+v", fs)
+	}
+}
+
+// -----------------------------------------------------------------------
+// dependency trees / generated output / binary payloads
+// -----------------------------------------------------------------------
+
+// Nothing under a package-manager tree was authored here. vendored_dir_tracked
+// makes the one actionable statement ("don't commit this"); itemising every
+// TODO and http:// inside it buries that statement.
+func TestContentGates_SkipDependencyTrees(t *testing.T) {
+	body := "// TODO: fix upstream\nconst u = 'http://json5.org/'\nconst ip = '51.222.140.163'\n"
+	files := map[string]string{
+		"node_modules/left-pad/index.js":                     body,
+		"webapp/node_modules/react/cjs/react.development.js": body,
+		".venv/lib/python3.9/site-packages/pydantic/net.py":  body,
+		"backend/vendor/github.com/jackc/pgx/pool.go":        body,
+		"ios/Pods/Alamofire/Source/Request.swift":            body,
+		"src/app.js": body, // control: first-party code must still be scanned
+	}
+	root := initRepoWithFiles(t, files)
+	ctx := context.Background()
+	for _, run := range []struct {
+		name string
+		fn   func(context.Context, string, json.RawMessage) ([]Finding, error)
+	}{
+		{"network_scan", checkNetworkScan},
+		{"connection_strings", checkConnectionStrings},
+		{"dead_placeholders", checkDeadPlaceholders},
+	} {
+		t.Run(run.name, func(t *testing.T) {
+			fs, err := run.fn(ctx, root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sawFirstParty := false
+			for _, f := range fs {
+				switch {
+				case strings.HasPrefix(f.FilePath, "src/app.js"):
+					sawFirstParty = true
+				default:
+					t.Errorf("dependency-tree file reported: %+v", f)
+				}
+			}
+			if !sawFirstParty {
+				t.Errorf("first-party file must still be scanned; got: %+v", fs)
+			}
+		})
+	}
+}
+
+// A per-file metadata finding inside a vendored tree restates what
+// vendored_dir_tracked already says once about the directory.
+func TestMetadataGates_SkipVendoredTrees(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"webapp/node_modules/typescript/lib/tsc.js": "x",
+		"target/debug/build/script.json":            "{}",
+		"src/main.go":                               "package main",
+	})
+	fs, err := checkUnexpectedExecutableBit(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fs {
+		if strings.Contains(f.FilePath, "node_modules") || strings.Contains(f.FilePath, "target/debug") {
+			t.Errorf("vendored-tree file reported by a metadata gate: %+v", f)
+		}
+	}
+}
+
+// A PDF's first 8 KiB is ASCII header and object table, so the NUL-byte
+// heuristic passes it through and the byte-scan lifts "URLs" out of
+// compressed streams and font tables.
+func TestContentGates_SkipBinaryExtensions(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"docs/report.pdf": "%PDF-1.4\nstream http://leaked.example.com 51.222.140.163\nendstream\n",
+	})
+	ctx := context.Background()
+	for _, fn := range []func(context.Context, string, json.RawMessage) ([]Finding, error){
+		checkNetworkScan, checkConnectionStrings,
+	} {
+		fs, err := fn(ctx, root, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(fs) != 0 {
+			t.Fatalf("binary payload must not be content-scanned; got: %+v", fs)
+		}
+	}
+}
+
+// A .vitepress/dist page is regenerated on the next build; a finding there
+// cannot be fixed where it is reported.
+func TestContentGates_SkipGeneratedDirs(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"docs/.vitepress/dist/guide/index.html": "<a href='http://api.acme.io'>x</a>\n",
+		"docs/guide/index.md":                   "# Guide\n",
+	})
+	fs, err := checkConnectionStrings(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) != 0 {
+		t.Fatalf("generated output must not be scanned; got: %+v", fs)
+	}
+}
+
+// -----------------------------------------------------------------------
+// secrets_scan
+// -----------------------------------------------------------------------
+
+// The PEM header inside an error message or a test's input string is code
+// that mentions a key, not a key.
+func TestSecretsScan_PemHeaderInsideStringLiteral(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"src/keys.ts": "  throw new Error(\n    \"Private key must be PEM with -----BEGIN PRIVATE KEY----- (PKCS#8).\"\n  );\n",
+		"src/red.rs":  "        let pem = \"head -----BEGIN RSA PRIVATE KEY----- tail\";\n",
+	})
+	fs, err := checkSecretsScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) != 0 {
+		t.Fatalf("PEM header inside a string literal must not fire; got: %+v", fs)
+	}
+}
+
+// A real key file must still fire — the literal check must not swallow it.
+func TestSecretsScan_RealPemFileStillFires(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"ssl/server.key": "-----BEGIN PRIVATE KEY-----\nMIIEowIBAAKCAQEA\n-----END PRIVATE KEY-----\n",
+	})
+	fs, err := checkSecretsScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingsContainPattern(fs, "private_key_header") {
+		t.Fatalf("a committed .key file must still fire; got: %+v", fs)
+	}
+}
+
+// A token spelled out as the alphabet scores MAXIMUM Shannon entropy (every
+// character distinct) and sails past the entropy floor, while being the most
+// obviously synthetic string a developer can type.
+func TestSecretsScan_SequentialFillerSuppressed(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"src/lib.rs": "assert_eq!(redact(\"export API_KEY=ghp_abcdefghijklmnopqrstuvwxyz0123456789\"), \"[REDACTED]\");\n",
+	})
+	fs, err := checkSecretsScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if findingsContainPattern(fs, "github_pat_classic") {
+		t.Fatalf("sequential filler must not fire; got: %+v", fs)
+	}
+}
+
+// Documentation placeholders no longer satisfy the Slack token shape.
+func TestSecretsScan_SlackPlaceholdersSuppressed(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"docs/slack.md":  "SLACK_BOT_TOKEN=xoxb-workspace1-token,xoxb-workspace2-token\n",
+		"src/example.md": "token: \"xoxb-your-bot-token-here\"\n",
+	})
+	fs, err := checkSecretsScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if findingsContainPattern(fs, "slack_token") {
+		t.Fatalf("slack placeholders must not fire; got: %+v", fs)
+	}
+}
+
+// Xcode / .NET name a test target `<Product>Tests`, which the fixture-path
+// convention did not recognise, so a regex-assertion test file was scanned.
+func TestFixturePath_CamelCaseTestDirectories(t *testing.T) {
+	yes := []string{
+		"proxymateTests/ExfiltrationTests.swift",
+		"AppKitTests/Helper.swift",
+		"Acme.Web.Tests/Fixture.cs",
+		"tests/conftest.py",
+	}
+	no := []string{
+		"src/contests/leaderboard.go",
+		"internal/latest/version.go",
+		// An API definition is not a test target.
+		"api/OpenApiSpec/paths.yaml",
+		"src/main.go",
+	}
+	for _, p := range yes {
+		if !isDefaultFixturePath(p) {
+			t.Errorf("%s should be a fixture path", p)
+		}
+	}
+	for _, p := range no {
+		if isDefaultFixturePath(p) {
+			t.Errorf("%s should NOT be a fixture path", p)
+		}
+	}
+}
+
+// -----------------------------------------------------------------------
+// ide_artifact_tracked
+// -----------------------------------------------------------------------
+
+// The canonical VisualStudioCode.gitignore ignores `.vscode/*` and then
+// explicitly un-ignores these — committing them is the documented convention.
+func TestIdeArtifact_SharedVscodeConfigAllowed(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		".vscode/settings.json":    "{}",
+		".vscode/launch.json":      "{}",
+		".vscode/extensions.json":  "{}",
+		".vscode/tasks.json":       "{}",
+		".vscode/mcp.json":         "{}",
+		".vscode/go.code-snippets": "{}",
+		".vscode/ipch/cache.bin":   "x",
+	})
+	fs, err := checkIdeArtifactTracked(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) != 1 || fs[0].FilePath != ".vscode/ipch/cache.bin" {
+		t.Fatalf("only user-local .vscode files may be flagged; got: %+v", fs)
+	}
+}
+
+// -----------------------------------------------------------------------
+// round 2: classes still visible after the first pass
+// -----------------------------------------------------------------------
+
+// Tailscale hands out RFC 6598 shared address space (100.64.0.0/10). A
+// service URL on the tailnet is unreachable from the public internet, so
+// cleartext there carries the same exposure as loopback — which the gate
+// already exempts.
+func TestConnectionStrings_TailnetHostExempt(t *testing.T) {
+	exempt := []string{
+		"http://100.102.64.123:8000/api",
+		"http://100.76.251.33:11434/health",
+	}
+	for _, u := range exempt {
+		if !httpHostExempt(u) {
+			t.Errorf("CGNAT/tailnet host must be exempt: %s", u)
+		}
+	}
+	// 100.0.0.0/10 outside the shared range is ordinary public space.
+	if httpHostExempt("http://100.1.2.3/api") {
+		t.Errorf("100.1.2.3 is not shared address space and must not be exempt")
+	}
+}
+
+// An XML namespace or DOCTYPE system identifier names a schema; nothing is
+// fetched over it. Every .plist and .svg in existence carries one.
+func TestConnectionStrings_MarkupIdentifiersExempt(t *testing.T) {
+	lines := []string{
+		`<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">`,
+		`<svg xmlns="http://www.w3.org/2000/svg" width="16">`,
+		`<xsd:schema xmlns:xsd="http://example.org/2001/XMLSchema">`,
+	}
+	for _, l := range lines {
+		fs := scanConnectionLine("doc.xml", 1, []byte(l+"\n"))
+		for _, f := range fs {
+			if strings.HasSuffix(f.FilePath, ":http_remote") {
+				t.Errorf("markup identifier must not fire http_remote: %+v", f)
+			}
+		}
+	}
+	// A real cleartext endpoint on the same kind of line still fires.
+	fs := scanConnectionLine("conf.xml", 1, []byte(`<url>http://api.acme.io/v1</url>`+"\n"))
+	if len(fs) == 0 {
+		t.Errorf("a real http:// endpoint must still fire")
+	}
+}
+
+// A tool's cache directory is scratch space regenerated on the next run.
+func TestContentGates_SkipCacheDirs(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		".stargazer_cache/profiles.json": `{"blog":"http://example.org/x"}` + "\n",
+		"src/app.py":                     `URL = "http://api.acme.io"` + "\n",
+	})
+	fs, err := checkConnectionStrings(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fs {
+		if strings.HasPrefix(f.FilePath, ".stargazer_cache/") {
+			t.Errorf("cache directory must not be scanned: %+v", f)
+		}
+	}
+	if len(fs) != 1 {
+		t.Fatalf("first-party source must still be scanned; got: %+v", fs)
+	}
+}
+
+// Documentation quotes an EXCERPT of a JSON document — the members without
+// their braces. Wrapping and reparsing is exact, not a heuristic.
+func TestMarkdown_JsonFragmentBlockAccepted(t *testing.T) {
+	fragments := []string{
+		"\"meta\": {\n  \"objective\": \"O1\",\n  \"split\": \"test\"\n}",
+		"\"scripts\": {\n  \"build\": \"tsc\"\n}",
+		"{\"a\": 1},\n{\"a\": 2}",
+	}
+	for _, body := range fragments {
+		if msg := validatePayload("json", body); msg != "" {
+			t.Errorf("JSON excerpt must be accepted; got: %s\n%s", msg, body)
+		}
+	}
+	// Genuinely broken JSON must still be reported.
+	if msg := validatePayload("json", `{"a": 1,,}`); msg == "" {
+		t.Errorf("malformed JSON must still be reported")
+	}
+}
+
+// A block showing two alternative spellings of the same key repeats it on
+// purpose. YAML forbids that; documentation does it constantly.
+func TestMarkdown_YamlDuplicateKeyBlockAccepted(t *testing.T) {
+	body := "# String format\ndiscord:\n  channels: \"1,2\"\n\n# List format\ndiscord:\n  channels:\n    - 1\n"
+	if msg := validatePayload("yaml", body); msg != "" {
+		t.Errorf("alternative-form YAML block must be accepted; got: %s", msg)
+	}
+	// Structurally broken YAML must still be reported.
+	if msg := validatePayload("yaml", "name: Smoke: engine syntax\n"); msg == "" {
+		t.Errorf("malformed YAML must still be reported")
+	}
+}
+
+// Minified bundles carry the addresses of whatever library was bundled.
+// secrets_scan still reads them — a build-injected key lives nowhere else.
+func TestContentGates_SkipMinifiedBundlesButNotSecrets(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"static/js/jspdf.umd.min.js": "var u='http://json5.org/';var k='AKIA1A2B3C4D5E6F7G8H';\n",
+	})
+	ctx := context.Background()
+	fs, err := checkConnectionStrings(ctx, root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) != 0 {
+		t.Errorf("minified bundle must not be URL-scanned; got: %+v", fs)
+	}
+	sec, err := checkSecretsScan(ctx, root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingsContainPattern(sec, "aws_access_key") {
+		t.Errorf("secrets_scan must still read minified bundles; got: %+v", sec)
+	}
+}
+
+// A real credential whose password merely CONTAINS a password-ish word must
+// still fire. This is the false negative an earlier suffix rule introduced:
+// `readonly_dev_pass` ends in `_pass` but is an issued credential.
+func TestConnectionStrings_PasswordWordSuffixStillFires(t *testing.T) {
+	cases := []string{
+		"mysql+pymysql://minerva_ro:readonly_dev_pass@127.0.0.1:3306/revenue",
+		"postgres://svc:prod_db_password@db.acme.io:5432/app",
+		"redis://cache:s3cret_key@redis.acme.io:6379/0",
+	}
+	for _, url := range cases {
+		t.Run(url, func(t *testing.T) {
+			fs := scanConnectionLine("db.py", 1, []byte(`    "`+url+`",`+"\n"))
+			found := false
+			for _, f := range fs {
+				if strings.HasSuffix(f.FilePath, ":creds_in_url") {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("real credential must still fire: %s :: %+v", url, fs)
+			}
+		})
+	}
+}
+
+// The username is not the secret: a placeholder-looking USER with a real
+// password must still fire, while doc shorthand (one-character segments)
+// and regex patterns stay suppressed on either side.
+func TestConnectionStrings_UserSideRulesAreStructuralOnly(t *testing.T) {
+	fires := "https://user:hunter2xyz@api.acme.com"
+	fs := scanConnectionLine("conf.txt", 1, []byte(fires+"\n"))
+	found := false
+	for _, f := range fs {
+		if strings.HasSuffix(f.FilePath, ":creds_in_url") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("placeholder-looking username with a real password must fire: %+v", fs)
+	}
+}
+
+// The version-context rules must not swallow a real hardcoded address. Each
+// of these was a false NEGATIVE an earlier, looser version of the rule
+// introduced, caught by diffing the corpus sweep before and after.
+func TestNetworkScan_VersionContextDoesNotHideRealAddresses(t *testing.T) {
+	cases := map[string]string{
+		"ssh_user_at_host": `ssh root@192.168.0.136 'systemctl restart app'`,
+		"makefile_host":    `DEV_HOST  ?= root@192.168.0.135`,
+		"env_host":         `ARENA_HOST=root@192.168.122.228 tools/deploy.sh`,
+		"js_strict_equal":  `  return h === '169.254.169.254'  // IMDS`,
+		"py_equality":      `if host == "169.254.169.254":`,
+		"url_path_segment": `resp = get("https://api.acme.com/whois/93.184.216.34")`,
+		"nip_io_wrapper":   `"http://169.254.169.254.nip.io",`,
+	}
+	for name, line := range cases {
+		t.Run(name, func(t *testing.T) {
+			fs := scanNetworkLine("conf.txt", 1, []byte(line), false, false, false)
+			if len(fs) == 0 {
+				t.Errorf("real address must still be reported: %s", line)
+			}
+		})
+	}
+}
+
+// …while the genuine version shapes stay suppressed.
+func TestNetworkScan_VersionContextStillSuppresses(t *testing.T) {
+	cases := map[string]string{
+		"user_agent": `'User-Agent': 'Mozilla/5.0 AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'`,
+		"pip_pin":    `dependencies = ["brotlicffi==1.2.0.1"]`,
+		"attribute":  `<assemblyIdentity version="0.0.1.0"/>`,
+		"oid":        `OID_PREFIX = "1.3.6.1.4.1.311"`,
+		"tag":        `git checkout v9.8.7.6`,
+	}
+	for name, line := range cases {
+		t.Run(name, func(t *testing.T) {
+			fs := scanNetworkLine("conf.txt", 1, []byte(line), false, false, false)
+			for _, f := range fs {
+				if strings.Contains(f.FilePath, "ipv4") {
+					t.Errorf("version literal reported as address: %s :: %+v", line, f)
+				}
+			}
+		})
+	}
+}
+
+// A PEM header with no key material after it is a MENTION of the format:
+// an error message, a README explaining what to paste, a changelog entry
+// describing this very rule. The tool tripped on its own CHANGELOG.
+func TestSecretsScan_PemHeaderWithoutBodyIsAMention(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"CHANGELOG.md": "- Recognises a PEM header quoted inside a literal, so\n" +
+			"  `\"must be PEM with -----BEGIN PRIVATE KEY----- (PKCS#8)\"` no longer fires.\n",
+		"docs/setup.md": "Paste the contents starting at -----BEGIN PRIVATE KEY----- into the field.\n",
+	})
+	fs, err := checkSecretsScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) != 0 {
+		t.Fatalf("a PEM header with no body must not fire; got: %+v", fs)
+	}
+}
+
+// A header WITH key material after it still fires anywhere, and a file whose
+// name declares it holds a key fires on the header alone.
+func TestSecretsScan_PemBodyAndKeyFilesStillFire(t *testing.T) {
+	const body = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj"
+	cases := map[string]string{
+		"docs/leak.md":      "```\n-----BEGIN PRIVATE KEY-----\n" + body + "\n```\n",
+		"ssl/acme.key":      "-----BEGIN PRIVATE KEY-----\n",
+		"deploy/id_ed25519": "-----BEGIN OPENSSH PRIVATE KEY-----\n",
+	}
+	for path, content := range cases {
+		t.Run(path, func(t *testing.T) {
+			root := initRepoWithFiles(t, map[string]string{path: content})
+			fs, err := checkSecretsScan(context.Background(), root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !findingsContainPattern(fs, "private_key_header") {
+				t.Errorf("%s must still fire; got: %+v", path, fs)
+			}
+		})
+	}
+}
+
+// -----------------------------------------------------------------------
+// round 2: gates that assert a file is missing, and rules whose stated
+// harm does not follow from the condition they detect
+// -----------------------------------------------------------------------
+
+// GitHub documents the root, .github/, and docs/ as valid homes for community
+// health files. codeowners_present already searched all three; the rest read
+// only the root and told authors to add a file they had already written.
+func TestPresenceGates_SearchCommunityHealthDirs(t *testing.T) {
+	cases := map[string]string{
+		".github/CONTRIBUTING.md":    "contributing_present",
+		"docs/SECURITY.md":           "security_present",
+		"docs/CHANGELOG.md":          "changelog_present",
+		".github/CODE_OF_CONDUCT.md": "code_of_conduct_present",
+		"docs/README.md":             "readme_present",
+	}
+	for path, gate := range cases {
+		t.Run(path, func(t *testing.T) {
+			root := initRepoWithFiles(t, map[string]string{path: "# x", "main.go": "package main"})
+			for _, g := range gateRegistry() {
+				if g.ID != gate {
+					continue
+				}
+				fs, err := g.Check(context.Background(), root, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(fs) != 0 {
+					t.Errorf("%s exists, %s must stay silent; got: %+v", path, gate, fs)
+				}
+			}
+		})
+	}
+}
+
+// LICENSE is deliberately root-only: GitHub's licensee reads only the root,
+// so a licence filed elsewhere still leaves the repo showing no license.
+func TestLicensePresent_StaysRootOnly(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{"docs/LICENSE": "MIT"})
+	for _, g := range gateRegistry() {
+		if g.ID != "license_present" {
+			continue
+		}
+		fs, err := g.Check(context.Background(), root, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(fs) != 1 {
+			t.Errorf("a licence outside the root must still be reported; got: %+v", fs)
+		}
+	}
+}
+
+// A project with a working .gitlab-ci.yml has CI. Telling it to "add a CI
+// workflow" was 23% of this gate's findings across the sweep, at warning.
+func TestCIWorkflow_RecognisesOtherProviders(t *testing.T) {
+	silent := []string{
+		".gitlab-ci.yml", ".travis.yml", "Jenkinsfile", "azure-pipelines.yml",
+		".drone.yml", "bitbucket-pipelines.yml", ".cirrus.yml",
+		".circleci/config.yml", ".gitea/workflows/ci.yml", ".forgejo/workflows/ci.yml",
+		".github/workflows/ci.yml",
+	}
+	for _, f := range silent {
+		t.Run(f, func(t *testing.T) {
+			root := initRepoWithFiles(t, map[string]string{f: "steps: []\n"})
+			fs, err := checkCIWorkflow(context.Background(), root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(fs) != 0 {
+				t.Errorf("%s is a CI pipeline; gate must stay silent, got: %+v", f, fs)
+			}
+		})
+	}
+	// A repo with no pipeline at all still fires.
+	root := initRepoWithFiles(t, map[string]string{"main.go": "package main"})
+	fs, err := checkCIWorkflow(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) != 1 {
+		t.Errorf("a repo with no CI must still fire; got: %+v", fs)
+	}
+}
+
+// GitHub accepts the PR template in three directories, with three extensions,
+// and as a directory of named templates.
+func TestPRTemplate_AllDocumentedForms(t *testing.T) {
+	for _, path := range []string{
+		".github/PULL_REQUEST_TEMPLATE.md",
+		"PULL_REQUEST_TEMPLATE.md",
+		"docs/pull_request_template.md",
+		".github/PULL_REQUEST_TEMPLATE/feature.md",
+	} {
+		t.Run(path, func(t *testing.T) {
+			root := initRepoWithFiles(t, map[string]string{path: "## What"})
+			fs, err := checkPRTemplate(context.Background(), root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(fs) != 0 {
+				t.Errorf("%s is a PR template; got: %+v", path, fs)
+			}
+		})
+	}
+}
+
+// The legacy single-file issue template is still supported by GitHub.
+func TestIssueTemplate_LegacySingleFile(t *testing.T) {
+	for _, path := range []string{".github/ISSUE_TEMPLATE.md", "ISSUE_TEMPLATE.md", "docs/ISSUE_TEMPLATE.md"} {
+		t.Run(path, func(t *testing.T) {
+			root := initRepoWithFiles(t, map[string]string{path: "## Bug"})
+			fs, err := checkIssueTemplates(context.Background(), root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(fs) != 0 {
+				t.Errorf("%s is an issue template; got: %+v", path, fs)
+			}
+		})
+	}
+}
+
+// A detection-rule file carries the marker as its payload: the pattern IS
+// what the file is about.
+func TestDeadPlaceholders_DetectionRuleFilesSkipped(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"rules/VBC-056.yaml":  "id: VBC-056\nregex: 'TODO:'\n",
+		"docs/rules/VBC-1.md": "Flags a leftover TODO: marker in production code.\n",
+		"config/rules.yaml":   "- name: Lorem Ipsum in Production\n",
+		"src/app.py":          "# TODO: implement\n",
+	})
+	fs, err := checkDeadPlaceholders(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sawFirstParty := false
+	for _, f := range fs {
+		if strings.HasPrefix(f.FilePath, "src/app.py") {
+			sawFirstParty = true
+			continue
+		}
+		t.Errorf("detection-rule file reported: %+v", f)
+	}
+	if !sawFirstParty {
+		t.Errorf("a real TODO in first-party code must still fire; got: %+v", fs)
+	}
+}
+
+// A line-oriented dump is payload whether its items are bare addresses or
+// bare URLs. connection_strings already skipped the URL form; network_scan
+// reported one finding per line of the same file.
+func TestNetworkScan_UrlListFileSkipped(t *testing.T) {
+	lines := ""
+	for i := 0; i < 20; i++ {
+		lines += fmt.Sprintf("http://93.184.216.%d:3000\n", i+10)
+	}
+	root := initRepoWithFiles(t, map[string]string{
+		"lista.txt":  lines,
+		"config.yml": "upstream: 93.184.216.34\n",
+	})
+	fs, err := checkNetworkScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fs {
+		if strings.HasPrefix(f.FilePath, "lista.txt") {
+			t.Errorf("URL-list payload must be skipped: %+v", f)
+		}
+	}
+	if len(fs) != 1 {
+		t.Fatalf("the real config literal must still fire; got: %+v", fs)
+	}
+}
+
+// The dependency / generated-directory skips must not swallow first-party
+// source that happens to share a name. Each of these was a plausible false
+// NEGATIVE in the first draft of the rules.
+func TestSkipRules_DoNotSwallowFirstPartySource(t *testing.T) {
+	mustScan := []string{
+		"k8s/manifests/pods/api.yaml", // lower-case: Kubernetes, not CocoaPods
+		"internal/cache/redis.go",     // an ordinary source package
+		"src/caches/store.ts",
+		"api/OpenApiSpec/paths.yaml",
+	}
+	for _, p := range mustScan {
+		if isDependencyPath(p) {
+			t.Errorf("%s must not be treated as a dependency tree", p)
+		}
+		if isGeneratedDirPath(p) {
+			t.Errorf("%s must not be treated as generated output", p)
+		}
+		if isDefaultFixturePath(p) {
+			t.Errorf("%s must not be treated as a fixture path", p)
+		}
+	}
+	mustSkip := map[string]func(string) bool{
+		"ios/Pods/Alamofire/Request.swift":       isDependencyPath,
+		"webapp/node_modules/x/index.js":         isDependencyPath,
+		".stargazer_cache/profiles.json":         isGeneratedDirPath,
+		"docs/.vitepress/dist/index.html":        isGeneratedDirPath,
+		"proxymateTests/ExfiltrationTests.swift": isDefaultFixturePath,
+	}
+	for p, fn := range mustSkip {
+		if !fn(p) {
+			t.Errorf("%s must be skipped", p)
+		}
+	}
+}
+
+// A strong password contains `$`, `^`, `+`, `*`, `?` constantly. The
+// regex-syntax check must recognise a detection rule without silencing one —
+// a suppressed credential is the leak this gate exists to catch.
+func TestConnectionStrings_RegexSyntaxVsStrongPassword(t *testing.T) {
+	rules := []string{`(\S+:)?\S+@`, `[^:]+`, `[a-zA-Z0-9_\-]+`, `mongodb|postgres`}
+	for _, r := range rules {
+		if !regexMetaRe.MatchString(r) {
+			t.Errorf("%q is regex syntax and must be recognised", r)
+		}
+	}
+	for _, p := range []string{`Xk9$mQ2!vL`, `p+ss?word`, `A^b*c$d`, `readonly_dev_pass`} {
+		if regexMetaRe.MatchString(p) {
+			t.Errorf("%q is a password, not a pattern", p)
+		}
+	}
+	// End to end: a URL with a metacharacter-rich password still fires.
+	fs := scanConnectionLine("conf.py", 1, []byte(`DSN = "postgres://app:Xk9$mQ2!vL@db.acme.io:5432/app"`+"\n"))
+	found := false
+	for _, f := range fs {
+		if strings.HasSuffix(f.FilePath, ":creds_in_url") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("a strong-password credential must still fire: %+v", fs)
+	}
+}
+
+// A tool directory that mixes a hand-written config with a third-party cache
+// must not be skipped wholesale. `.cargo/config.toml` holds registry and
+// mirror URLs — and sometimes credentials — and is authored, not installed.
+func TestDependencyPath_ToolDirsWithFirstPartyConfig(t *testing.T) {
+	mustScan := []string{
+		".cargo/config.toml",
+		".cargo/config",
+		".bundle/config",
+		".yarn/patches/left-pad.patch",
+	}
+	for _, p := range mustScan {
+		if isDependencyPath(p) {
+			t.Errorf("%s is authored config and must still be scanned", p)
+		}
+	}
+	mustSkip := []string{
+		".cargo/registry/src/crate/lib.rs",
+		".cargo/git/checkouts/repo/mod.rs",
+		".yarn/cache/left-pad-npm-1.3.0.zip",
+		".yarn/releases/yarn-4.1.0.cjs",
+	}
+	for _, p := range mustSkip {
+		if !isDependencyPath(p) {
+			t.Errorf("%s is a dependency cache and must be skipped", p)
+		}
+	}
+}
+
+// -----------------------------------------------------------------------
+// review round: false negatives the suppressions themselves introduced
+// -----------------------------------------------------------------------
+
+// Reserved-range exemptions must run on a PARSED address. A string prefix
+// also accepts a public hostname that merely starts with the same digits.
+func TestConnectionStrings_HostRangesRequireAnIPLiteral(t *testing.T) {
+	mustFire := []string{
+		// NB: not `10.example.com` — that is exempt for a different and valid
+		// reason (RFC 2606 reserves example.com), which would make the row
+		// pass without testing anything.
+		"http://10.acme.io/api",
+		"http://100.64.123.evil/api",
+		"http://192.168.evil.net/api",
+		"http://169.254.attacker.io/api",
+	}
+	for _, u := range mustFire {
+		if httpHostExempt(u) {
+			t.Errorf("%s is a public hostname and must not be exempt", u)
+		}
+	}
+	mustBeExempt := []string{
+		"http://10.0.0.5/api", "http://192.168.1.1/", "http://127.0.0.1:8080/",
+		"http://169.254.169.254/latest/meta-data/", "http://100.102.64.123:8000/",
+	}
+	for _, u := range mustBeExempt {
+		if !httpHostExempt(u) {
+			t.Errorf("%s is a reserved-range literal and must be exempt", u)
+		}
+	}
+}
+
+// A placeholder prefix needs a token boundary. Without one, any password
+// starting with "my" is discarded — and that is a real credential leaking.
+func TestConnectionStrings_PlaceholderPrefixNeedsABoundary(t *testing.T) {
+	mustFire := []string{
+		"postgres://svc:mySecretValue@db.acme.com:5432/app",
+		"redis://cache:yourtOwnRandomness@redis.acme.io:6379/0",
+		"https://api:changelogSigningKey@hooks.acme.io",
+	}
+	for _, u := range mustFire {
+		fs := scanConnectionLine("conf.py", 1, []byte(u+"\n"))
+		found := false
+		for _, f := range fs {
+			if strings.HasSuffix(f.FilePath, ":creds_in_url") {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("real credential must fire: %s :: %+v", u, fs)
+		}
+	}
+	mustBeQuiet := []string{
+		"postgres://svc:CHANGE_ME@db/app",
+		"postgres://svc:your-token@db/app",
+		"postgres://svc:changeme@db/app",
+		"postgres://svc:yourpassword@db/app",
+		"postgres://svc:my_password@db/app",
+	}
+	for _, u := range mustBeQuiet {
+		fs := scanConnectionLine("conf.py", 1, []byte(u+"\n"))
+		for _, f := range fs {
+			if strings.HasSuffix(f.FilePath, ":creds_in_url") {
+				t.Errorf("placeholder must stay quiet: %s :: %+v", u, f)
+			}
+		}
+	}
+}
+
+// The markup-identifier exemption must belong to the declaration that owns
+// the URL. Matching anywhere in the line prefix meant one namespace
+// declaration hid every later endpoint on the same line.
+func TestConnectionStrings_MarkupExemptionOwnsOnlyItsOwnURL(t *testing.T) {
+	line := `<svg xmlns="http://www.w3.org/2000/svg"><image href="http://api.acme.io/logo.png"/></svg>`
+	fs := scanConnectionLine("icon.svg", 1, []byte(line+"\n"))
+	if len(fs) != 1 {
+		t.Fatalf("the namespace must be exempt and the href reported; got: %+v", fs)
+	}
+	if !strings.Contains(fs[0].Message, "api.acme.io") {
+		t.Errorf("wrong URL reported: %+v", fs[0])
+	}
+	// A DOCTYPE system identifier is still exempt, and so is a plain namespace.
+	for _, l := range []string{
+		`<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">`,
+		`<svg xmlns="http://www.w3.org/2000/svg" width="16">`,
+	} {
+		if got := scanConnectionLine("doc.xml", 1, []byte(l+"\n")); len(got) != 0 {
+			t.Errorf("markup identifier must be exempt: %s :: %+v", l, got)
+		}
+	}
+}
+
+// Evidence of key material outranks every quoting heuristic. A key assigned
+// to a source constant is still a committed key.
+func TestSecretsScan_KeyMaterialOutranksSourceLiteral(t *testing.T) {
+	const body = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj"
+	mustFire := map[string]string{
+		// The whole key inside one source string literal.
+		"src/keys.go": "const key = \"-----BEGIN PRIVATE KEY-----\\n" + body + "\\n-----END PRIVATE KEY-----\"\n",
+		// An encrypted PEM: RFC 1421 metadata sits between header and body.
+		"secrets/leaked.txt": "-----BEGIN RSA PRIVATE KEY-----\nProc-Type: 4,ENCRYPTED\nDEK-Info: AES-128-CBC,8A7F2B\n\n" + body + "\n",
+	}
+	for path, content := range mustFire {
+		t.Run(path, func(t *testing.T) {
+			root := initRepoWithFiles(t, map[string]string{path: content})
+			fs, err := checkSecretsScan(context.Background(), root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !findingsContainPattern(fs, "private_key_header") {
+				t.Errorf("key material present — must fire; got: %+v", fs)
+			}
+		})
+	}
+}
+
+// Detection-rule basenames are matched case-insensitively, extension included.
+func TestDetectionRuleFile_UppercaseExtension(t *testing.T) {
+	for _, p := range []string{"RULES.YAML", "config/SIGNATURES.JSON", "Detections.Yml"} {
+		if !isDetectionRuleFile(p) {
+			t.Errorf("%s must be recognised as a rule file", p)
+		}
+	}
+	for _, p := range []string{"rules.go", "internal/rules/engine.go", "app.yaml"} {
+		if isDetectionRuleFile(p) {
+			t.Errorf("%s must NOT be treated as a rule file", p)
+		}
+	}
+}
+
+// Key material is base64 of random bytes: both cases AND digits. A long
+// alphanumeric identifier is not. Without that distinction, a docs sentence
+// mentioning the PEM header alongside `kSecAttrAccessibleAfterFirstUnlock…`
+// (47 alphanumeric characters) reported as an error-severity leak.
+func TestSecretsScan_PemBodyIsNotAnyLongIdentifier(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"docs/guide.md": "The CA key is an AES-256 encrypted PEM (`-----BEGIN ENCRYPTED PRIVATE KEY-----`). " +
+			"The passphrase lives in the Keychain with accessibility " +
+			"`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` (not iCloud-syncable).\n",
+		"docs/hash.md": "Fingerprint of `-----BEGIN PRIVATE KEY-----` blobs: a94a8fe5ccb19ba61c4c0873d391e987982fbbd3\n",
+	})
+	fs, err := checkSecretsScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) != 0 {
+		t.Fatalf("a long identifier is not key material; got: %+v", fs)
+	}
+	// Real base64 key material in the same shape still fires.
+	root = initRepoWithFiles(t, map[string]string{
+		"ops/restore.sh": "echo \"-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIN3vR3P3kKxUv4k5W1N+N3e+Gz5G3F3Q5F3Z+F3Y+F3XoAoGCCqGSM49\n\" > key\n",
+	})
+	fs, err = checkSecretsScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingsContainPattern(fs, "private_key_header") {
+		t.Fatalf("real key material must fire; got: %+v", fs)
+	}
+}
+
+// The dependency / generated / binary skips must NOT reach secrets_scan.
+// The first draft put them in the shared base helper on the reasoning that
+// vendored_dir_tracked already reports the tree — but a legitimate Go
+// `vendor/` (go.mod + vendor/modules.txt) is exempt from that gate, so a
+// credential committed there would have produced no finding at all.
+func TestSecretsScan_StillReadsVendoredAndGeneratedTrees(t *testing.T) {
+	key := "AKIA1A2B3C4D5E6F7G8H"
+	files := map[string]string{
+		"go.mod":                                      "module x\n",
+		"vendor/modules.txt":                          "# github.com/x/y v1.0.0\n",
+		"vendor/github.com/x/y/client.go":             "const k = \"" + key + "\"\n",
+		"webapp/node_modules/leaky/index.js":          "var k = '" + key + "';\n",
+		".venv/lib/python3.9/site-packages/a/conf.py": "K = '" + key + "'\n",
+		"docs/.vitepress/dist/assets/app.js":          "var k='" + key + "';\n",
+	}
+	root := initRepoWithFiles(t, files)
+	fs, err := checkSecretsScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, f := range fs {
+		seen[strings.SplitN(f.FilePath, ":", 2)[0]] = true
+	}
+	for path := range files {
+		if strings.HasSuffix(path, ".go") && !strings.Contains(path, "vendor") {
+			continue
+		}
+		if path == "go.mod" || path == "vendor/modules.txt" {
+			continue
+		}
+		if !seen[path] {
+			t.Errorf("secrets_scan must still read %s; got: %+v", path, fs)
+		}
+	}
+	// …while the noisy gates keep skipping them.
+	cs, err := checkConnectionStrings(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cs) != 0 {
+		t.Errorf("connection_strings must still skip these trees; got: %+v", cs)
+	}
+}
+
+// The open-ended equal-pair exemption is bounded by the host. Every instance
+// in the corpus pointed at localhost or a container-internal service name;
+// a repeated pair against a real host is a weak credential, not an example.
+func TestConnectionStrings_EqualPairExemptOnlyOnLocalHosts(t *testing.T) {
+	quiet := []string{
+		"postgres://portal:portal@localhost:5432/portal",
+		"postgres://hattrick:hattrick@db:5432/hattrick",
+		"postgres://acmedns:acmedns@acmedns-pg:5432/acmedns",
+	}
+	for _, u := range quiet {
+		fs := scanConnectionLine("conf.py", 1, []byte(u+"\n"))
+		for _, f := range fs {
+			if strings.HasSuffix(f.FilePath, ":creds_in_url") {
+				t.Errorf("scaffold default on a local host must stay quiet: %s :: %+v", u, f)
+			}
+		}
+	}
+	fires := []string{
+		"postgres://svc:svc@db.acme.io:5432/app",
+		"mongodb://build:build@cluster0.example.net:27017/app",
+	}
+	for _, u := range fires {
+		fs := scanConnectionLine("conf.py", 1, []byte(u+"\n"))
+		found := false
+		for _, f := range fs {
+			if strings.HasSuffix(f.FilePath, ":creds_in_url") {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("repeated pair against a real host must fire: %s :: %+v", u, fs)
+		}
+	}
+}

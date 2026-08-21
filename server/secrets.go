@@ -38,7 +38,12 @@ var secretPatterns = []secretPattern{
 	{id: "openai_key", title: "OpenAI API key", re: regexp.MustCompile(`sk-[A-Za-z0-9]{48}`), minEntropy: 3.5},
 	{id: "anthropic_key", title: "Anthropic API key", re: regexp.MustCompile(`sk-ant-[A-Za-z0-9_\-]{40,}`), minEntropy: 3.5},
 	{id: "google_api_key", title: "Google API key", re: regexp.MustCompile(`AIza[0-9A-Za-z_\-]{35}`), minEntropy: 3.5},
-	{id: "slack_token", title: "Slack token", re: regexp.MustCompile(`xox[abprs]-[0-9A-Za-z\-]{10,}`), minEntropy: 3.5},
+	// Real Slack tokens are `xox<kind>-<digits>-<digits>[-<digits>]-<hex/alnum secret>`.
+	// The previous shape (`xox[abprs]-[0-9A-Za-z-]{10,}`) matched any hyphenated
+	// word salad after the prefix, so documentation lines like
+	// `SLACK_BOT_TOKEN=xoxb-workspace1-token` and a test's
+	// `"xoxb-1234567890-1234567890-"` literal both reported as leaked tokens.
+	{id: "slack_token", title: "Slack token", re: regexp.MustCompile(`xox[abprs]-[0-9]{10,13}-[0-9]{10,13}(?:-[0-9]{10,13})?-[A-Za-z0-9]{24,}`), minEntropy: 3.5},
 	{id: "stripe_live", title: "Stripe live secret key", re: regexp.MustCompile(`sk_live_[0-9A-Za-z]{24,}`), minEntropy: 3.5},
 	{id: "jwt", title: "JWT-like token", re: regexp.MustCompile(`eyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}`), minEntropy: 3.5},
 	{id: "private_key_header", title: "Private key", re: regexp.MustCompile(`-----BEGIN [A-Z ]*PRIVATE KEY-----`)},
@@ -75,11 +80,13 @@ const secretsMaxFileSize = 2 * 1024 * 1024
 // (scanHistoryBlob) so both apply identical filtering — a doc example or
 // placeholder must not surface in history just because it was once committed.
 //
-//   - match:   the bytes the pattern matched
-//   - rel:     path of the file/blob (for source-literal detection)
-//   - content: the full line/segment the match sits in
-//   - at:      byte offset of the match start within content
-func secretMatchSuppressed(p secretPattern, match []byte, rel string, content []byte, at int) bool {
+//   - match:     the bytes the pattern matched
+//   - rel:       path of the file/blob (for source-literal detection)
+//   - content:   the full line/segment the match sits in
+//   - at:        byte offset of the match start within content
+//   - following: everything after this line, used to check whether a PEM
+//     header is actually followed by key material
+func secretMatchSuppressed(p secretPattern, match []byte, rel string, content []byte, at int, following []byte) bool {
 	// Entropy floor: skip low-entropy matches (mock data, doc examples,
 	// placeholder strings that happen to satisfy the pattern syntax).
 	if p.minEntropy > 0 && shannonEntropy(string(match)) < p.minEntropy {
@@ -91,12 +98,146 @@ func secretMatchSuppressed(p secretPattern, match []byte, rel string, content []
 	if isKnownNonSecret(string(match)) {
 		return true
 	}
-	// Structural marker patterns (private_key_header) match a header string,
-	// not a value. In source code that parses or matches keys, the header
-	// appears as a literal string — that's code, not a leak. Skip when the
-	// match sits immediately after an opening quote in a source file.
-	if p.id == "private_key_header" && isQuotedLiteralInSource(rel, content, at) {
+	// Synthetic filler that the entropy floor cannot catch: a token body
+	// spelled out as a monotone character run (`abcdefghijklmnopqrstuvwxyz`,
+	// `0123456789`) scores maximal entropy precisely because every character
+	// is distinct.
+	if p.minEntropy > 0 && hasSequentialRun(string(match)) {
 		return true
+	}
+	// private_key_header matches a structural marker, not a value, so the
+	// question is never "does this look random" but "is there a key here".
+	// The checks are ordered so that evidence of key material always wins:
+	//
+	//  1. Key material follows       -> report, whatever the surroundings.
+	//     An embedded literal is still a leak:
+	//     `const k = "-----BEGIN PRIVATE KEY-----\nMIIEow…"`.
+	//  2. The file NAME declares a key -> report on the header alone.
+	//     `.pem` / `.key` / `id_ed25519` need no corroboration.
+	//  3. Otherwise                   -> a mention of the format: an error
+	//     message, a README explaining what to paste, a changelog entry
+	//     describing this very rule.
+	//
+	// Ordering matters. An earlier revision consulted the quoted-literal
+	// heuristic first, which meant a real key assigned to a source constant
+	// was silently dropped — the exact leak this pattern exists to catch.
+	if p.id == "private_key_header" {
+		if pemBodyFollows(content, at+len(match), following) {
+			return false
+		}
+		return !isKeyFileName(rel)
+	}
+	return false
+}
+
+// keyFileExtensions / keyFileBasenames name a file whose whole reason to
+// exist is to hold a private key. In one of those the header is proof enough
+// — the body check is skipped so an unusually-wrapped or truncated key still
+// fires.
+var keyFileExtensions = map[string]bool{
+	".pem": true, ".key": true, ".p8": true, ".pkcs8": true, ".pk8": true,
+	".priv": true, ".ppk": true, ".jks": true, ".p12": true, ".pfx": true,
+}
+
+var keyFileBasenames = map[string]bool{
+	"id_rsa": true, "id_dsa": true, "id_ecdsa": true, "id_ed25519": true,
+	"server.key": true, "client.key": true, "privkey.pem": true,
+}
+
+// isKeyFileName reports whether rel names a private-key file.
+func isKeyFileName(rel string) bool {
+	base := strings.ToLower(filepath.Base(rel))
+	if keyFileBasenames[base] {
+		return true
+	}
+	return keyFileExtensions[strings.ToLower(filepath.Ext(base))]
+}
+
+// pemBodyRunRe finds a candidate run of PEM key material. Length alone is not
+// enough to conclude anything — see looksLikePEMBody.
+var pemBodyRunRe = regexp.MustCompile(`[A-Za-z0-9+/]{40,}={0,2}`)
+
+// looksLikePEMBody reports whether line contains a run that is really base64
+// of random bytes rather than a long identifier that happens to be
+// alphanumeric.
+//
+// The length test on its own was wrong: a docs sentence containing
+// `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` (47 characters, all
+// alphanumeric) read as key material and turned a prose mention of
+// `-----BEGIN ENCRYPTED PRIVATE KEY-----` into an error-severity leak.
+//
+// Base64 of random bytes mixes both cases AND digits; a CamelCase identifier
+// has no digits, and a hex digest has no upper case. For 40 random base64
+// characters the chance of containing no digit at all is about 4e-6, so
+// requiring all three classes costs nothing in recall.
+func looksLikePEMBody(line []byte) bool {
+	for _, run := range pemBodyRunRe.FindAll(line, -1) {
+		var digit, upper, lower bool
+		for _, c := range run {
+			switch {
+			case c >= '0' && c <= '9':
+				digit = true
+			case c >= 'A' && c <= 'Z':
+				upper = true
+			case c >= 'a' && c <= 'z':
+				lower = true
+			}
+		}
+		if digit && upper && lower {
+			return true
+		}
+	}
+	return false
+}
+
+// pemMetadataRe matches the RFC 1421 headers an encrypted PEM puts between
+// the BEGIN line and the body:
+//
+//	-----BEGIN RSA PRIVATE KEY-----
+//	Proc-Type: 4,ENCRYPTED
+//	DEK-Info: AES-128-CBC,8A7F…
+//
+//	MIIEow…
+var pemMetadataRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9-]*: `)
+
+// pemBodyMaxLines bounds how far past the header we look, and
+// pemBodyMaxOtherLines how many lines that are neither blank, metadata, nor
+// body we tolerate before concluding the header was only a mention.
+const (
+	pemBodyMaxLines      = 12
+	pemBodyMaxOtherLines = 2
+)
+
+// pemBodyFollows reports whether key material follows a PEM header.
+//
+// It reads the remainder of the header's own line first — an embedded literal
+// puts the whole key there, `"-----BEGIN PRIVATE KEY-----\nMIIEow…"` — then
+// walks the following lines, stepping over blank lines and RFC 1421 metadata
+// headers so an ENCRYPTED key is not mistaken for prose.
+func pemBodyFollows(content []byte, afterMatch int, following []byte) bool {
+	lines := make([][]byte, 0, pemBodyMaxLines+1)
+	if afterMatch < len(content) {
+		lines = append(lines, content[afterMatch:])
+	}
+	for _, l := range bytes.SplitN(following, []byte("\n"), pemBodyMaxLines+1) {
+		lines = append(lines, l)
+	}
+
+	other := 0
+	for i, raw := range lines {
+		if i > pemBodyMaxLines {
+			break
+		}
+		line := bytes.TrimSpace(raw)
+		if looksLikePEMBody(line) {
+			return true
+		}
+		if len(line) == 0 || pemMetadataRe.Match(line) {
+			continue
+		}
+		if other++; other >= pemBodyMaxOtherLines {
+			return false
+		}
 	}
 	return false
 }
@@ -174,14 +315,14 @@ func checkSecretsScan(ctx context.Context, root string, opts json.RawMessage) ([
 		relForLookup := rel
 		line := 1
 		start := 0
-		emit := func(content []byte, lineNum int) {
+		emit := func(content []byte, lineNum int, following []byte) {
 			for _, p := range secretPatterns {
 				idx := p.re.FindIndex(content)
 				if idx == nil {
 					continue
 				}
 				match := content[idx[0]:idx[1]]
-				if secretMatchSuppressed(p, match, relForLookup, content, idx[0]) {
+				if secretMatchSuppressed(p, match, relForLookup, content, idx[0], following) {
 					continue
 				}
 				out = append(out, Finding{
@@ -194,13 +335,13 @@ func checkSecretsScan(ctx context.Context, root string, opts json.RawMessage) ([
 		}
 		for i := 0; i < len(data); i++ {
 			if data[i] == '\n' {
-				emit(data[start:i], line)
+				emit(data[start:i], line, data[i+1:])
 				line++
 				start = i + 1
 			}
 		}
 		if start < len(data) {
-			emit(data[start:], line)
+			emit(data[start:], line, nil)
 		}
 	}
 	return out, nil
@@ -282,10 +423,49 @@ func gitLsFilesWithMode(ctx context.Context, root string) ([]gitFileEntry, error
 // every security/detection toolkit repo.
 func isDetectionRuleFile(rel string) bool {
 	switch strings.ToLower(filepath.Ext(rel)) {
-	case ".yar", ".yara":
+	case ".yar", ".yara", ".sigma":
 		return true
 	}
+	// A YAML/JSON/Markdown file under a detection-rule directory carries the
+	// pattern as its payload: a placeholder marker quoted as a regex in
+	// `rules/VBC-056.yaml`, a cleartext-protocol probe in
+	// `rules/vulnerability.json`, the prose describing either in
+	// `docs/rules/VBC-056.md`. The marker is what the file is ABOUT.
+	//
+	// Requires both the directory and a rule-carrying extension, so a real
+	// source file under rules/ (`rules/engine.go`) is never silenced.
+	switch strings.ToLower(filepath.Ext(rel)) {
+	case ".yml", ".yaml", ".json", ".md", ".toml", ".conf":
+	default:
+		return false
+	}
+	// A file NAMED for the rule set is the same thing without the directory:
+	// `rules.md`, `config/rules.yaml`, `signatures.json`.
+	lowerBase := strings.ToLower(filepath.Base(rel))
+	switch strings.TrimSuffix(lowerBase, strings.ToLower(filepath.Ext(lowerBase))) {
+	case "rules", "ruleset", "signatures", "detections", "patterns":
+		return true
+	}
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	for i := 0; i < len(parts)-1; i++ {
+		switch strings.ToLower(parts[i]) {
+		case "rules", "signatures", "detections", "detection-rules", "sigs", "yara":
+			return true
+		}
+	}
 	return false
+}
+
+// isBinary uses the same heuristic git itself does: any NUL byte in the
+// first 8 KiB means binary. Cheap and correct for text-vs-blob, but blind to
+// formats whose header is ASCII — see isBinaryPath for the extension check
+// that runs first.
+func isBinary(data []byte) bool {
+	n := len(data)
+	if n > 8192 {
+		n = 8192
+	}
+	return bytes.IndexByte(data[:n], 0) >= 0
 }
 
 // sourceCodeExtensions covers files where a comment-prefixed line
@@ -337,56 +517,41 @@ var sourceCodeExtensions = map[string]bool{
 	".jl":     true,
 }
 
-// isQuotedLiteralInSource returns true when a private-key-header match
-// at offset `at` inside the line `content` looks like a header string
-// in a literal context — not committed key material. Three signatures:
+// sequentialRunFloor is how many consecutive characters make a string
+// obviously hand-typed filler. Eight is long enough that no real credential
+// has ever contained such a run by chance (probability ~62^-7 per position)
+// and short enough to catch `abcdefgh…` and `01234567…`.
+const sequentialRunFloor = 8
+
+// hasSequentialRun reports whether s contains a run of at least
+// sequentialRunFloor characters whose code points step by exactly +1 or -1.
 //
-//  1. Quote-preceded (any file): the char immediately before `at` is
-//     `"`, `'`, or `` ` ``. Covers TS/Go/Py string literals, YAML
-//     `- "-----BEGIN …"`, Astro/HTML `placeholder="…"`, and Markdown
-//     inline code `` `-----BEGIN …` ``. Cross-language.
-//
-//  2. Comment-line in a source file: the line up to `at`, after
-//     trimming whitespace, starts with a comment marker (`//`, `#`,
-//     `/*`, `*`, `--`, `;`, `<!--`). Catches docstrings and inline
-//     comments explaining a parser's supported headers.
-//
-// Genuine PEM blobs sit at column 0 on their own line with no quote
-// or comment ahead of them — they keep firing.
-func isQuotedLiteralInSource(rel string, content []byte, at int) bool {
-	if at <= 0 {
+// This is the hole the Shannon-entropy floor cannot cover: a fake token like
+// `ghp_abcdefghijklmnopqrstuvwxyz0123456789` uses 36 distinct characters and
+// therefore scores the MAXIMUM possible entropy (~5.17 bits/char), sailing
+// past a 3.5 floor — while being the most obviously synthetic string a
+// developer could type. Real credentials are drawn at random and effectively
+// never contain a monotone run this long.
+func hasSequentialRun(s string) bool {
+	runes := []rune(s)
+	if len(runes) < sequentialRunFloor {
 		return false
 	}
-	prev := content[at-1]
-	if prev == '"' || prev == '\'' || prev == '`' {
-		return true
-	}
-	if !sourceCodeExtensions[strings.ToLower(filepath.Ext(rel))] {
-		return false
-	}
-	// Comment-line check: scan the line prefix and see whether it
-	// opens with a comment marker.
-	prefix := bytes.TrimLeft(content[:at], " \t")
-	for _, marker := range commentMarkers {
-		if bytes.HasPrefix(prefix, []byte(marker)) {
+	asc, desc := 1, 1
+	for i := 1; i < len(runes); i++ {
+		switch runes[i] - runes[i-1] {
+		case 1:
+			asc++
+			desc = 1
+		case -1:
+			desc++
+			asc = 1
+		default:
+			asc, desc = 1, 1
+		}
+		if asc >= sequentialRunFloor || desc >= sequentialRunFloor {
 			return true
 		}
 	}
 	return false
 }
-
-// commentMarkers are the leading sequences that open a line-or-block
-// comment across the languages we care about. Order is irrelevant —
-// every prefix is tried.
-var commentMarkers = []string{"//", "#", "/*", "*", "--", ";", "<!--"}
-
-// isBinary uses the same heuristic git itself does: any NUL byte in the
-// first 8 KiB means binary. Cheap and correct for our purposes.
-func isBinary(data []byte) bool {
-	n := len(data)
-	if n > 8192 {
-		n = 8192
-	}
-	return bytes.IndexByte(data[:n], 0) >= 0
-}
-

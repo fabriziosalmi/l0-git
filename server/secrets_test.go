@@ -60,10 +60,10 @@ func TestSecretsScan_PatternsFire(t *testing.T) {
 		{"openai", "sk-" + highEntropyAlnum(48), "openai_key"},
 		{"anthropic", "sk-ant-" + highEntropyAlnum(50), "anthropic_key"},
 		{"google", "AIza" + highEntropyAlnum(35), "google_api_key"},
-		{"slack", "xoxb-1a2B3c4D5e6F7g8H12", "slack_token"},
+		{"slack", "xoxb-2147483647-1357924680-" + highEntropyAlnum(24), "slack_token"},
 		{"stripe", "sk_live_" + highEntropyAlnum(30), "stripe_live"},
 		{"jwt", "eyJ" + highEntropyAlnum(12) + ".eyJ" + highEntropyAlnum(12) + "." + highEntropyAlnum(12), "jwt"},
-		{"pem", "-----BEGIN RSA PRIVATE KEY-----", "private_key_header"},
+		{"pem", "-----BEGIN RSA PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj", "private_key_header"},
 	}
 	ctx := context.Background()
 	for _, tc := range cases {
@@ -162,8 +162,8 @@ func TestSecretsScan_TrackedEnvFile(t *testing.T) {
 // untracked files are invisible to the gate.
 func TestSecretsScan_GitignoredFileSkipped(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
-		".gitignore":   "secret.txt\n",
-		"placeholder":  "x",
+		".gitignore":  "secret.txt\n",
+		"placeholder": "x",
 	})
 	// Add the secret AFTER commit so it's untracked AND ignored.
 	if err := os.WriteFile(filepath.Join(root, "secret.txt"), []byte("AKIA"+strings.Repeat("A", 16)), 0o644); err != nil {
@@ -263,11 +263,16 @@ func TestSecretsScan_ExcludePaths(t *testing.T) {
 // highEntropyAlnum returns a deterministic alphanumeric string of length n
 // with Shannon entropy ≥ 3.5 bits/char, suitable for use in test vectors
 // that must clear the entropy floor of secretPatterns.
+// highEntropyAlnum builds a deterministic, credential-looking string. The
+// stride of 17 is coprime with the 62-character alphabet, so every character
+// is distinct (maximal entropy) while no two adjacent characters are adjacent
+// code points — the naive `i%len(alphabet)` walk produced `0123456789ABC…`,
+// which is exactly the synthetic filler hasSequentialRun now rejects.
 func highEntropyAlnum(n int) string {
 	const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 	b := make([]byte, n)
 	for i := range b {
-		b[i] = alphabet[i%len(alphabet)]
+		b[i] = alphabet[(i*17)%len(alphabet)]
 	}
 	return string(b)
 }
@@ -275,13 +280,13 @@ func highEntropyAlnum(n int) string {
 // TestShannonEntropy validates the helper against known values.
 func TestShannonEntropy(t *testing.T) {
 	cases := []struct {
-		s    string
-		low  bool // true = below 3.5 threshold
+		s   string
+		low bool // true = below 3.5 threshold
 	}{
 		{strings.Repeat("A", 20), true},          // single char → entropy 0
 		{"AKIA" + strings.Repeat("A", 16), true}, // mostly same char
 		{"AKIA1a2B3c4D5e6F7g8H", false},          // 8 distinct chars, 4 bits
-		{highEntropyAlnum(40), false},             // cycling 62-char alphabet
+		{highEntropyAlnum(40), false},            // cycling 62-char alphabet
 	}
 	for _, c := range cases {
 		h := shannonEntropy(c.s)
@@ -329,9 +334,9 @@ func TestSecretsScan_DetectionRuleFilesSkipped(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			root := initRepoWithFiles(t, map[string]string{
-				name:        "rule pk { strings: $h = \"" + pem + "\" condition: $h }\n",
-				"prod.go":   "var x = []byte(\"" + pem + "\")\n", // also caught by string-literal heuristic below
-				"leak.pem":  pem + "\n",                            // genuine
+				name:       "rule pk { strings: $h = \"" + pem + "\" condition: $h }\n",
+				"prod.go":  "var x = []byte(\"" + pem + "\")\n", // also caught by string-literal heuristic below
+				"leak.pem": pem + "\n",                          // genuine
 			})
 			fs, err := checkSecretsScan(context.Background(), root, nil)
 			if err != nil {
@@ -454,10 +459,10 @@ func TestSecretsScan_PrivateKeyHeaderGenuinePEM(t *testing.T) {
 		content string
 	}{
 		{"key.pem", "-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n"},
-		{"secrets/leaked.txt", "-----BEGIN RSA PRIVATE KEY-----\nMIIB...\n"},
+		{"secrets/leaked.txt", "-----BEGIN RSA PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj\n"},
 		// Even in a source file — if the header isn't preceded by a
 		// quote (no string-literal pattern), it's a leak.
-		{"main.go", "/*\n-----BEGIN PRIVATE KEY-----\nMIIB...\n*/\n"},
+		{"main.go", "/*\n-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj\n*/\n"},
 	}
 	for _, c := range cases {
 		t.Run(c.path, func(t *testing.T) {

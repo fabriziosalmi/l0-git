@@ -14,15 +14,15 @@ func TestConnectionStrings_PerScheme(t *testing.T) {
 		patternID string
 		severity  string
 	}{
-		{"creds_in_url", "DSN = postgres://user:pass@db.example.com:5432/app\n", "creds_in_url", SeverityError},
+		{"creds_in_url", "DSN = postgres://svcacct:hunter2@db.example.com:5432/app\n", "creds_in_url", SeverityError},
 		{"ftp", "url = ftp://files.example.com/dump.tar\n", "ftp", SeverityWarning},
 		{"telnet", "url = telnet://router.example.com\n", "telnet", SeverityWarning},
 		{"smb", "share = smb://fileserver/public\n", "smb", SeverityWarning},
 		{"nfs", "mount = nfs://nas.example.com/exports/data\n", "nfs", SeverityWarning},
 		{"rsync", "src = rsync://mirror.example.com/pub\n", "rsync", SeverityWarning},
 		{"ldap_unencrypted", "url = ldap://dc.corp.local\n", "ldap_unencrypted", SeverityInfo},
-		{"db_uri", "url = mongodb://db.internal:27017\n", "db_uri", SeverityInfo},
-		{"jdbc", "url = jdbc:postgresql://db.internal/app\n", "jdbc", SeverityInfo},
+		{"db_uri", "url = mongodb://db.acme.io:27017\n", "db_uri", SeverityInfo},
+		{"jdbc", "url = jdbc:postgresql://db.acme.io/app\n", "jdbc", SeverityInfo},
 		{"http_remote", "see http://api.production.acme.io/v1\n", "http_remote", SeverityInfo},
 	}
 	for _, tc := range cases {
