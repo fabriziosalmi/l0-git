@@ -67,10 +67,10 @@ type FileEdit struct {
 }
 
 const (
-	OpAppend            = "append"
-	OpInsertBeforeLine  = "insert_before_line"
-	ConfidenceDeter     = "deterministic"
-	ConfidenceGuided    = "guided"
+	OpAppend           = "append"
+	OpInsertBeforeLine = "insert_before_line"
+	ConfidenceDeter    = "deterministic"
+	ConfidenceGuided   = "guided"
 )
 
 // Channel identifies how a remediation is being delivered, so the prompt's
@@ -268,9 +268,9 @@ func remediateEnvExample(f Finding) Remediation {
 		Caveats: []string{"The inserted comment is a placeholder — replace `TODO: explain what " + key + " is used for` with a one-line explanation of the variable's purpose."},
 	}
 	return Remediation{
-		Summary:      fmt.Sprintf("Add an explanatory comment above %s in %s:%d.", key, file, line),
-		Confidence:   ConfidenceDeter,
-		Recipe:       recipe,
+		Summary:    fmt.Sprintf("Add an explanatory comment above %s in %s:%d.", key, file, line),
+		Confidence: ConfidenceDeter,
+		Recipe:     recipe,
 		ClaudePrompt: buildClaudePrompt(f,
 			fmt.Sprintf("Insert a `# …` comment immediately above line %d in %s explaining what %s is. Look at the codebase to understand its purpose; don't leave a TODO placeholder.", line, file, key),
 			recipe),
@@ -480,8 +480,19 @@ func RenderRemediationText(w *strings.Builder, f Finding, r Remediation) {
 	w.WriteString("Detected\n")
 	fmt.Fprintf(w, "  %s\n\n", wrap(f.Message, 76, "  "))
 
+	// Gates with no recipe and nothing specific to say set Summary to the
+	// finding's own title, so this block printed the title a third time — after
+	// the header and after Detected, which already carries the advice. Three
+	// identical lines under a heading called "Fix" look like guidance and
+	// contain none. Say what to do next instead.
+	summary := strings.TrimSpace(r.Summary)
+	substituted := summary == "" || strings.EqualFold(summary, strings.TrimSpace(f.Title))
+	if substituted {
+		summary = "No mechanical fix for this gate — it needs judgement. Start from " +
+			"Detected above, or hand the prompt below to Claude Code."
+	}
 	w.WriteString("Fix\n")
-	fmt.Fprintf(w, "  %s\n\n", wrap(r.Summary, 76, "  "))
+	fmt.Fprintf(w, "  %s\n\n", wrap(summary, 76, "  "))
 
 	if r.Recipe != nil {
 		if len(r.Recipe.Commands) > 0 {
@@ -515,7 +526,9 @@ func RenderRemediationText(w *strings.Builder, f Finding, r Remediation) {
 			}
 			w.WriteString("\n")
 		}
-	} else {
+	} else if !substituted {
+		// Only worth saying when Fix carried a real summary; otherwise Fix has
+		// already said it.
 		w.WriteString("No deterministic recipe — this gate needs human or LLM judgement.\n\n")
 	}
 
@@ -567,4 +580,3 @@ func wrap(s string, width int, contIndent string) string {
 	}
 	return out.String()
 }
-

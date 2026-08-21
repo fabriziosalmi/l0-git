@@ -44,9 +44,13 @@ func fullProject(t *testing.T) string {
 	return root
 }
 
+// gitInit creates a bare-minimum repo. `--template=` suppresses the sample
+// hook copy: default `git init` writes 14 files into .git/hooks that no test
+// ever runs, and the suite builds a few hundred repos. On Windows, where file
+// creation is expensive, that copy was a measurable slice of the run.
 func gitInit(t *testing.T, dir string) {
 	t.Helper()
-	cmd := exec.Command("git", "init", "-q")
+	cmd := exec.Command("git", "init", "-q", "--template=")
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v\n%s", err, out)
@@ -86,26 +90,26 @@ func TestRunChecks_EmptyDir(t *testing.T) {
 		"changelog_present",
 		"ci_workflow_present",
 		"code_of_conduct_present",
-		"compose_lint",              // skipped (not git)
-		"config_parse_error",        // skipped (not git)
-		"connection_strings",        // skipped (not git)
+		"compose_lint",       // skipped (not git)
+		"config_parse_error", // skipped (not git)
+		"connection_strings", // skipped (not git)
 		"contributing_present",
-		"css_lint",                  // skipped (not git)
-		"dead_placeholders",         // skipped (not git)
-		"dockerfile_lint",           // skipped (not git)
-		"filename_quality",          // skipped (not git)
+		"css_lint",          // skipped (not git)
+		"dead_placeholders", // skipped (not git)
+		"dockerfile_lint",   // skipped (not git)
+		"filename_quality",  // skipped (not git)
 		"gitignore_present",
-		"html_lint",                 // skipped (not git)
-		"ide_artifact_tracked",      // skipped (not git)
+		"html_lint",            // skipped (not git)
+		"ide_artifact_tracked", // skipped (not git)
 		"issue_template_present",
-		"large_file_tracked",        // skipped (not git)
+		"large_file_tracked", // skipped (not git)
 		"license_present",
-		"markdown_lint",             // skipped (not git)
-		"merge_conflict_markers",    // skipped (not git)
-		"network_scan",              // skipped (not git)
+		"markdown_lint",          // skipped (not git)
+		"merge_conflict_markers", // skipped (not git)
+		"network_scan",           // skipped (not git)
 		"pr_template_present",
 		"readme_present",
-		"secrets_scan",              // skipped (not git)
+		"secrets_scan", // skipped (not git)
 		"security_present",
 		"tests_present",
 		"unexpected_executable_bit", // skipped (not git)

@@ -1,45 +1,87 @@
-# Dockerfile Lint
+---
+title: "Dockerfile lint"
+description: "Deterministic AST-based lint of tracked Dockerfiles. Fires for: untagged FROM, FROM :latest, ADD instruction, missing USER, USER root. Inline…"
+---
 
-The `dockerfile_lint` gate performs a deterministic AST-based analysis of your Dockerfiles to ensure best practices and security compliance.
+# Dockerfile lint
 
-## Details
+An AST-based lint over tracked Dockerfiles — reproducibility and least privilege, nothing stylistic.
 
-- **Gate ID**: `dockerfile_lint`
-- **Severity**: Warning
-- **Tags**: `containers`, `security`, `build`
+<GateMeta id="dockerfile_lint" severity="warning" tags="containers,security,build" scope="Tracked files (`git ls-files`)" />
 
-## Rules
+## What it checks
 
-This gate checks for several common Dockerfile issues:
+Deterministic AST-based lint of tracked Dockerfiles. Fires for: untagged FROM, FROM :latest, ADD instruction, missing USER, USER root. Inline override via `# l0git: ignore <rule_id> reason: …`. Silent on repos without Dockerfile (set gate_options.dockerfile_lint.suggest_when_missing to opt in).
 
-| Rule ID | Description |
-|---------|-------------|
-| `from_untagged` | Using a base image without a specific tag (e.g., `FROM node`). |
-| `from_latest` | Using the `:latest` tag, which leads to non-deterministic builds. |
-| `add_instruction` | Using `ADD` instead of `COPY`. `COPY` is preferred for clarity. |
-| `missing_user` | The Dockerfile does not define a `USER`. |
-| `user_root` | The Dockerfile explicitly sets `USER root`. |
+### Rules
 
-## Inline Overrides
+| Rule | Severity | Fires when |
+|---|---|---|
+| `from_untagged` | warning | `FROM` has no tag at all |
+| `from_latest` | warning | `FROM` pins `:latest` |
+| `add_instruction` | info | `ADD` used where `COPY` would do |
+| `missing_user` | warning | `ENTRYPOINT`/`CMD` with no `USER` earlier in the stage |
+| `user_root` | warning | `USER` is explicitly `root` |
 
-You can ignore specific rules using comments:
+`missing_user` is evaluated **per build stage**, so a multi-stage file is not
+punished for its builder stage.
 
-```dockerfile
-# l0git: ignore from_latest reason: dev-only image
-FROM node:latest
+### Silent by default on repos without a Dockerfile
+
+If nothing containerised is tracked, the gate emits nothing. Set
+`suggest_when_missing` to get a single info finding instead.
+
+## What a finding says
+
+```text
+Dockerfile:1 FROM node:latest pins :latest. `:latest` is a moving target. Pin to a real version (or a digest with @sha256:…) so the image you ship today still rebuilds tomorrow.
 ```
 
-## Configuration
-
-You can opt-in to suggestions even when a Dockerfile is missing:
+## Options
 
 ```json
 {
   "gate_options": {
     "dockerfile_lint": {
-      "suggest_when_missing": true,
-      "disabled_rules": ["add_instruction"]
+      "disabled_rules": ["add_instruction"],
+      "suggest_when_missing": false
     }
   }
 }
 ```
+
+Use `disabled_rules` for a repo-wide policy decision. For a single line, prefer
+the inline directive — it records *why*:
+
+```dockerfile
+# l0git: ignore from_latest reason: dev base image, never released
+FROM node:latest
+```
+
+## Turning it off
+
+Silence the gate for the whole project in `.l0git.json`:
+
+```json
+{
+  "ignore": ["dockerfile_lint"]
+}
+```
+
+Or keep it running at a lower severity:
+
+```json
+{
+  "severity": { "dockerfile_lint": "info" }
+}
+```
+
+For a single occurrence, prefer the inline directive — it records the reason next to the code:
+
+```text
+# l0git: ignore <rule_id> reason: …
+```
+
+## See also
+
+- [Compose lint](/gates/compose-lint)

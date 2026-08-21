@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="782" viewBox="0 0 700 782" role="img" aria-label="Terminal session: lgit check, lgit list and lgit fix on a sample project">
+<title>lgit check / list / fix — real output on a sample project</title>
+<rect x="0.5" y="0.5" width="699" height="781" rx="11" fill="#0C0D10" stroke="#262932"/>
+<path d="M0.5 11.5a11 11 0 0 1 11-11h677a11 11 0 0 1 11 11V40H0.5Z" fill="#15171C"/>
+<path d="M0 40h700" stroke="#262932"/>
+<circle cx="22" cy="20" r="5.5" fill="#FF5F57" opacity="0.85"/>
+<circle cx="40" cy="20" r="5.5" fill="#FEBC2E" opacity="0.85"/>
+<circle cx="58" cy="20" r="5.5" fill="#28C840" opacity="0.85"/>
+<text x="350" y="24.5" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#6A7080">payments-api — lgit</text>
+<text x="26" y="64.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#5FD08A">$ </tspan><tspan fill="#EAECF2">lgit check . | jq &#x27;{gates: (.gates_run|length), findings: (.findings|length)}&#x27;</tspan></text>
+<text x="26" y="85.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan>{</tspan></text>
+<text x="26" y="106.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#8FB8FF">  &quot;gates&quot;: </tspan><tspan fill="#E3B341">35,</tspan></text>
+<text x="26" y="127.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#8FB8FF">  &quot;findings&quot;: </tspan><tspan fill="#E3B341">19</tspan></text>
+<text x="26" y="148.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan>}</tspan></text>
+<text x="26" y="190.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#5FD08A">$ </tspan><tspan fill="#EAECF2">lgit list -project=$PWD -severity=error | jq -r &#x27;.[].file_path&#x27;</tspan></text>
+<text x="26" y="211.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#FF7B72">src/index.js</tspan></text>
+<text x="26" y="232.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#FF7B72">.env:0:env_tracked</tspan></text>
+<text x="26" y="274.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#5FD08A">$ </tspan><tspan fill="#EAECF2">lgit fix 16</tspan></text>
+<text x="26" y="295.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#6A7080">l0-git finding </tspan><tspan fill="#EAECF2">#16</tspan><tspan fill="#6A7080"> — </tspan><tspan fill="#A9B4FF">ide_artifact_tracked</tspan><tspan fill="#6A7080"> (</tspan><tspan fill="#E3B341">warning</tspan><tspan fill="#6A7080">)</tspan></text>
+<text x="26" y="316.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#EAECF2">Editor/IDE artefact tracked in git</tspan></text>
+<text x="26" y="337.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#6A7080">Location: </tspan><tspan fill="#C6CBD5">.idea/workspace.xml</tspan></text>
+<text x="26" y="379.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#EAECF2">Detected</tspan></text>
+<text x="26" y="400.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan>  .idea/workspace.xml is a user-local editor/IDE/OS artefact and shouldn&#x27;t</tspan></text>
+<text x="26" y="421.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan>  live in shared history. Add it to .gitignore and remove with `git rm</tspan></text>
+<text x="26" y="442.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan>  --cached .idea/workspace.xml`.</tspan></text>
+<text x="26" y="484.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#EAECF2">Fix</tspan></text>
+<text x="26" y="505.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan>  Untrack .idea/workspace.xml and ignore it going forward.</tspan></text>
+<text x="26" y="547.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#EAECF2">Run</tspan></text>
+<text x="26" y="568.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#5FD08A">  $ </tspan><tspan fill="#EAECF2">git rm --cached .idea/workspace.xml</tspan></text>
+<text x="26" y="589.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#6A7080">      remove from the index, leave on disk</tspan></text>
+<text x="26" y="610.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#5FD08A">  $ </tspan><tspan fill="#EAECF2">git commit -m &#x27;untrack editor artefact .idea/workspace.xml&#x27;</tspan></text>
+<text x="26" y="652.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#EAECF2">Edit</tspan></text>
+<text x="26" y="673.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#6A7080">  append to .gitignore:</tspan></text>
+<text x="26" y="694.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#C6CBD5">    .idea/</tspan></text>
+<text x="26" y="736.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#EAECF2">Confidence</tspan></text>
+<text x="26" y="757.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#5FD08A">  deterministic</tspan></text>
+</svg>

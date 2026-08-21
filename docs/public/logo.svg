@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="l0-git">
+  <title>l0-git</title>
+  <style>
+    /* CSS beats presentation attributes in SVG, so fill and stroke are
+       declared on separate classes — a single `.mark { fill: … }` would
+       silently override fill="none" and flood the counter of the zero. */
+    .plate     { fill: #111318; }
+    .fg-fill   { fill: #FFFFFF; }
+    .fg-stroke { fill: none; stroke: #FFFFFF; }
+    @media (prefers-color-scheme: dark) {
+      .plate     { fill: #F2F3F7; }
+      .fg-fill   { fill: #111318; }
+      .fg-stroke { stroke: #111318; }
+    }
+  </style>
+  <rect class="plate" width="64" height="64" rx="15"/>
+  <rect class="fg-fill" x="13" y="15" width="6.5" height="34" rx="3.25"/>
+  <circle class="fg-stroke" cx="38" cy="36.5" r="10.25" stroke-width="5.4"/>
+  <path class="fg-stroke" d="M30.4 44.6 45.6 28.4" stroke-width="3.4" stroke-linecap="round"/>
+</svg>

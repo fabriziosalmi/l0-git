@@ -1,39 +1,65 @@
+/* ---------------------------------------------------------------------------
+   Brand palette.
+
+   VitePress 1.x reads --vp-c-brand-1/2/3. The older single --vp-c-brand was
+   removed, so setting it does nothing — every rule below uses the current
+   names. Values track the accent used in the architecture diagram so the
+   site and the artwork read as one thing.
+   ------------------------------------------------------------------------ */
 :root {
-  --vp-c-brand: #000000;
-  --vp-c-brand-next: #333333;
-  --vp-home-hero-name-color: #000000;
+  --vp-c-brand-1: #2F4F9E;
+  --vp-c-brand-2: #3A5FBF;
+  --vp-c-brand-3: #4B72D8;
+  --vp-c-brand-soft: rgba(47, 79, 158, 0.12);
+
+  --vp-button-brand-bg: #14161B;
+  --vp-button-brand-border: #14161B;
+  --vp-button-brand-text: #FFFFFF;
+  --vp-button-brand-hover-bg: #2A2E38;
+  --vp-button-brand-hover-border: #2A2E38;
+  --vp-button-brand-active-bg: #000000;
+
+  --vp-home-hero-name-color: var(--vp-c-text-1);
   --vp-home-hero-name-background: transparent;
-  
+
   --vp-font-family-base: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --vp-font-family-mono: "SF Mono", SFMono-Regular, ui-monospace, "DejaVu Sans Mono", Menlo, Consolas, monospace;
 }
 
 .dark {
-  --vp-c-brand: #ffffff;
-  --vp-c-brand-next: #cccccc;
-  --vp-home-hero-name-color: #ffffff;
+  --vp-c-brand-1: #8FB8FF;
+  --vp-c-brand-2: #A8C7FF;
+  --vp-c-brand-3: #6E9BEE;
+  --vp-c-brand-soft: rgba(143, 184, 255, 0.14);
+
+  --vp-button-brand-bg: #F2F3F7;
+  --vp-button-brand-border: #F2F3F7;
+  --vp-button-brand-text: #14161B;
+  --vp-button-brand-hover-bg: #FFFFFF;
+  --vp-button-brand-hover-border: #FFFFFF;
+  --vp-button-brand-active-bg: #D8DBE2;
 }
 
-/* Apple-like clean look */
+/* Typography ------------------------------------------------------------- */
 .vp-doc h1, .vp-doc h2, .vp-doc h3, .vp-doc h4 {
   letter-spacing: -0.02em;
   font-weight: 600;
 }
 
 .vp-doc p {
-  line-height: 1.6;
-  color: var(--vp-c-text-1);
+  line-height: 1.65;
 }
 
 .vp-doc code {
-  font-size: 0.9em;
+  font-size: 0.88em;
   background-color: var(--vp-c-bg-soft);
-  padding: 0.2em 0.4em;
+  padding: 0.15em 0.4em;
   border-radius: 4px;
 }
 
-/* Data-driven table look */
+/* Tables ------------------------------------------------------------------ */
 .vp-doc table {
+  display: table;
   width: 100%;
   border-collapse: collapse;
   margin: 20px 0;
@@ -43,51 +69,60 @@
 .vp-doc th {
   background-color: var(--vp-c-bg-soft);
   text-align: left;
-  padding: 12px;
+  padding: 10px 12px;
   border-bottom: 2px solid var(--vp-c-divider);
   font-weight: 600;
   text-transform: uppercase;
-  font-size: 0.8em;
-  letter-spacing: 0.05em;
-}
-
-.vp-doc td {
-  padding: 12px;
-  border-bottom: 1px solid var(--vp-c-divider);
-}
-
-/* Sidebar clean look */
-.VPSidebarItem.level-0 .text {
-  font-weight: 600;
-  text-transform: uppercase;
-  font-size: 0.75em;
+  font-size: 0.78em;
   letter-spacing: 0.05em;
   color: var(--vp-c-text-2);
 }
 
-/* Remove emojis from VitePress defaults if any */
-.vp-doc .header-anchor::before {
-  content: none !important;
+.vp-doc td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--vp-c-divider);
+  vertical-align: top;
 }
 
-/* Custom button look */
-.VPButton.brand {
-  border-radius: 20px;
-  padding: 0 24px;
-  font-weight: 500;
-  background-color: var(--vp-c-brand);
-  color: var(--vp-c-bg);
-  transition: all 0.2s ease;
+/* Tables can outgrow the prose column (the gate reference has three columns
+   of prose). Let the table scroll inside its own box instead of pushing the
+   page into a horizontal scroll. */
+.vp-doc div:has(> table) {
+  overflow-x: auto;
 }
 
-.VPButton.brand:hover {
-  opacity: 0.8;
+/* Example blocks ---------------------------------------------------------- */
+/* Untagged / `text` blocks hold finding messages — full sentences, not code.
+   Wrapping them beats a horizontal scrollbar that hides half the sentence. */
+.vp-doc div[class*='language-text'] code {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
+/* Sidebar ----------------------------------------------------------------- */
+.VPSidebarItem.level-0 .text {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.72em;
+  letter-spacing: 0.06em;
+  color: var(--vp-c-text-2);
+}
+
+/* Home hero --------------------------------------------------------------- */
+.VPHome .VPImage {
+  border-radius: 22%;
+}
+
+.VPButton.brand,
 .VPButton.alt {
-  border-radius: 20px;
-  padding: 0 24px;
+  border-radius: 999px;
+  padding: 0 22px;
   font-weight: 500;
-  border: 1px solid var(--vp-c-divider);
-  transition: all 0.2s ease;
+}
+
+/* Images ------------------------------------------------------------------ */
+.vp-doc img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 10px;
 }

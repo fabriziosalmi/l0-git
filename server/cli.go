@@ -104,11 +104,9 @@ func runCLI(args []string) error {
 		return writeJSON(os.Stdout, map[string]any{"deleted": n})
 	case "stats":
 		// lgit stats [-project=…]
-		project := ""
-		for _, a := range rest {
-			if k, v, _ := splitFlag(a); k == "project" {
-				project = v
-			}
+		project, err := parseStatsFlags(rest)
+		if err != nil {
+			return err
 		}
 		s, err := store.Stats(ctx, project)
 		if err != nil {
@@ -137,11 +135,9 @@ func runFixCommand(ctx context.Context, store *Store, rest []string) error {
 	if err != nil {
 		return fmt.Errorf("invalid id: %w", err)
 	}
-	asJSON := false
-	for _, a := range rest[1:] {
-		if k, _, _ := splitFlag(a); k == "json" {
-			asJSON = true
-		}
+	asJSON, err := parseFixFlags(rest[1:])
+	if err != nil {
+		return err
 	}
 	f, err := store.GetByID(ctx, id)
 	if err != nil {
@@ -223,6 +219,56 @@ func parseListFlags(args []string) (FindingFilter, error) {
 		i++
 	}
 	return f, nil
+}
+
+// parseFixFlags reads the flags after the finding id.
+//
+// Same discipline as parseStatsFlags: a flag this command cannot honour is an
+// error, not a shrug. Silently ignoring `--jsno` printed human-readable text to
+// a caller that had asked for JSON and was about to parse it.
+func parseFixFlags(args []string) (bool, error) {
+	asJSON := false
+	for _, a := range args {
+		key, val, hasInline := splitFlag(a)
+		if key != "json" {
+			return false, fmt.Errorf("unexpected argument %q (usage: lgit fix <id> [--json])", a)
+		}
+		if hasInline && val != "" && val != "true" {
+			return false, fmt.Errorf("-json takes no value (got %q)", val)
+		}
+		asJSON = true
+	}
+	return asJSON, nil
+}
+
+// parseStatsFlags reads the one flag `lgit stats` takes.
+//
+// It replaces an inline loop that only ever honoured the inline `-project=x`
+// spelling. Given the space-separated `-project /path`, splitFlag returned an
+// empty value, the loop assigned it anyway, and Stats fell back to its
+// "every project" behaviour — so the command answered a question nobody asked
+// and looked authoritative doing it. Both spellings work now, and anything
+// else is an error, which is how `lgit list` has always behaved.
+func parseStatsFlags(args []string) (string, error) {
+	project := ""
+	for i := 0; i < len(args); i++ {
+		key, val, hasInline := splitFlag(args[i])
+		if key == "" {
+			return "", fmt.Errorf("unexpected positional argument: %q (use -project=<path>)", args[i])
+		}
+		if key != "project" {
+			return "", fmt.Errorf("unknown flag -%s (lgit stats accepts only -project)", key)
+		}
+		if !hasInline {
+			if i+1 >= len(args) {
+				return "", fmt.Errorf("flag -project requires a value")
+			}
+			i++
+			val = args[i]
+		}
+		project = val
+	}
+	return project, nil
 }
 
 // splitFlag accepts "-key=value", "--key=value", "-key", "--key" forms and

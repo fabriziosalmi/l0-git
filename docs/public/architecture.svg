@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="566" viewBox="0 0 1120 566" role="img" aria-label="Architecture: VS Code extension, MCP clients and the shell all drive one lgit binary that reads the working tree and git index and persists findings to a shared SQLite store">
+<title>l0-git architecture</title>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#3C4354"/></marker></defs>
+<rect width="1120" height="566" rx="14" fill="#0B0C0F"/>
+<rect x="0.5" y="0.5" width="1119" height="565" rx="14" fill="none" stroke="#23262E"/>
+<text x="40" y="50" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10.5" letter-spacing="1.6" fill="#666C7C">CONSUMERS</text>
+<text x="430" y="50" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10.5" letter-spacing="1.6" fill="#666C7C">ENGINE</text>
+<text x="830" y="50" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10.5" letter-spacing="1.6" fill="#666C7C">STORE</text>
+<rect x="40" y="72" width="256" height="78" rx="10" fill="#14161B" stroke="#2A2E38"/>
+<text x="60" y="104" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="14.5" font-weight="600" letter-spacing="0" fill="#E4E7EE">VS Code extension</text>
+<text x="60" y="127" text-anchor="start" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" font-weight="400" letter-spacing="0" fill="#8A90A0">sidebar · Problems · status bar</text>
+<text x="362" y="102" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10.5" font-weight="400" letter-spacing="0" fill="#666C7C">execFile</text>
+<path d="M300 111H424" stroke="#3C4354" stroke-width="1.4" fill="none" marker-end="url(#a)"/>
+<rect x="40" y="170" width="256" height="78" rx="10" fill="#14161B" stroke="#2A2E38"/>
+<text x="60" y="202" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="14.5" font-weight="600" letter-spacing="0" fill="#E4E7EE">Claude Code / MCP client</text>
+<text x="60" y="225" text-anchor="start" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" font-weight="400" letter-spacing="0" fill="#8A90A0">8 tools: gates_* findings_*</text>
+<text x="362" y="200" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10.5" font-weight="400" letter-spacing="0" fill="#666C7C">JSON-RPC · stdio</text>
+<path d="M300 209H424" stroke="#3C4354" stroke-width="1.4" fill="none" marker-end="url(#a)"/>
+<rect x="40" y="268" width="256" height="78" rx="10" fill="#14161B" stroke="#2A2E38"/>
+<text x="60" y="300" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="14.5" font-weight="600" letter-spacing="0" fill="#E4E7EE">Shell · CI · Makefile</text>
+<text x="60" y="323" text-anchor="start" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" font-weight="400" letter-spacing="0" fill="#8A90A0">lgit check / list / fix</text>
+<text x="362" y="298" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10.5" font-weight="400" letter-spacing="0" fill="#666C7C">argv → stdout</text>
+<path d="M300 307H424" stroke="#3C4354" stroke-width="1.4" fill="none" marker-end="url(#a)"/>
+<rect x="430" y="72" width="280" height="274" rx="10" fill="#14161B" stroke="#3C4354"/>
+<text x="570" y="116" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="34" font-weight="600" letter-spacing="-1" fill="#E4E7EE">lgit</text>
+<text x="570" y="140" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" font-weight="400" letter-spacing="0" fill="#666C7C">one static Go binary · no CGO</text>
+<path d="M456 166h228" stroke="#2A2E38"/>
+<text x="570" y="194" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="14" font-weight="600" letter-spacing="0" fill="#8FB8FF">35 deterministic gates</text>
+<text x="570" y="222" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" font-weight="400" letter-spacing="0" fill="#8A90A0">project hygiene · governance</text>
+<text x="570" y="244" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" font-weight="400" letter-spacing="0" fill="#8A90A0">security · secrets · network</text>
+<text x="570" y="266" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" font-weight="400" letter-spacing="0" fill="#8A90A0">git hygiene · history</text>
+<text x="570" y="288" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" font-weight="400" letter-spacing="0" fill="#8A90A0">containers · frontend · docs</text>
+<path d="M456 322h228" stroke="#2A2E38"/>
+<text x="570" y="338" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10.5" font-weight="400" letter-spacing="0" fill="#666C7C">a gate fires only on a binary, checkable condition</text>
+<rect x="830" y="170" width="250" height="110" rx="10" fill="#14161B" stroke="#5FD08A"/>
+<text x="955" y="202" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13.5" font-weight="600" letter-spacing="0" fill="#5FD08A">~/.l0-git/findings.db</text>
+<text x="955" y="226" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" font-weight="400" letter-spacing="0" fill="#8A90A0">SQLite · WAL · shared</text>
+<text x="955" y="250" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" font-weight="400" letter-spacing="0" fill="#666C7C">key: project + gate + path</text>
+<text x="955" y="268" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" font-weight="400" letter-spacing="0" fill="#666C7C">override with LGIT_DB</text>
+<text x="770" y="215" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10.5" font-weight="400" letter-spacing="0" fill="#666C7C">upsert</text>
+<text x="770" y="246" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10.5" font-weight="400" letter-spacing="0" fill="#666C7C">query</text>
+<path d="M714 230H826" stroke="#3C4354" stroke-width="1.4" fill="none" marker-end="url(#a)" marker-start="url(#a)"/>
+<rect x="300" y="430" width="540" height="82" rx="10" fill="#14161B" stroke="#2A2E38"/>
+<text x="320" y="458" text-anchor="start" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10.5" font-weight="400" letter-spacing="1.6" fill="#666C7C">READS</text>
+<text x="400" y="482" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="13" font-weight="600" letter-spacing="0" fill="#E4E7EE">working tree</text>
+<text x="400" y="500" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10.5" font-weight="400" letter-spacing="0" fill="#666C7C">files on disk</text>
+<text x="570" y="482" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="13" font-weight="600" letter-spacing="0" fill="#E4E7EE">git index</text>
+<text x="570" y="500" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10.5" font-weight="400" letter-spacing="0" fill="#666C7C">git ls-files → .gitignore honoured</text>
+<text x="745" y="482" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="13" font-weight="600" letter-spacing="0" fill="#E4E7EE">git history</text>
+<text x="745" y="500" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10.5" font-weight="400" letter-spacing="0" fill="#666C7C">opt-in gates only</text>
+<path d="M570 426V352" stroke="#3C4354" stroke-width="1.4" fill="none" marker-end="url(#a)"/>
+<text x="560" y="546" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" letter-spacing="0" fill="#666C7C">Every consumer talks to the same binary and the same store — findings you ignore in the editor stay ignored in CI.</text>
+</svg>

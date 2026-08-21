@@ -9,6 +9,13 @@ on:
 permissions:
   contents: read
 
+# Two pushes landing on main seconds apart (a merge followed by the release
+# commit) used to run the full matrix twice against contended runners, which
+# is what tipped the Windows job over its test timeout. Supersede instead.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   server:
     name: server (${{ matrix.os }} / go ${{ matrix.go }})
@@ -33,12 +40,20 @@ jobs:
           cache-dependency-path: server/go.sum
       - run: go vet ./...
       - run: go build -v ./...
+      # -timeout is a deadlock detector, not a performance budget. At 90s it
+      # was doing both jobs and failing at both: the suite spawns a git process
+      # per fixture repo, Windows spawns processes an order of magnitude slower
+      # than Linux, and the run landed close enough to the limit that the same
+      # commit passed on one Go version and timed out on the other. The helpers
+      # now spawn ~half as many processes; this leaves real headroom on top so
+      # a genuine hang is still caught, loudly, and slowness never masquerades
+      # as one.
       - name: Test (race, except Windows)
         if: runner.os != 'Windows'
-        run: go test -count=1 -race -timeout 90s ./...
+        run: go test -count=1 -race -timeout 300s ./...
       - name: Test (no race on Windows)
         if: runner.os == 'Windows'
-        run: go test -count=1 -timeout 90s ./...
+        run: go test -count=1 -timeout 300s ./...
 
   extension:
     name: extension (node ${{ matrix.node }})
