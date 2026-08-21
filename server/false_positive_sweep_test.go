@@ -34,8 +34,10 @@ func TestNetworkScan_SvgPathDataIsNotAnAddress(t *testing.T) {
 	}
 }
 
-// A standalone .svg is a drawing; nothing in it is ever infrastructure.
-func TestNetworkScan_SvgFileSkipped(t *testing.T) {
+// A standalone .svg made only of geometry produces nothing — not because the
+// file is skipped (it is not; see TestNetworkScan_SvgKeepsNonGeometryContent)
+// but because every coordinate attribute is blanked before matching.
+func TestNetworkScan_SvgGeometryOnlyIsSilent(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
 		"icon.svg": `<svg viewBox="0 0 16 16"><path d="M2.2.82.64 1.23.82.72"/></svg>` + "\n",
 	})
@@ -44,7 +46,7 @@ func TestNetworkScan_SvgFileSkipped(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(fs) != 0 {
-		t.Fatalf(".svg files must not be address-scanned; got: %+v", fs)
+		t.Fatalf("SVG geometry must produce no address findings; got: %+v", fs)
 	}
 }
 
@@ -57,7 +59,13 @@ func TestNetworkScan_VersionLiteralsAreNotAddresses(t *testing.T) {
 		"pin":        `dependencies = ["brotlicffi==1.2.0.1", "aiohttp==3.13.3"]`,
 		"attribute":  `<assemblyIdentity version="0.0.1.0" name="setup"/>`,
 		"assignment": `version: 4.18.2.1`,
-		"npm_spec":   `"pkg": "@1.2.3.4"`,
+		// NB: no `@1.2.3.4` row. An npm spec and `user@host` are
+		// indistinguishable, and the bare `@` rule was removed because it
+		// silenced `ssh root@192.168.0.136`. A row asserting silence here
+		// would only pass by accident — which is exactly how it read before.
+		// Prose versions without a `:`/`=` ("# build 4.18.2.1") are likewise
+		// out of scope: widening the rule to reach them brings the `@` false
+		// negative straight back.
 		"oid_prefix": `oid = 1.3.6.1.4.1.311`,
 		"tag":        `git checkout v9.8.7.6`,
 	}
@@ -117,12 +125,59 @@ func TestNetworkScan_ResolversAndPlaceholdersAreInfo(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, f := range fs {
-				if f.Severity == SeverityWarning {
-					t.Errorf("%s must not be a warning: %+v", addr, f)
-				}
+			// Assert the finding EXISTS at info. "no warning" alone is also
+			// satisfied by a finding that was dropped outright — which is how
+			// a category routed into the suppressed `doc-range` bucket got
+			// past review. The classification is the point, not silence.
+			if len(fs) != 1 {
+				t.Fatalf("%s must produce exactly one informational finding, got: %+v", addr, fs)
+			}
+			if fs[0].Severity != SeverityInfo {
+				t.Errorf("%s must be info, got %s: %+v", addr, fs[0].Severity, fs[0])
 			}
 		})
+	}
+}
+
+// RFC-designated documentation ranges stay suppressed outright — they are
+// reserved for the purpose, so there is nothing to tell the reader.
+// Consecutive-octet placeholders are NOT the same thing: those ranges are
+// really allocated, so they are reported at info instead of dropped.
+func TestNetworkScan_DocRangeDroppedButPlaceholderReported(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"rfc.yaml":         "addr: 192.0.2.42\n",
+		"placeholder.yaml": "addr: 1.2.3.4\n",
+	})
+	fs, err := checkNetworkScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) != 1 {
+		t.Fatalf("expected exactly the placeholder finding, got: %+v", fs)
+	}
+	if !strings.HasPrefix(fs[0].FilePath, "placeholder.yaml") ||
+		!strings.HasSuffix(fs[0].FilePath, ":ipv4_doc-placeholder") {
+		t.Errorf("unexpected finding: %+v", fs[0])
+	}
+}
+
+// An SVG can carry a real endpoint alongside its geometry. Stripping the
+// coordinate attributes is what kills the false positive; skipping the whole
+// file also threw away anything real in it.
+func TestNetworkScan_SvgKeepsNonGeometryContent(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"icon.svg": `<svg viewBox="0 0 16 16"><path d="M2.2.82.64 1.23.82.72"/>` +
+			`<image href="http://93.184.216.34/logo.png"/></svg>` + "\n",
+	})
+	fs, err := checkNetworkScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) != 1 {
+		t.Fatalf("expected the <image> address and nothing from the path data, got: %+v", fs)
+	}
+	if !strings.Contains(fs[0].Message, "93.184.216.34") {
+		t.Errorf("wrong address reported: %+v", fs[0])
 	}
 }
 
@@ -930,5 +985,163 @@ func TestConnectionStrings_RegexSyntaxVsStrongPassword(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("a strong-password credential must still fire: %+v", fs)
+	}
+}
+
+// A tool directory that mixes a hand-written config with a third-party cache
+// must not be skipped wholesale. `.cargo/config.toml` holds registry and
+// mirror URLs — and sometimes credentials — and is authored, not installed.
+func TestDependencyPath_ToolDirsWithFirstPartyConfig(t *testing.T) {
+	mustScan := []string{
+		".cargo/config.toml",
+		".cargo/config",
+		".bundle/config",
+		".yarn/patches/left-pad.patch",
+	}
+	for _, p := range mustScan {
+		if isDependencyPath(p) {
+			t.Errorf("%s is authored config and must still be scanned", p)
+		}
+	}
+	mustSkip := []string{
+		".cargo/registry/src/crate/lib.rs",
+		".cargo/git/checkouts/repo/mod.rs",
+		".yarn/cache/left-pad-npm-1.3.0.zip",
+		".yarn/releases/yarn-4.1.0.cjs",
+	}
+	for _, p := range mustSkip {
+		if !isDependencyPath(p) {
+			t.Errorf("%s is a dependency cache and must be skipped", p)
+		}
+	}
+}
+
+// -----------------------------------------------------------------------
+// review round: false negatives the suppressions themselves introduced
+// -----------------------------------------------------------------------
+
+// Reserved-range exemptions must run on a PARSED address. A string prefix
+// also accepts a public hostname that merely starts with the same digits.
+func TestConnectionStrings_HostRangesRequireAnIPLiteral(t *testing.T) {
+	mustFire := []string{
+		// NB: not `10.example.com` — that is exempt for a different and valid
+		// reason (RFC 2606 reserves example.com), which would make the row
+		// pass without testing anything.
+		"http://10.acme.io/api",
+		"http://100.64.123.evil/api",
+		"http://192.168.evil.net/api",
+		"http://169.254.attacker.io/api",
+	}
+	for _, u := range mustFire {
+		if httpHostExempt(u) {
+			t.Errorf("%s is a public hostname and must not be exempt", u)
+		}
+	}
+	mustBeExempt := []string{
+		"http://10.0.0.5/api", "http://192.168.1.1/", "http://127.0.0.1:8080/",
+		"http://169.254.169.254/latest/meta-data/", "http://100.102.64.123:8000/",
+	}
+	for _, u := range mustBeExempt {
+		if !httpHostExempt(u) {
+			t.Errorf("%s is a reserved-range literal and must be exempt", u)
+		}
+	}
+}
+
+// A placeholder prefix needs a token boundary. Without one, any password
+// starting with "my" is discarded — and that is a real credential leaking.
+func TestConnectionStrings_PlaceholderPrefixNeedsABoundary(t *testing.T) {
+	mustFire := []string{
+		"postgres://svc:mySecretValue@db.acme.com:5432/app",
+		"redis://cache:yourtOwnRandomness@redis.acme.io:6379/0",
+		"https://api:changelogSigningKey@hooks.acme.io",
+	}
+	for _, u := range mustFire {
+		fs := scanConnectionLine("conf.py", 1, []byte(u+"\n"))
+		found := false
+		for _, f := range fs {
+			if strings.HasSuffix(f.FilePath, ":creds_in_url") {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("real credential must fire: %s :: %+v", u, fs)
+		}
+	}
+	mustBeQuiet := []string{
+		"postgres://svc:CHANGE_ME@db/app",
+		"postgres://svc:your-token@db/app",
+		"postgres://svc:changeme@db/app",
+		"postgres://svc:yourpassword@db/app",
+		"postgres://svc:my_password@db/app",
+	}
+	for _, u := range mustBeQuiet {
+		fs := scanConnectionLine("conf.py", 1, []byte(u+"\n"))
+		for _, f := range fs {
+			if strings.HasSuffix(f.FilePath, ":creds_in_url") {
+				t.Errorf("placeholder must stay quiet: %s :: %+v", u, f)
+			}
+		}
+	}
+}
+
+// The markup-identifier exemption must belong to the declaration that owns
+// the URL. Matching anywhere in the line prefix meant one namespace
+// declaration hid every later endpoint on the same line.
+func TestConnectionStrings_MarkupExemptionOwnsOnlyItsOwnURL(t *testing.T) {
+	line := `<svg xmlns="http://www.w3.org/2000/svg"><image href="http://api.acme.io/logo.png"/></svg>`
+	fs := scanConnectionLine("icon.svg", 1, []byte(line+"\n"))
+	if len(fs) != 1 {
+		t.Fatalf("the namespace must be exempt and the href reported; got: %+v", fs)
+	}
+	if !strings.Contains(fs[0].Message, "api.acme.io") {
+		t.Errorf("wrong URL reported: %+v", fs[0])
+	}
+	// A DOCTYPE system identifier is still exempt, and so is a plain namespace.
+	for _, l := range []string{
+		`<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">`,
+		`<svg xmlns="http://www.w3.org/2000/svg" width="16">`,
+	} {
+		if got := scanConnectionLine("doc.xml", 1, []byte(l+"\n")); len(got) != 0 {
+			t.Errorf("markup identifier must be exempt: %s :: %+v", l, got)
+		}
+	}
+}
+
+// Evidence of key material outranks every quoting heuristic. A key assigned
+// to a source constant is still a committed key.
+func TestSecretsScan_KeyMaterialOutranksSourceLiteral(t *testing.T) {
+	const body = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj"
+	mustFire := map[string]string{
+		// The whole key inside one source string literal.
+		"src/keys.go": "const key = \"-----BEGIN PRIVATE KEY-----\\n" + body + "\\n-----END PRIVATE KEY-----\"\n",
+		// An encrypted PEM: RFC 1421 metadata sits between header and body.
+		"secrets/leaked.txt": "-----BEGIN RSA PRIVATE KEY-----\nProc-Type: 4,ENCRYPTED\nDEK-Info: AES-128-CBC,8A7F2B\n\n" + body + "\n",
+	}
+	for path, content := range mustFire {
+		t.Run(path, func(t *testing.T) {
+			root := initRepoWithFiles(t, map[string]string{path: content})
+			fs, err := checkSecretsScan(context.Background(), root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !findingsContainPattern(fs, "private_key_header") {
+				t.Errorf("key material present — must fire; got: %+v", fs)
+			}
+		})
+	}
+}
+
+// Detection-rule basenames are matched case-insensitively, extension included.
+func TestDetectionRuleFile_UppercaseExtension(t *testing.T) {
+	for _, p := range []string{"RULES.YAML", "config/SIGNATURES.JSON", "Detections.Yml"} {
+		if !isDetectionRuleFile(p) {
+			t.Errorf("%s must be recognised as a rule file", p)
+		}
+	}
+	for _, p := range []string{"rules.go", "internal/rules/engine.go", "app.yaml"} {
+		if isDetectionRuleFile(p) {
+			t.Errorf("%s must NOT be treated as a rule file", p)
+		}
 	}
 }

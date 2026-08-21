@@ -111,13 +111,6 @@ func checkNetworkScan(ctx context.Context, root string, opts json.RawMessage) ([
 		if isChangelogBasename(filepath.Base(rel)) {
 			continue
 		}
-		// A standalone .svg is a drawing. Its path data is a dense run of
-		// packed decimals ("M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 …") that
-		// contains dotted quads by pure coincidence, and nothing in a vector
-		// graphic is ever infrastructure configuration.
-		if strings.EqualFold(filepath.Ext(rel), ".svg") {
-			continue
-		}
 		// Licence texts are verbatim boilerplate nobody edits.
 		if isLicenseBasename(filepath.Base(rel)) {
 			continue
@@ -333,10 +326,15 @@ func classifyIPv4(ip net.IP) (string, string) {
 		return SeverityInfo, "private"
 	}
 	// Octets that count 1,2,3,4 or 4,3,2,1 are the universal stand-in
-	// address of technical writing. No allocation is ever laid out that
-	// way, so the author has already declared "this is an example".
+	// address of technical writing. No allocation is ever laid out that way.
+	//
+	// Its own category, NOT "doc-range": doc-range is dropped outright by
+	// scanNetworkLine, and unlike 192.0.2.0/24 these addresses are really
+	// allocated and routable — the author only conventionally treats them as
+	// fictional. Reporting at info says exactly that, and matches what the
+	// changelog promises.
 	if isSequentialOctets(ip) {
-		return SeverityInfo, "doc-range"
+		return SeverityInfo, "doc-placeholder"
 	}
 	// A public resolver constant (8.8.8.8, 1.1.1.1, 9.9.9.9, …) is a
 	// deliberate, globally-anycast choice — not "infrastructure this project
@@ -406,6 +404,8 @@ func networkAdvice(category string) string {
 		return "0.0.0.0 / similar — review the surrounding bind/listen logic."
 	case "public-resolver":
 		return "Well-known public DNS resolver — an intentional constant, not accidental infrastructure coupling."
+	case "doc-placeholder":
+		return "Consecutive octets (1.2.3.4 / 4.3.2.1) are the conventional stand-in address — but the range is really allocated, so double-check it is an example."
 	case "broadcast":
 		return "Limited-broadcast address — a protocol constant, not a host."
 	case "multicast":

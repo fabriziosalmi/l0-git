@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -132,32 +133,26 @@ func urlHostExempt(rest string) bool {
 	if host == "localhost" || host == "0.0.0.0" || host == "::1" {
 		return true
 	}
-	if strings.HasPrefix(host, "127.") || strings.HasPrefix(host, "10.") ||
-		strings.HasPrefix(host, "192.168.") || strings.HasPrefix(host, "169.254.") {
-		// 169.254.0.0/16 is link-local: the cloud metadata endpoint
-		// (169.254.169.254) is http-only by design and unreachable off-host,
-		// so "cleartext HTTP MITM" never applies.
-		return true
-	}
-	if strings.HasPrefix(host, "100.") {
-		// 100.64.0.0/10 — RFC 6598 shared address space, which is what
-		// Tailscale hands out. A `http://100.102.64.123:8000` service URL is
-		// reachable only from inside the tailnet, so cleartext there is no
-		// more exposed than loopback. network_scan already treats the range
-		// as a doc/private range for the same reason.
-		if parts := strings.Split(host, "."); len(parts) == 4 {
-			if n := atoiSafe(parts[1]); n >= 64 && n <= 127 {
-				return true
-			}
+	// Reserved-range tests run on a PARSED address, never on a string prefix.
+	// `strings.HasPrefix(host, "10.")` also accepts `10.example.com`, and
+	// `"100."` accepts `100.64.123.evil` — a public hostname whose cleartext
+	// URL would then be silently exempt.
+	if ip := net.ParseIP(host); ip != nil {
+		switch {
+		case ip.IsLoopback(), ip.IsPrivate(), ip.IsUnspecified():
+			return true
+		case ip.IsLinkLocalUnicast():
+			// 169.254.0.0/16: the cloud metadata endpoint (169.254.169.254)
+			// is http-only by design and unreachable off-host, so "cleartext
+			// HTTP MITM" never applies.
+			return true
 		}
-	}
-	if strings.HasPrefix(host, "172.") {
-		// 172.16.0.0/12 — second octet 16..31.
-		parts := strings.Split(host, ".")
-		if len(parts) >= 2 {
-			if n := atoiSafe(parts[1]); n >= 16 && n <= 31 {
-				return true
-			}
+		// 100.64.0.0/10 — RFC 6598 shared address space, which is what
+		// Tailscale hands out. Such a URL is reachable only from inside the
+		// tailnet, so cleartext there is no more exposed than loopback;
+		// network_scan already treats the range the same way.
+		if v4 := ip.To4(); v4 != nil && v4[0] == 100 && v4[1] >= 64 && v4[1] <= 127 {
+			return true
 		}
 	}
 	if host == "example.com" || strings.HasSuffix(host, ".example.com") ||
@@ -541,7 +536,44 @@ var placeholderWordRe = regexp.MustCompile(`^(?:` +
 // `YOUR_DB_PASSWORD`) is already covered by the prefix and
 // SCREAMING_SNAKE_CASE rules below.
 var placeholderPrefixes = []string{
-	"your", "my", "change", "replace", "insert", "enter", "add_", "add-", "todo",
+	"your", "my", "change", "replace", "insert", "enter", "add", "todo",
+}
+
+// placeholderNouns are the words a stand-in prefix is glued to when there is
+// no separator: `changeme`, `yourpassword`, `replaceme`, `insertkey`.
+var placeholderNouns = map[string]bool{
+	"me": true, "this": true, "it": true, "here": true,
+	"pass": true, "password": true, "passwd": true, "pwd": true,
+	"secret": true, "token": true, "key": true, "apikey": true,
+	"value": true, "name": true, "user": true, "username": true,
+	"db": true, "dbpass": true, "dbpassword": true, "credentials": true,
+}
+
+// hasPlaceholderPrefix reports whether seg is a stand-in the author is telling
+// you to replace.
+//
+// A bare prefix test is not enough: `my` alone would classify
+// `svc:mySecretValue@db` as a placeholder and silently drop a real credential.
+// The prefix must therefore be followed by a separator (`my_password`,
+// `your-token`, `CHANGE_ME`) or by a placeholder noun with nothing after it
+// (`changeme`, `yourpassword`) — never by arbitrary text.
+func hasPlaceholderPrefix(lower string) bool {
+	for _, p := range placeholderPrefixes {
+		if !strings.HasPrefix(lower, p) {
+			continue
+		}
+		rest := lower[len(p):]
+		if rest == "" {
+			return true
+		}
+		if rest[0] == '_' || rest[0] == '-' || rest[0] == '.' {
+			return true
+		}
+		if placeholderNouns[rest] {
+			return true
+		}
+	}
+	return false
 }
 
 // isStructuralNonCredential reports whether a userinfo segment cannot be a
@@ -571,10 +603,8 @@ func isPlaceholderPassword(seg string) bool {
 	if placeholderWordRe.MatchString(lower) {
 		return true
 	}
-	for _, p := range placeholderPrefixes {
-		if strings.HasPrefix(lower, p) {
-			return true
-		}
+	if hasPlaceholderPrefix(lower) {
+		return true
 	}
 	// SCREAMING_SNAKE_CASE is env-var notation, i.e. a slot to fill, not a
 	// value: CHANGE_DATABASE_PASSWORD, DB_PASS, SUPABASE_SERVICE_KEY.
@@ -624,20 +654,31 @@ func dbURIHostExempt(rawURL string) bool {
 	return urlHostExempt(rest)
 }
 
-// markupIdentifierRe matches the declaration keywords that introduce a URI
-// used as a NAME rather than as an address. Checked against the text before
-// the match on the same line.
-var markupIdentifierRe = regexp.MustCompile(`(?i)<!DOCTYPE\b|<!ENTITY\b|\bxmlns(?::[a-z0-9_.-]+)?=|\bschemaLocation=|\bsystemId=|\bnamespace=`)
+// markupAttrRe matches an XML/SGML attribute whose value IS a name rather than
+// an endpoint, anchored so it must sit IMMEDIATELY before the URL:
+//
+//	<svg xmlns="http://www.w3.org/2000/svg">
+//
+// The anchor is the point. Matching anywhere in the line prefix meant that one
+// `xmlns` earlier on the line suppressed every later URL too, hiding a real
+// endpoint in, say, `<image href="http://api.example.com/x"/>` on the same line.
+var markupAttrRe = regexp.MustCompile(`(?i)\b(?:xmlns(?::[a-z0-9_.-]+)?|schemaLocation|xsi:schemaLocation|systemId|namespace)\s*=\s*["']$`)
+
+// doctypeOpenRe matches an unclosed DOCTYPE / ENTITY declaration. Inside one,
+// the quoted URI is a system identifier naming a DTD — nothing is fetched:
+//
+//	<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://…/PropertyList-1.0.dtd">
+var doctypeOpenRe = regexp.MustCompile(`(?i)<!(?:DOCTYPE|ENTITY)\b[^>]*$`)
 
 // isMarkupIdentifierURL reports whether the URL starting at offset `at` is an
-// XML/SGML system identifier or namespace URI. `xmlns="http://www.w3.org/…"`
-// declares a namespace name; a DOCTYPE's system identifier names a DTD. In
-// neither case does anything connect over http, so "cleartext MITM" cannot
-// apply — yet every .plist, .svg, and XML document in existence carries one.
+// XML/SGML system identifier or namespace URI — a NAME, not an address.
+// Nothing connects over either, so "cleartext MITM" cannot apply, yet every
+// .plist, .svg, and XML document in existence carries one.
 func isMarkupIdentifierURL(content []byte, at int) bool {
 	lineStart := 0
 	if i := bytes.LastIndexByte(content[:at], '\n'); i >= 0 {
 		lineStart = i + 1
 	}
-	return markupIdentifierRe.Match(content[lineStart:at])
+	prefix := content[lineStart:at]
+	return markupAttrRe.Match(prefix) || doctypeOpenRe.Match(prefix)
 }

@@ -550,12 +550,9 @@ var dependencyDirNames = map[string]bool{
 	"venv":             true,
 	"virtualenv":       true,
 	".tox":             true,
-	".yarn":            true,
 	".pnpm-store":      true,
 	".gradle":          true,
 	".terraform":       true,
-	".bundle":          true,
-	".cargo":           true,
 	".pub-cache":       true,
 	// NOTE: CocoaPods' "Pods" is deliberately absent from this map and
 	// matched case-sensitively below — a lower-case `pods/` is a normal
@@ -566,19 +563,36 @@ var dependencyDirNames = map[string]bool{
 	"vendor":      true, // Go -mod=vendor, PHP Composer, vendored web assets
 }
 
+// dependencySubtrees covers tool directories that mix a first-party config
+// file with a third-party cache. `.cargo/config.toml` and `.bundle/config`
+// are hand-written — the first commonly holds registry and mirror URLs and can
+// hold credentials — so only the named cache subtrees below count as
+// dependency code. Anything else under these directories is still scanned.
+var dependencySubtrees = map[string]map[string]bool{
+	".cargo":  {"registry": true, "git": true, "bin": true},
+	".bundle": {}, // only ever holds a hand-written `config`
+	".yarn":   {"cache": true, "unplugged": true, "releases": true, "plugins": true, "sdks": true, "berry": true},
+}
+
 // isDependencyPath reports whether rel traverses a third-party dependency
 // directory. The basename is excluded from the walk so a file *named*
 // `vendor` (rare, but legal) is not mistaken for a directory.
 func isDependencyPath(rel string) bool {
 	parts := strings.Split(filepath.ToSlash(rel), "/")
 	for i := 0; i < len(parts)-1; i++ {
-		if dependencyDirNames[strings.ToLower(parts[i])] {
+		lower := strings.ToLower(parts[i])
+		if dependencyDirNames[lower] {
 			return true
 		}
 		// CocoaPods always capitalises; `pods/` in lower case is a
 		// Kubernetes manifest directory.
 		if parts[i] == "Pods" {
 			return true
+		}
+		if subtrees, ok := dependencySubtrees[lower]; ok {
+			if i+1 < len(parts)-1 && subtrees[strings.ToLower(parts[i+1])] {
+				return true
+			}
 		}
 	}
 	return false

@@ -46,6 +46,19 @@ from the condition they detect.
 - **`html_lint target_blank_no_rel` no longer asserts a vulnerability that does not exist.** Its advice said the new tab "can read `window.opener` and run reverse-tabnabbing attacks". Every evergreen browser has implied `rel="noopener"` for `target="_blank"` since 2021 (Chrome 88, Firefox 79, Safari 12.1, WHATWG HTML #4078), so that hazard is unreachable. What remains — withholding the Referer header, and supporting pre-2021 browsers — is a preference, so the rule drops from **warning** to **info** and says what is actually true.
 - **`network_scan` skips URL-list files.** A 108-line `lista.txt` of bare `http://<ip>:<port>` lines is a scan-target dump; its addresses are the payload. `connection_strings` already recognised the URL-list form via the same exact per-line test — `network_scan` saw only the bare-address form and reported one finding per line.
 
+Review round — eleven further defects, every one on the same axis: a
+suppression that would have hidden something real.
+
+- **A key assigned to a source constant is still a committed key.** The quoted-literal heuristic ran *before* the key-material check, so `const key = "-----BEGIN PRIVATE KEY-----\nMIIEow…"` was discarded as "a mention of the format". The checks are now ordered so evidence of key material always wins; the quoted-literal and comment heuristics are gone entirely, subsumed by it.
+- **An encrypted PEM is no longer mistaken for prose.** The body check gave up after two non-empty lines, but an encrypted key puts `Proc-Type: 4,ENCRYPTED` and `DEK-Info: …` between the header and the base64. RFC 1421 metadata lines are now stepped over within a bounded PEM block.
+- **Reserved-range exemptions parse the host as an address.** `strings.HasPrefix(host, "10.")` also accepts `10.acme.io`, and `"100."` accepts `100.64.123.evil` — public hostnames whose cleartext URL was silently exempt.
+- **A placeholder prefix needs a token boundary.** Bare `my` classified `svc:mySecretValue@db` as a placeholder and dropped a real credential. A prefix now has to be followed by a separator (`my_password`, `your-token`) or by a placeholder noun with nothing after it (`changeme`, `yourpassword`).
+- **The markup-identifier exemption belongs to the declaration that owns the URL.** Matching anywhere in the line prefix meant one `xmlns` hid every later endpoint on the same line — `<svg xmlns="…"><image href="http://api.acme.io/x"/>` reported nothing.
+- **`.svg` files are scanned again.** Blanking the geometry attributes is what kills the false positive; skipping the whole file also threw away a real `<image href="http://…">`.
+- **`1.2.3.4` is reported at info instead of vanishing.** `isSequentialOctets` returned the `doc-range` category, which `scanNetworkLine` drops outright — so the placeholders produced no finding at all, contradicting this changelog. They have their own category now. The test that should have caught this asserted only "not a warning", which a dropped finding satisfies; it now asserts the finding exists.
+- **`.cargo/config.toml` and `.bundle/config` are authored files**, not dependency code — the first routinely holds registry URLs and can hold credentials. Only named cache subtrees (`.cargo/registry`, `.cargo/git`, `.yarn/cache`, …) count as third-party now.
+- **Detection-rule basenames match case-insensitively**, extension included: `RULES.YAML` trimmed a lower-cased basename with an upper-cased extension and fell through.
+
 Self-review of the sweep's own suppressions, held to the same standard as the
 false positives it removed — a skip that silences real source is worse than the
 noise it removes:
