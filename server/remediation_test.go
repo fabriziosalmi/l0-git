@@ -306,3 +306,86 @@ func TestRenderRemediationText_GuidedSkipsRunSection(t *testing.T) {
 		t.Error("prompt block must always be present")
 	}
 }
+
+// =============================================================================
+// text rendering
+// =============================================================================
+
+// A gate with no recipe sets Summary to the finding's own title. The renderer
+// used to print that under a "Fix" heading, so the same sentence appeared three
+// times — header, Detected, Fix — and the one labelled "Fix" told the reader
+// nothing they could act on.
+func TestRenderRemediationText_FixDoesNotEchoTitle(t *testing.T) {
+	f := Finding{
+		ID:       42,
+		Project:  "/p",
+		GateID:   "dockerfile_lint",
+		Severity: SeverityWarning,
+		Title:    "Dockerfile has no USER directive",
+		Message:  "Dockerfile:4 ENTRYPOINT/CMD with no preceding USER directive in this stage.",
+		FilePath: "Dockerfile:4:missing_user",
+	}
+	var sb strings.Builder
+	RenderRemediationText(&sb, f, RemediationFor(f, ChannelCLI))
+	out := sb.String()
+
+	fix := sectionBody(t, out, "Fix")
+	if strings.Contains(fix, f.Title) {
+		t.Errorf("Fix section repeats the title verbatim:\n%s", fix)
+	}
+	if !strings.Contains(fix, "judgement") {
+		t.Errorf("Fix section should say the fix needs judgement, got:\n%s", fix)
+	}
+	// The substitute text already says there is no recipe; saying it twice was
+	// the other half of the noise.
+	if strings.Count(out, "No deterministic recipe") > 0 {
+		t.Errorf("redundant no-recipe line kept alongside the substituted Fix:\n%s", out)
+	}
+}
+
+// A gate that supplies a real summary must keep it — the de-duplication is
+// about echoed titles, not about suppressing guidance.
+func TestRenderRemediationText_KeepsRealSummary(t *testing.T) {
+	f := Finding{
+		ID:       43,
+		Project:  "/p",
+		GateID:   "merge_conflict_markers",
+		Severity: SeverityError,
+		Title:    "Merge conflict markers in tracked file",
+		Message:  "src/main.go:2 contains an unresolved merge conflict marker.",
+		FilePath: "src/main.go",
+	}
+	var sb strings.Builder
+	RenderRemediationText(&sb, f, RemediationFor(f, ChannelCLI))
+	out := sb.String()
+
+	fix := sectionBody(t, out, "Fix")
+	if !strings.Contains(fix, "Resolve the merge conflict in src/main.go") {
+		t.Errorf("real summary was dropped, got:\n%s", fix)
+	}
+	if !strings.Contains(out, "No deterministic recipe") {
+		t.Error("guided finding with its own summary should still say there is no recipe")
+	}
+}
+
+// sectionBody returns the indented lines that follow a heading, up to the next
+// blank line.
+func sectionBody(t *testing.T, out, heading string) string {
+	t.Helper()
+	lines := strings.Split(out, "\n")
+	for i, l := range lines {
+		if l != heading {
+			continue
+		}
+		var body []string
+		for _, b := range lines[i+1:] {
+			if strings.TrimSpace(b) == "" {
+				break
+			}
+			body = append(body, b)
+		}
+		return strings.Join(body, "\n")
+	}
+	t.Fatalf("heading %q not found in:\n%s", heading, out)
+	return ""
+}
