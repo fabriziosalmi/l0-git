@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -48,12 +49,50 @@ func fullProject(t *testing.T) string {
 // hook copy: default `git init` writes 14 files into .git/hooks that no test
 // ever runs, and the suite builds a few hundred repos. On Windows, where file
 // creation is expensive, that copy was a measurable slice of the run.
+//
+// It also disables background maintenance. `git commit` can detach a
+// `gc --auto`, and git does not wait for it — so it keeps writing into
+// .git/objects/pack after the test function returns, and t.TempDir()'s
+// RemoveAll loses the race:
+//
+//	TempDir RemoveAll cleanup: unlinkat …/.git/objects/pack: directory not empty
+//
+// That surfaced once on macOS with git 2.55 and never on 2.50, which is the
+// shape of a race rather than a rule. Writing the setting straight into
+// .git/config costs no extra process and covers every git invocation against
+// the repo, including the ones the gates make themselves.
 func gitInit(t *testing.T, dir string) {
 	t.Helper()
 	cmd := exec.Command("git", "init", "-q", "--template=")
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	cfg := filepath.Join(dir, ".git", "config")
+	f, err := os.OpenFile(cfg, os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatalf("open %s: %v", cfg, err)
+	}
+	defer f.Close()
+	if _, err := f.WriteString("[gc]\n\tauto = 0\n[maintenance]\n\tauto = false\n"); err != nil {
+		t.Fatalf("disable gc in %s: %v", cfg, err)
+	}
+}
+
+// The flake this guards against cannot be reproduced on demand — it showed up
+// once, on macOS with git 2.55. If a refactor drops the config write, the only
+// signal would be another intermittent red on someone else's PR months later.
+func TestGitInitDisablesBackgroundMaintenance(t *testing.T) {
+	root := t.TempDir()
+	gitInit(t, root)
+	b, err := os.ReadFile(filepath.Join(root, ".git", "config"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"[gc]", "auto = 0", "[maintenance]", "auto = false"} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("missing %q in .git/config:\n%s", want, b)
+		}
 	}
 }
 
