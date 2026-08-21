@@ -153,10 +153,42 @@ func isKeyFileName(rel string) bool {
 	return keyFileExtensions[strings.ToLower(filepath.Ext(base))]
 }
 
-// pemBodyRunRe matches a run of PEM key material. 40 characters is long
-// enough that no prose sentence reaches it and short enough to catch a
-// truncated example; real PEM bodies wrap at 64.
+// pemBodyRunRe finds a candidate run of PEM key material. Length alone is not
+// enough to conclude anything — see looksLikePEMBody.
 var pemBodyRunRe = regexp.MustCompile(`[A-Za-z0-9+/]{40,}={0,2}`)
+
+// looksLikePEMBody reports whether line contains a run that is really base64
+// of random bytes rather than a long identifier that happens to be
+// alphanumeric.
+//
+// The length test on its own was wrong: a docs sentence containing
+// `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` (47 characters, all
+// alphanumeric) read as key material and turned a prose mention of
+// `-----BEGIN ENCRYPTED PRIVATE KEY-----` into an error-severity leak.
+//
+// Base64 of random bytes mixes both cases AND digits; a CamelCase identifier
+// has no digits, and a hex digest has no upper case. For 40 random base64
+// characters the chance of containing no digit at all is about 4e-6, so
+// requiring all three classes costs nothing in recall.
+func looksLikePEMBody(line []byte) bool {
+	for _, run := range pemBodyRunRe.FindAll(line, -1) {
+		var digit, upper, lower bool
+		for _, c := range run {
+			switch {
+			case c >= '0' && c <= '9':
+				digit = true
+			case c >= 'A' && c <= 'Z':
+				upper = true
+			case c >= 'a' && c <= 'z':
+				lower = true
+			}
+		}
+		if digit && upper && lower {
+			return true
+		}
+	}
+	return false
+}
 
 // pemMetadataRe matches the RFC 1421 headers an encrypted PEM puts between
 // the BEGIN line and the body:
@@ -197,7 +229,7 @@ func pemBodyFollows(content []byte, afterMatch int, following []byte) bool {
 			break
 		}
 		line := bytes.TrimSpace(raw)
-		if pemBodyRunRe.Match(line) {
+		if looksLikePEMBody(line) {
 			return true
 		}
 		if len(line) == 0 || pemMetadataRe.Match(line) {

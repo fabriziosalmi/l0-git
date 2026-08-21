@@ -1145,3 +1145,34 @@ func TestDetectionRuleFile_UppercaseExtension(t *testing.T) {
 		}
 	}
 }
+
+// Key material is base64 of random bytes: both cases AND digits. A long
+// alphanumeric identifier is not. Without that distinction, a docs sentence
+// mentioning the PEM header alongside `kSecAttrAccessibleAfterFirstUnlock…`
+// (47 alphanumeric characters) reported as an error-severity leak.
+func TestSecretsScan_PemBodyIsNotAnyLongIdentifier(t *testing.T) {
+	root := initRepoWithFiles(t, map[string]string{
+		"docs/guide.md": "The CA key is an AES-256 encrypted PEM (`-----BEGIN ENCRYPTED PRIVATE KEY-----`). " +
+			"The passphrase lives in the Keychain with accessibility " +
+			"`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` (not iCloud-syncable).\n",
+		"docs/hash.md": "Fingerprint of `-----BEGIN PRIVATE KEY-----` blobs: a94a8fe5ccb19ba61c4c0873d391e987982fbbd3\n",
+	})
+	fs, err := checkSecretsScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) != 0 {
+		t.Fatalf("a long identifier is not key material; got: %+v", fs)
+	}
+	// Real base64 key material in the same shape still fires.
+	root = initRepoWithFiles(t, map[string]string{
+		"ops/restore.sh": "echo \"-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIN3vR3P3kKxUv4k5W1N+N3e+Gz5G3F3Q5F3Z+F3Y+F3XoAoGCCqGSM49\n\" > key\n",
+	})
+	fs, err = checkSecretsScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingsContainPattern(fs, "private_key_header") {
+		t.Fatalf("real key material must fire; got: %+v", fs)
+	}
+}
