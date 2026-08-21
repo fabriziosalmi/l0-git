@@ -14,8 +14,8 @@ import (
 // composeLintOptions is the shape of gate_options.compose_lint.
 type composeLintOptions struct {
 	scanOptions
-	DisabledRules               []string `json:"disabled_rules,omitempty"`
-	SuggestWhenMissing          bool     `json:"suggest_when_missing,omitempty"`
+	DisabledRules                []string `json:"disabled_rules,omitempty"`
+	SuggestWhenMissing           bool     `json:"suggest_when_missing,omitempty"`
 	AdditionalOrchestratorImages []string `json:"additional_orchestrator_images,omitempty"`
 }
 
@@ -30,10 +30,10 @@ type composeFinding struct {
 }
 
 type composeRule struct {
-	id             string
-	severity       string
-	title          string
-	advice         string
+	id              string
+	severity        string
+	title           string
+	advice          string
 	overrideAliases []string // parent rule IDs whose inline overrides also silence this rule
 }
 

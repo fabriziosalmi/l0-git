@@ -46,17 +46,17 @@ func isKnownNonSecret(value string) bool {
 // a real secret, fill it in before use". Applied to the raw matched string.
 var placeholderValueREs = []*regexp.Regexp{
 	// Template / substitution variable syntaxes (all common config ecosystems)
-	regexp.MustCompile(`^\s*\{\{[^}]+\}\}\s*$`),                // {{secret}} / {{env.MY_KEY}}
-	regexp.MustCompile(`^\s*\$\{[^}]+\}\s*$`),                  // ${MY_SECRET} / ${env:SECRET}
-	regexp.MustCompile(`^\s*\$\([^)]+\)\s*$`),                  // $(MY_SECRET)
+	regexp.MustCompile(`^\s*\{\{[^}]+\}\}\s*$`),               // {{secret}} / {{env.MY_KEY}}
+	regexp.MustCompile(`^\s*\$\{[^}]+\}\s*$`),                 // ${MY_SECRET} / ${env:SECRET}
+	regexp.MustCompile(`^\s*\$\([^)]+\)\s*$`),                 // $(MY_SECRET)
 	regexp.MustCompile(`(?i)^\s*<[A-Z][A-Z0-9_\- ]{2,}>\s*$`), // <MY_TOKEN> / <REPLACE ME>
-	regexp.MustCompile(`(?i)^\s*%[A-Z][A-Z0-9_]{2,}%\s*$`),     // %MY_SECRET%  (Windows env)
+	regexp.MustCompile(`(?i)^\s*%[A-Z][A-Z0-9_]{2,}%\s*$`),    // %MY_SECRET%  (Windows env)
 	regexp.MustCompile(`^\s*\[[A-Z][A-Z0-9_\- ]{2,}\]\s*$`),   // [MY_TOKEN]
-	regexp.MustCompile(`^\s*__[A-Z][A-Z0-9_]+__\s*$`),          // __MY_SECRET__
-	regexp.MustCompile(`^\s*@[A-Z][A-Z0-9_]+@\s*$`),            // @MY_SECRET@  (Maven filtering)
-	regexp.MustCompile(`^\s*#\{[^}]+\}\s*$`),                   // #{my_secret}  (Ruby ERB / Spring)
-	regexp.MustCompile(`^\s*\$\[\[[^\]]+\]\]\s*$`),             // $[[MY_SECRET]]
-	regexp.MustCompile(`^\s*__[a-z][a-z0-9_]+__\s*$`),          // __my_secret__
+	regexp.MustCompile(`^\s*__[A-Z][A-Z0-9_]+__\s*$`),         // __MY_SECRET__
+	regexp.MustCompile(`^\s*@[A-Z][A-Z0-9_]+@\s*$`),           // @MY_SECRET@  (Maven filtering)
+	regexp.MustCompile(`^\s*#\{[^}]+\}\s*$`),                  // #{my_secret}  (Ruby ERB / Spring)
+	regexp.MustCompile(`^\s*\$\[\[[^\]]+\]\]\s*$`),            // $[[MY_SECRET]]
+	regexp.MustCompile(`^\s*__[a-z][a-z0-9_]+__\s*$`),         // __my_secret__
 
 	// Explicit placeholder / instruction words in the value itself
 	regexp.MustCompile(`(?i)\b(your|my|the|an?)\b.{0,20}\b(api[-_]?key|token|secret|password|credential)\b`),
@@ -122,8 +122,9 @@ func allSameChar(s string, minLen int) bool {
 
 // knownServiceDefaultSet is keyed on the lowercase-trimmed value. Every entry
 // corresponds to a credential that is:
-//   (a) shipped as the default by an official open-source project, AND
-//   (b) documented publicly in the project's official README / docs / image page.
+//
+//	(a) shipped as the default by an official open-source project, AND
+//	(b) documented publicly in the project's official README / docs / image page.
 //
 // Sources: official Docker Hub pages, GitHub README files, official docs sites.
 // Nothing is added by speculation — only verified defaults are listed.
@@ -198,8 +199,8 @@ var knownServiceDefaultSet = map[string]bool{
 	"userpassword":     true,
 	"user_password":    true,
 	"user123":          true,
-	"guest":            true,  // RabbitMQ default username AND password
-	"manager":          true,  // ActiveMQ default user password
+	"guest":            true, // RabbitMQ default username AND password
+	"manager":          true, // ActiveMQ default user password
 	"foobar":           true,
 	"foo":              true,
 	"bar":              true,
@@ -289,45 +290,45 @@ var knownServiceDefaultSet = map[string]bool{
 
 	// ── PostgreSQL ─────────────────────────────────────────────────────────────
 	// https://hub.docker.com/_/postgres — POSTGRES_PASSWORD examples
-	"postgres":         true,
-	"postgresql":       true,
-	"pgpassword":       true,
-	"pg_password":      true,
-	"postgrespassword": true,
-	"postgres123":      true,
-	"dbpassword":       true,
-	"db_password":      true,
-	"dbpass":           true,
-	"db_pass":          true,
-	"databasepassword": true,
+	"postgres":          true,
+	"postgresql":        true,
+	"pgpassword":        true,
+	"pg_password":       true,
+	"postgrespassword":  true,
+	"postgres123":       true,
+	"dbpassword":        true,
+	"db_password":       true,
+	"dbpass":            true,
+	"db_pass":           true,
+	"databasepassword":  true,
 	"database_password": true,
 
 	// ── MySQL / MariaDB ────────────────────────────────────────────────────────
 	// https://hub.docker.com/_/mysql — MYSQL_ROOT_PASSWORD examples
-	"mysql":            true,
-	"mariadb":          true,
-	"rootpasswd":       true,
-	"mysqlpassword":    true,
-	"mysql_password":   true,
+	"mysql":               true,
+	"mariadb":             true,
+	"rootpasswd":          true,
+	"mysqlpassword":       true,
+	"mysql_password":      true,
 	"mysql_root_password": true,
-	"mysqlrootpassword": true,
+	"mysqlrootpassword":   true,
 
 	// ── MongoDB ────────────────────────────────────────────────────────────────
 	// https://hub.docker.com/_/mongo
-	"mongo":           true,
-	"mongodb":         true,
-	"mongopassword":   true,
-	"mongo_password":  true,
-	"mongoadmin":      true,
-	"mongo_admin":     true,
+	"mongo":          true,
+	"mongodb":        true,
+	"mongopassword":  true,
+	"mongo_password": true,
+	"mongoadmin":     true,
+	"mongo_admin":    true,
 
 	// ── Redis ──────────────────────────────────────────────────────────────────
 	// https://hub.docker.com/_/redis — no auth by default; examples use these
-	"redis":           true,
-	"redispassword":   true,
-	"redis_password":  true,
-	"redisauth":       true,
-	"redis_auth":      true,
+	"redis":          true,
+	"redispassword":  true,
+	"redis_password": true,
+	"redisauth":      true,
+	"redis_auth":     true,
 
 	// ── RabbitMQ ───────────────────────────────────────────────────────────────
 	// https://hub.docker.com/_/rabbitmq — default user/pass is guest:guest
@@ -339,13 +340,13 @@ var knownServiceDefaultSet = map[string]bool{
 
 	// ── Elasticsearch / OpenSearch ─────────────────────────────────────────────
 	// https://hub.docker.com/_/elasticsearch — bootstrap password in docs
-	"elastic":         true,
-	"elasticsearch":   true,
-	"opensearch":      true,
-	"kibanapassword":  true,
-	"kibana_password": true,
-	"kibana_system":   true,
-	"elasticpassword": true,
+	"elastic":          true,
+	"elasticsearch":    true,
+	"opensearch":       true,
+	"kibanapassword":   true,
+	"kibana_password":  true,
+	"kibana_system":    true,
+	"elasticpassword":  true,
 	"elastic_password": true,
 
 	// ── InfluxDB ───────────────────────────────────────────────────────────────
@@ -358,59 +359,59 @@ var knownServiceDefaultSet = map[string]bool{
 
 	// ── CouchDB ────────────────────────────────────────────────────────────────
 	// https://hub.docker.com/_/couchdb — COUCHDB_PASSWORD default
-	"couchdb":         true,
-	"couch":           true,
-	"couchpassword":   true,
+	"couchdb":       true,
+	"couch":         true,
+	"couchpassword": true,
 
 	// ── Cassandra ──────────────────────────────────────────────────────────────
 	// https://hub.docker.com/_/cassandra — cassandra:cassandra default
-	"cassandra":       true,
+	"cassandra":         true,
 	"cassandrapassword": true,
 
 	// ── Neo4j ──────────────────────────────────────────────────────────────────
 	// https://hub.docker.com/_/neo4j — NEO4J_AUTH default is neo4j/neo4j
-	"neo4j":           true,
-	"neo4jpassword":   true,
+	"neo4j":         true,
+	"neo4jpassword": true,
 
 	// ── MinIO ──────────────────────────────────────────────────────────────────
 	// https://hub.docker.com/r/minio/minio — MINIO_ROOT_USER/PASSWORD defaults
-	"minioadmin":      true, // official default root user AND password
-	"minio":           true,
-	"miniopassword":   true,
-	"minio_password":  true,
-	"minioroot":       true,
-	"minio_root":      true,
-	"minioaccesskey":  true,
+	"minioadmin":       true, // official default root user AND password
+	"minio":            true,
+	"miniopassword":    true,
+	"minio_password":   true,
+	"minioroot":        true,
+	"minio_root":       true,
+	"minioaccesskey":   true,
 	"minio_access_key": true,
-	"miniosecretkey":  true,
+	"miniosecretkey":   true,
 	"minio_secret_key": true,
 
 	// ── Grafana ────────────────────────────────────────────────────────────────
 	// https://hub.docker.com/r/grafana/grafana — default admin:admin
-	"grafana":         true,
-	"grafanapassword": true,
+	"grafana":          true,
+	"grafanapassword":  true,
 	"grafana_password": true,
-	"grafanaadmin":    true,
+	"grafanaadmin":     true,
 
 	// ── Prometheus / Alertmanager ──────────────────────────────────────────────
 	// No auth by default; examples in config use these
-	"prometheus":      true,
-	"alertmanager":    true,
+	"prometheus":   true,
+	"alertmanager": true,
 
 	// ── Keycloak ───────────────────────────────────────────────────────────────
 	// https://hub.docker.com/r/keycloak/keycloak — KEYCLOAK_ADMIN_PASSWORD
-	"keycloak":        true,
-	"keycloakadmin":   true,
-	"keycloak_admin":  true,
-	"keycloakpassword": true,
+	"keycloak":          true,
+	"keycloakadmin":     true,
+	"keycloak_admin":    true,
+	"keycloakpassword":  true,
 	"keycloak_password": true,
 
 	// ── SonarQube ──────────────────────────────────────────────────────────────
 	// https://hub.docker.com/_/sonarqube — default sonarqube:sonarqube then admin:admin
-	"sonarqube":       true,
-	"sonar":           true,
-	"sonarpassword":   true,
-	"sonar_password":  true,
+	"sonarqube":      true,
+	"sonar":          true,
+	"sonarpassword":  true,
+	"sonar_password": true,
 
 	// ── Portainer ──────────────────────────────────────────────────────────────
 	// First-run creates admin; docs examples use these
@@ -420,41 +421,41 @@ var knownServiceDefaultSet = map[string]bool{
 
 	// ── Gitea ──────────────────────────────────────────────────────────────────
 	// https://hub.docker.com/r/gitea/gitea — setup wizard; docs examples
-	"gitea":           true,
-	"giteaadmin":      true,
-	"gitea_admin":     true,
+	"gitea":       true,
+	"giteaadmin":  true,
+	"gitea_admin": true,
 
 	// ── Harbor ─────────────────────────────────────────────────────────────────
 	// https://goharbor.io/docs — Harbor12345 is the shipped default
-	"harbor12345":     true,
-	"harbor":          true,
+	"harbor12345": true,
+	"harbor":      true,
 
 	// ── Nexus Repository ───────────────────────────────────────────────────────
 	// https://hub.docker.com/r/sonatype/nexus3 — admin123 shipped default (old)
-	"nexus":           true,
-	"nexuspassword":   true,
-	"nexus_password":  true,
+	"nexus":          true,
+	"nexuspassword":  true,
+	"nexus_password": true,
 
 	// ── Artifactory ────────────────────────────────────────────────────────────
 	// https://hub.docker.com/r/releases-docker.jfrog.io/jfrog/artifactory-oss
-	"artifactory":     true,
-	"jfrog":           true,
+	"artifactory": true,
+	"jfrog":       true,
 
 	// ── Vault (HashiCorp) ──────────────────────────────────────────────────────
 	// https://developer.hashicorp.com/vault/docs/concepts/dev-server
 	// dev-server token is literally "root" — already listed; extra aliases:
-	"dev-root-token":  true,
-	"dev_root_token":  true,
-	"devroot":         true,
-	"vaulttoken":      true,
-	"vault_token":     true,
-	"vault":           true,
+	"dev-root-token":                       true,
+	"dev_root_token":                       true,
+	"devroot":                              true,
+	"vaulttoken":                           true,
+	"vault_token":                          true,
+	"vault":                                true,
 	"00000000-0000-0000-0000-000000000000": true, // null UUID — docs placeholder
 
 	// ── Consul (HashiCorp) ─────────────────────────────────────────────────────
-	"consul":          true,
-	"consultoken":     true,
-	"consul_token":    true,
+	"consul":       true,
+	"consultoken":  true,
+	"consul_token": true,
 
 	// ── Traefik ────────────────────────────────────────────────────────────────
 	// Dashboard has no auth by default; docs examples use these
@@ -463,66 +464,66 @@ var knownServiceDefaultSet = map[string]bool{
 
 	// ── LocalStack / AWS emulation ─────────────────────────────────────────────
 	// https://docs.localstack.cloud/references/credentials/
-	"localstack":      true,
+	"localstack": true,
 	// "test" is already listed above (generic); LocalStack uses it too
 	// "000000000000" — AWS account ID example, listed above
 
 	// ── Apache Kafka / Confluent ───────────────────────────────────────────────
 	// https://docs.confluent.io — SASL examples in quickstart docs
-	"kafka":           true,
-	"kafkapassword":   true,
-	"kafka_password":  true,
-	"confluent":       true,
+	"kafka":          true,
+	"kafkapassword":  true,
+	"kafka_password": true,
+	"confluent":      true,
 
 	// ── ActiveMQ ───────────────────────────────────────────────────────────────
 	// https://activemq.apache.org — default admin:admin, user:manager
-	"activemq":        true,
+	"activemq": true,
 
 	// ── NATS ───────────────────────────────────────────────────────────────────
 	// No auth by default; docs examples
-	"nats":            true,
-	"natspassword":    true,
+	"nats":         true,
+	"natspassword": true,
 
 	// ── ClickHouse ─────────────────────────────────────────────────────────────
 	// https://hub.docker.com/r/clickhouse/clickhouse-server
-	"clickhouse":      true,
-	"clickhousepassword": true,
+	"clickhouse":          true,
+	"clickhousepassword":  true,
 	"clickhouse_password": true,
-	"clickhouseadmin": true,
+	"clickhouseadmin":     true,
 
 	// ── Airflow ────────────────────────────────────────────────────────────────
 	// https://airflow.apache.org/docs/apache-airflow/stable/howto/docker-compose/index.html
-	"airflow":         true,
-	"airflowpassword": true,
-	"airflow_password": true,
-	"airflowadmin":    true,
-	"airflow123":      true,
+	"airflow":                    true,
+	"airflowpassword":            true,
+	"airflow_password":           true,
+	"airflowadmin":               true,
+	"airflow123":                 true,
 	"_airflow_www_user_password": true, // exact env var value in official Airflow docker-compose.yaml
 
 	// ── Superset ───────────────────────────────────────────────────────────────
 	// https://superset.apache.org/docs/installation/installing-superset-using-docker-compose/
-	"superset":        true,
-	"supersetpassword": true,
+	"superset":                true,
+	"supersetpassword":        true,
 	"superset_admin_password": true,
-	"supersetadmin":   true,
-	"superset_admin":  true,
+	"supersetadmin":           true,
+	"superset_admin":          true,
 
 	// ── Metabase ───────────────────────────────────────────────────────────────
-	"metabase":        true,
+	"metabase":         true,
 	"metabasepassword": true,
 
 	// ── Redash ─────────────────────────────────────────────────────────────────
 	// https://redash.io/help/open-source/setup
-	"redash":          true,
-	"redashpassword":  true,
+	"redash":         true,
+	"redashpassword": true,
 
 	// ── n8n ────────────────────────────────────────────────────────────────────
-	"n8n":             true,
-	"n8npassword":     true,
-	"n8n_password":    true,
+	"n8n":          true,
+	"n8npassword":  true,
+	"n8n_password": true,
 
 	// ── Mattermost ─────────────────────────────────────────────────────────────
-	"mattermost":      true,
+	"mattermost":         true,
 	"mattermostpassword": true,
 
 	// ── Gitab CE/EE ────────────────────────────────────────────────────────────
@@ -534,19 +535,19 @@ var knownServiceDefaultSet = map[string]bool{
 	"gitlab":          true,
 
 	// ── Jenkins ────────────────────────────────────────────────────────────────
-	"jenkins":         true,
-	"jenkinspassword": true,
+	"jenkins":          true,
+	"jenkinspassword":  true,
 	"jenkins_password": true,
 
 	// ── Drone CI ───────────────────────────────────────────────────────────────
-	"drone":           true,
-	"dronerpc":        true,
+	"drone":            true,
+	"dronerpc":         true,
 	"drone_rpc_secret": true,
-	"dronepassword":   true,
+	"dronepassword":    true,
 
 	// ── Woodpecker CI ──────────────────────────────────────────────────────────
-	"woodpecker":      true,
-	"woodpeckeragent": true,
+	"woodpecker":              true,
+	"woodpeckeragent":         true,
 	"woodpecker_agent_secret": true,
 
 	// ── Azure Storage Emulator / Azurite ───────────────────────────────────────
@@ -556,11 +557,11 @@ var knownServiceDefaultSet = map[string]bool{
 	"eby8vdm02xnocqflquwijpllmetlcdxj1ouzft50usrz6ifsusfq2uverczc4i6tq/k1szfptort/kbhbeksogmgw==": true,
 
 	// ── Stripe test mode — prefix handled in Tier 3, but zero-info defaults ───
-	"stripe_test":     true,
-	"stripetest":      true,
+	"stripe_test": true,
+	"stripetest":  true,
 
 	// ── SendGrid ───────────────────────────────────────────────────────────────
-	"sendgrid":        true,
+	"sendgrid":         true,
 	"sendgridpassword": true,
 
 	// ── Twilio ─────────────────────────────────────────────────────────────────
@@ -569,25 +570,25 @@ var knownServiceDefaultSet = map[string]bool{
 	"twilioauthtoken": true,
 
 	// ── JWT "secret" used in tutorials ────────────────────────────────────────
-	"your-256-bit-secret":           true, // jwt.io default HS256 secret
-	"your-384-bit-secret":           true, // jwt.io default HS384 secret
-	"your-512-bit-secret":           true, // jwt.io default HS512 secret
-	"supersecretjwtkey":             true,
-	"jwtsecret":                     true,
-	"jwt_secret":                    true,
-	"jwtpassword":                   true,
-	"jwt_password":                  true,
-	"jwtkey":                        true,
-	"jwt_key":                       true,
-	"jwtsecretkey":                  true,
-	"jwt_secret_key":                true,
-	"this_is_my_secret_key":         true,
-	"this-is-my-secret":             true,
-	"mysupersecretpassword":         true,
-	"thisisasecret":                 true,
-	"this_is_a_secret":              true,
-	"iamsupersecret":                true,
-	"i_am_super_secret":             true,
+	"your-256-bit-secret":   true, // jwt.io default HS256 secret
+	"your-384-bit-secret":   true, // jwt.io default HS384 secret
+	"your-512-bit-secret":   true, // jwt.io default HS512 secret
+	"supersecretjwtkey":     true,
+	"jwtsecret":             true,
+	"jwt_secret":            true,
+	"jwtpassword":           true,
+	"jwt_password":          true,
+	"jwtkey":                true,
+	"jwt_key":               true,
+	"jwtsecretkey":          true,
+	"jwt_secret_key":        true,
+	"this_is_my_secret_key": true,
+	"this-is-my-secret":     true,
+	"mysupersecretpassword": true,
+	"thisisasecret":         true,
+	"this_is_a_secret":      true,
+	"iamsupersecret":        true,
+	"i_am_super_secret":     true,
 
 	// ── Misc cloud / SaaS placeholders from official quickstarts ───────────────
 	"your_api_key":    true,
@@ -618,13 +619,14 @@ func isKnownServiceDefault(value string) bool {
 // non-production.
 //
 // Sources:
-//   Stripe:  https://stripe.com/docs/keys
-//   Square:  https://developer.squareup.com/docs/devtools/sandbox/overview
-//   Braintree: https://developer.paypal.com/braintree/docs/start/overview
-//   Checkout.com: https://www.checkout.com/docs/testing
-//   Adyen:   https://docs.adyen.com/development-resources/test-credentials
-//   Twilio:  https://www.twilio.com/docs/iam/test-credentials
-//   Vault:   https://developer.hashicorp.com/vault/docs/concepts/dev-server
+//
+//	Stripe:  https://stripe.com/docs/keys
+//	Square:  https://developer.squareup.com/docs/devtools/sandbox/overview
+//	Braintree: https://developer.paypal.com/braintree/docs/start/overview
+//	Checkout.com: https://www.checkout.com/docs/testing
+//	Adyen:   https://docs.adyen.com/development-resources/test-credentials
+//	Twilio:  https://www.twilio.com/docs/iam/test-credentials
+//	Vault:   https://developer.hashicorp.com/vault/docs/concepts/dev-server
 var testKeyPrefixes = []string{
 	// Stripe — test keys start with sk_test_, pk_test_, rk_test_, whsec_test_
 	"sk_test_",
@@ -657,7 +659,7 @@ var testKeyPrefixes = []string{
 	// We only exempt the literal dev-server default pattern, not all hvs. tokens.
 	// (The all-same char pattern is also caught by Tier 1 regex above.)
 	// Google test API keys from their testing guide
-	"aizasyc-",  // documented test key prefix in some GCP quickstarts
+	"aizasyc-", // documented test key prefix in some GCP quickstarts
 	// OpenAI — sk-proj- is a newer format; the pure test/example prefix from docs:
 	"sk-xxxxxxxx",
 	"sk-none",
@@ -685,18 +687,19 @@ func hasTestKeyPrefix(value string) bool {
 // match the string exactly as it would appear in a file).
 //
 // Sources — each entry is verifiable in the referenced official page:
-//   AWS:     https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html
-//   jwt.io:  https://jwt.io/#debugger-io
-//   Azurite: https://learn.microsoft.com/azure/storage/common/storage-use-azurite
-//   GCP:     https://cloud.google.com/docs/authentication/api-keys (example key)
-//   GitHub:  https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/about-authentication-to-github
+//
+//	AWS:     https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html
+//	jwt.io:  https://jwt.io/#debugger-io
+//	Azurite: https://learn.microsoft.com/azure/storage/common/storage-use-azurite
+//	GCP:     https://cloud.google.com/docs/authentication/api-keys (example key)
+//	GitHub:  https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/about-authentication-to-github
 var canonicalDocExamples = map[string]bool{
 	// ── AWS ────────────────────────────────────────────────────────────────────
 	// Official AWS documentation example credentials (IAM docs, SDK guides, etc.)
-	"AKIAIOSFODNN7EXAMPLE":                           true,
-	"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY":     true,
-	"AKIAI44QH8DHBEXAMPLE":                           true, // SDK guide example
-	"je7MtGbClwBF/2Zp9Utk/h3yCo8nvbEXAMPLEKEY":     true,
+	"AKIAIOSFODNN7EXAMPLE":                     true,
+	"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY": true,
+	"AKIAI44QH8DHBEXAMPLE":                     true, // SDK guide example
+	"je7MtGbClwBF/2Zp9Utk/h3yCo8nvbEXAMPLEKEY": true,
 
 	// ── Azure Storage Emulator / Azurite ───────────────────────────────────────
 	// https://learn.microsoft.com/en-us/azure/storage/common/storage-use-azurite#well-known-storage-account-and-key
@@ -712,12 +715,12 @@ var canonicalDocExamples = map[string]bool{
 
 	// ── GCP ────────────────────────────────────────────────────────────────────
 	// https://cloud.google.com/docs/authentication/api-keys — example in guides
-	"AIzaSyD-9tSrke72I6IsoFkSEXAMPLEKEY":    true,
+	"AIzaSyD-9tSrke72I6IsoFkSEXAMPLEKEY":       true,
 	"AIzaSyC73SomeExampleKeyFromDocumentation": true,
 
 	// ── GitHub ─────────────────────────────────────────────────────────────────
 	// https://docs.github.com/en/authentication — examples in the token format docs
-	"ghp_16C7e42F292c6912E7710c838347Ae178B4a": true, // classic PAT format example
+	"ghp_16C7e42F292c6912E7710c838347Ae178B4a":                                                    true, // classic PAT format example
 	"github_pat_11ABCDE0Y0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": true,
 
 	// Slack, OpenAI, Anthropic, Stripe live placeholder examples:

@@ -7,23 +7,23 @@ import (
 
 func TestConfigKind(t *testing.T) {
 	cases := map[string]cfgKind{
-		"package.json":          cfgJSON,
-		"composer.json":         cfgJSON,
-		"sub/dir/app.json":      cfgJSON,
-		"k8s.yaml":              cfgYAML,
-		"deploy.yml":            cfgYAML,
+		"package.json":             cfgJSON,
+		"composer.json":            cfgJSON,
+		"sub/dir/app.json":         cfgJSON,
+		"k8s.yaml":                 cfgYAML,
+		"deploy.yml":               cfgYAML,
 		".github/workflows/ci.yml": cfgYAML,
 		// JSONC family — never parsed as strict JSON.
-		"tsconfig.json":         cfgNone,
-		"tsconfig.build.json":   cfgNone,
-		"jsconfig.json":         cfgNone,
-		".vscode/settings.json": cfgNone,
+		"tsconfig.json":                   cfgNone,
+		"tsconfig.build.json":             cfgNone,
+		"jsconfig.json":                   cfgNone,
+		".vscode/settings.json":           cfgNone,
 		".devcontainer/devcontainer.json": cfgNone,
-		"theme.jsonc":           cfgNone,
+		"theme.jsonc":                     cfgNone,
 		// Not config we parse.
-		"data.jsonl":            cfgNone,
-		"README.md":             cfgNone,
-		"main.go":               cfgNone,
+		"data.jsonl": cfgNone,
+		"README.md":  cfgNone,
+		"main.go":    cfgNone,
 	}
 	for rel, want := range cases {
 		if got := configKind(rel); got != want {

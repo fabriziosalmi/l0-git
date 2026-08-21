@@ -137,4 +137,3 @@ func (c *ProjectConfig) optionsFor(gateID string) json.RawMessage {
 	out, _ := json.Marshal(m)
 	return out
 }
-

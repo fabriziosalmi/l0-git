@@ -116,17 +116,17 @@ func TestKnownNonSecret_DatabaseDefaults(t *testing.T) {
 
 func TestKnownNonSecret_ServiceDefaults(t *testing.T) {
 	cases := []string{
-		"minioadmin",   // MinIO official default
-		"grafana",      // Grafana default password
-		"keycloak",     // Keycloak default
-		"sonarqube",    // SonarQube default
-		"harbor12345",  // Harbor shipped default
-		"5iveL!fe",     // Old GitLab shipped default
-		"dev-root-token", // Vault dev-server
+		"minioadmin",                           // MinIO official default
+		"grafana",                              // Grafana default password
+		"keycloak",                             // Keycloak default
+		"sonarqube",                            // SonarQube default
+		"harbor12345",                          // Harbor shipped default
+		"5iveL!fe",                             // Old GitLab shipped default
+		"dev-root-token",                       // Vault dev-server
 		"00000000-0000-0000-0000-000000000000", // null UUID
-		"localstack",   // LocalStack default
-		"airflow",      // Airflow default
-		"rabbitmq",     // RabbitMQ
+		"localstack",                           // LocalStack default
+		"airflow",                              // Airflow default
+		"rabbitmq",                             // RabbitMQ
 	}
 	for _, v := range cases {
 		if !isKnownNonSecret(v) {

@@ -93,11 +93,11 @@ var testDirNames = map[string]bool{
 	"__test__":   true,
 	"test_suite": true,
 	// E2E / integration test directories from common frameworks.
-	"cypress":    true,
-	"playwright": true,
-	"e2e":        true,
+	"cypress":     true,
+	"playwright":  true,
+	"e2e":         true,
 	"integration": true,
-	"features":   true, // Cucumber / Gherkin
+	"features":    true, // Cucumber / Gherkin
 }
 
 func checkTestsPresent(_ context.Context, root string, _ json.RawMessage) ([]Finding, error) {

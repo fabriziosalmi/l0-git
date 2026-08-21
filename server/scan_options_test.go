@@ -154,12 +154,12 @@ func TestIsDefaultBackupPath(t *testing.T) {
 		{"security_fixes_backup_20250626/main.py", true},
 		// must NOT match
 		{"src/main.go", false},
-		{"docs/backups.md", false},                       // basename mention, not a backup file
-		{"archive_test.go", false},                       // "archive" not a directory component
-		{"backupable_module.py", false},                  // contains "backup" as substring only
-		{"old/file.go", false},                           // "old" alone isn't a backup-dir marker
+		{"docs/backups.md", false},                        // basename mention, not a backup file
+		{"archive_test.go", false},                        // "archive" not a directory component
+		{"backupable_module.py", false},                   // contains "backup" as substring only
+		{"old/file.go", false},                            // "old" alone isn't a backup-dir marker
 		{"checks/aws/efs/check_backup_enabled.py", false}, // "backup" is domain word, no timestamp
-		{"src/check_backup_policy.py", false},            // same — code checking backup policies
+		{"src/check_backup_policy.py", false},             // same — code checking backup policies
 	}
 	for _, c := range cases {
 		t.Run(c.path, func(t *testing.T) {
@@ -230,12 +230,12 @@ func TestIsDefaultDataDirFile(t *testing.T) {
 		}
 	}
 	keep := []string{
-		"data/loader.go",          // source in a data dir
-		"internal/data/store.py",  // source in a data dir
-		"config.json",             // ambiguous ext, no data dir
-		"docs/notes.txt",          // ambiguous ext, no data dir
-		"src/app.ts",              // ordinary source
-		"data/schema.sql",         // non-data ext in a data dir
+		"data/loader.go",         // source in a data dir
+		"internal/data/store.py", // source in a data dir
+		"config.json",            // ambiguous ext, no data dir
+		"docs/notes.txt",         // ambiguous ext, no data dir
+		"src/app.ts",             // ordinary source
+		"data/schema.sql",        // non-data ext in a data dir
 	}
 	for _, rel := range keep {
 		if isDefaultDataDirFile(rel) {
@@ -267,11 +267,11 @@ func TestShouldSkipContentExceptDataDirs(t *testing.T) {
 // tree, but secrets must still read them (logs are a leak vector).
 func TestNoisyDataFile_ListAndLog(t *testing.T) {
 	noisy := []string{
-		"dns/dns.list",                     // quoted-IP list outside a data dir
-		"wordlists/x.lst",                  // .lst
+		"dns/dns.list",                           // quoted-IP list outside a data dir
+		"wordlists/x.lst",                        // .lst
 		"use-cases/sample-logs/nginx-access.log", // .log
-		"log.json",                         // log dump w/ generic ext
-		"service.log.json",                 // *.log.json
+		"log.json",                               // log dump w/ generic ext
+		"service.log.json",                       // *.log.json
 	}
 	for _, rel := range noisy {
 		if !isNoisyDataFile(rel) {
@@ -279,10 +279,10 @@ func TestNoisyDataFile_ListAndLog(t *testing.T) {
 		}
 	}
 	keep := []string{
-		"server/main.go",   // source
-		"config.json",      // not a log/list, not under a data dir
-		"docs/guide.md",    // docs
-		"catalog.json",     // generic json at root
+		"server/main.go", // source
+		"config.json",    // not a log/list, not under a data dir
+		"docs/guide.md",  // docs
+		"catalog.json",   // generic json at root
 	}
 	for _, rel := range keep {
 		if isNoisyDataFile(rel) {
