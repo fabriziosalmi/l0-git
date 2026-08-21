@@ -6,6 +6,30 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Security
+
+- **`golang.org/x/net` 0.27.0 → 0.58.0.** Three advisories were open on this dependency. The one that mattered here is [GHSA-5cv4-jp36-h3mw](https://github.com/advisories/GHSA-5cv4-jp36-h3mw) (CVSS 6.5), first patched in **0.55.0**: *parsing arbitrary HTML can consume excessive CPU time, possibly leading to denial of service*. `golang.org/x/net/html` is the only package of x/net this project imports, and parsing arbitrary HTML out of third-party repositories is exactly what `html_lint` does — so this was reachable on the one code path where it counts. Dependabot's open PR proposed 0.38.0, which would have closed the proxy-bypass and XSS advisories and left this one. The other two are closed as well.
+
+### Changed
+
+- **Minimum Go is now 1.25** (`go.mod`), because `golang.org/x/net` 0.55.0+ requires it. The CI matrix moves to 1.25.x / 1.26.x on Linux, macOS and Windows. This is not a narrowing: 1.22 and 1.23 are both EOL, and 1.25/1.26 are the pair Go itself supports. Prebuilt release binaries are unaffected — only building from source needs the newer toolchain. `release.yml` moved with it; it had pinned Go 1.23 in two places, which would have either failed the release build or had `GOTOOLCHAIN` quietly substitute a different toolchain than the pin claimed.
+- **The `macos-15` CI pin is gone.** It existed because macOS 26's dyld rejects Go 1.22's `-race` test binaries, and its own comment said to drop it once 1.22 left the matrix.
+
+### Fixed
+
+- **`lgit stats -project <path>` returned totals for every project in the store.** Only the inline `-project=<path>` spelling was ever honoured: with the space-separated form the value came back empty, and an empty project means "all of them" to the store. The result was a wrong answer in the shape of the right one — correct JSON, exit 0, no warning. Both spellings work now, and unknown flags, missing values and stray positionals are errors, matching `lgit list`.
+- **`lgit fix <id> --jsno` silently printed human-readable text.** A mistyped flag fell through as "no `--json`", so a caller about to parse JSON got prose instead. Unknown arguments are now rejected.
+- **`lgit fix` printed the finding's title three times.** Gates without a deterministic recipe set the remediation summary to the finding's own title, so the same sentence appeared as the header, in substance under `Detected`, and again under a heading called `Fix`. A heading that says *Fix* and restates the problem reads as guidance while carrying none; it now says what to do next. Gates with a real summary — `merge_conflict_markers` — keep it. Rendering only: the `Remediation` struct and the MCP contract are unchanged.
+- **The Windows CI job timed out intermittently.** Not deterministically: the same commit passed on one Go version and timed out on the other, then the reverse on the next run. Windows runs without `-race` and timed out anyway, so the cost was process spawning, which Windows does an order of magnitude slower than Linux. The test helpers spawned **1,467 git processes**, of which **478 were `git config`** setting a committer identity that `-c` carries inline; `git init` copied 14 sample hook files into each of ~240 fixture repos; and `initRepoWithFiles` committed, when every working-tree gate enumerates through `git ls-files`, which reads the index. Now **767 processes**, and the suite runs in roughly half the time. History gates see nothing in a repo built without a commit, so `initRepoWithCommit` exists for them — a test expecting findings would otherwise have passed vacuously. `-timeout` goes to 300s on top of that: it is a deadlock detector, not a performance budget.
+
+### Documentation
+
+- **The published site was broken from the day it went up.** VitePress resolves its public directory as `<srcDir>/public`; `logo.svg` lived in `docs/.vitepress/public`, which is never copied into the build, so the navbar logo and the favicon returned **404 in production**. Separately, the sidebar declared roughly 35 gate pages of which **three existed** — every other entry was a 404 for anyone who clicked it.
+- **All 35 gates are now documented**, written from the source: rule tables with severity and advice for the five linters, the secret patterns with their entropy floor, the `network_scan` categories with the reasoning behind the ones that are off by default, the compose orchestrator carve-out, and the five `.vscode` files that are deliberately not flagged. Plus the VS Code and MCP guides the sidebar had always promised. 44 pages, no dead internal links.
+- **The sidebar is generated from the gate registry** rather than maintained by hand, which is what let it drift — it also still claimed "34 gates" while the registry held 35, so `config_parse_error` had shipped undocumented. Four tests now pin the documentation to the registry, including that each page's `<GateMeta>` block matches on id, severity and tags.
+- **Artwork**, all vector and first-party: a logo (the previous one was Lucide's shield icon as-is), an architecture diagram of the actual mechanism, and a terminal demo that is a transcript of real `lgit` output. The VS Code extension had no Marketplace icon at all and shipped with the grey placeholder.
+- **The README drops from 475 lines to 190**, with install near the top instead of at line 435 — and the command is the one that works, verified against the real release asset names. Corrected along the way: the gate count, two contradictory test counts, and the claim that a firing gate means "no false positives", which three rounds of false-positive suppression do not support. Determinism buys reproducibility, not being right about intent.
+
 ## [0.1.27] - 2026-08-21
 
 ### Fixed
