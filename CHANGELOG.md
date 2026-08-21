@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **`findings_remediate` returned a `summary` that restated `title`.** v0.1.28 fixed this for `lgit fix`'s text output; the `Remediation` struct was untouched, so MCP clients and `--json` still received both fields carrying the same sentence — which cost an agent tokens and told it nothing it did not already have in the same payload. Seven call sites were assembling `Remediation{Summary: f.Title, …}` by hand; they now share one helper, and the sentence lives in a single exported constant both channels read. Deterministic summaries are unchanged: *"Untrack .idea/workspace.xml and ignore it going forward."* is real guidance and stays.
+- **A test flake that only appeared on git 2.55.** `git commit` can detach a `gc --auto`, and git does not wait for it, so it kept writing into `.git/objects/pack` after a test returned and raced `t.TempDir()`'s cleanup — `unlinkat …/.git/objects/pack: directory not empty`. Fixture repos now disable background maintenance at init, written straight into `.git/config` so it costs no extra process and covers every git invocation against the repo.
+
+### Changed
+
+- **Every GitHub Action moved to its current major** — `checkout` v7, `setup-go` v7, `setup-node` v7, `upload-artifact` v7, `download-artifact` v8, `upload-pages-artifact` v5, `deploy-pages` v5, `action-gh-release` v3. The runner logs had been warning that Node 20 is deprecated, which is a countdown rather than a warning: when it is removed, the release workflow stops working. The release notes were read rather than the version numbers trusted — `upload-pages-artifact` v4 stops including dotfiles in the artifact, which was the one change here that could have broken the published site silently, and was checked against a real build (the VitePress `dist` has no dotfiles and no underscore directories).
+- **The docs build uses `npm ci` instead of `npm install`.** The lockfile is committed and `install` is free to resolve something else, so the published site need not have been the one built and reviewed locally.
+
 ## [0.1.28] - 2026-08-21
 
 ### Security
