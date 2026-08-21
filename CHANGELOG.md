@@ -9,8 +9,9 @@ All notable changes to this project are documented here. The format is based on
 ### Fixed
 
 Adversarial false-positive sweep against 220 real repositories (28,531 findings
-before / 7,674 after — **-73% total, -89% of all warnings, -71% of all errors**,
-across two adversarial passes).
+before / 7,929 after — **-72% total, -89% of all warnings, -71% of all errors**,
+across two adversarial passes and a review round that put 248 real findings
+back).
 Every item below is a class the sweep proved unactionable, and every one is
 locked in by a regression test in `false_positive_sweep_test.go`.
 
