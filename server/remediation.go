@@ -101,6 +101,27 @@ func RemediationFor(f Finding, ch Channel) Remediation {
 	return rem
 }
 
+// GuidedNoRecipeSummary is what a gate reports when the finding is real but
+// there is nothing mechanical to run.
+//
+// Summary used to be set to the finding's own Title at seven call sites. That
+// made `lgit fix` print the same sentence three times — header, Detected, and
+// again under a heading called "Fix" — and it handed MCP clients a `summary`
+// field that restated `title`, which tells an agent nothing it did not already
+// have. Saying "this one needs judgement" is less, and worth more.
+const GuidedNoRecipeSummary = "No mechanical fix for this gate — it needs judgement. " +
+	"Work from the detected message, or act on the framing prompt."
+
+// guidedRemediation is the "real finding, no mechanical fix" answer, in one
+// place instead of seven.
+func guidedRemediation(f Finding) Remediation {
+	return Remediation{
+		Summary:      GuidedNoRecipeSummary,
+		Confidence:   ConfidenceGuided,
+		ClaudePrompt: buildClaudePrompt(f, "", nil),
+	}
+}
+
 // remediationBody builds the channel-agnostic remediation: recipe, summary,
 // confidence, and the framing prompt. The verification step is appended by
 // RemediationFor once the delivery channel is known.
@@ -124,11 +145,7 @@ func remediationBody(f Finding) Remediation {
 		return remediateSecretsHistory(f)
 	}
 	// No deterministic recipe — the LLM is the only channel.
-	return Remediation{
-		Summary:      f.Title,
-		Confidence:   ConfidenceGuided,
-		ClaudePrompt: buildClaudePrompt(f, "", nil),
-	}
+	return guidedRemediation(f)
 }
 
 // =============================================================================
@@ -139,11 +156,7 @@ func remediateVendoredDir(f Finding) Remediation {
 	dir := strings.TrimSuffix(f.FilePath, "/")
 	if dir == "" {
 		// Defensive: gate normally always sets FilePath.
-		return Remediation{
-			Summary:      f.Title,
-			Confidence:   ConfidenceGuided,
-			ClaudePrompt: buildClaudePrompt(f, "", nil),
-		}
+		return guidedRemediation(f)
 	}
 	recipe := &Recipe{
 		Commands: []Command{
@@ -172,7 +185,7 @@ func remediateVendoredDir(f Finding) Remediation {
 func remediateIdeArtifact(f Finding) Remediation {
 	rel := f.FilePath
 	if rel == "" {
-		return Remediation{Summary: f.Title, Confidence: ConfidenceGuided, ClaudePrompt: buildClaudePrompt(f, "", nil)}
+		return guidedRemediation(f)
 	}
 	// Pick the .gitignore line: prefer a directory glob for known
 	// editor dirs, exact path otherwise.
@@ -210,7 +223,7 @@ func remediateGitignoreCoverage(f Finding) Remediation {
 	// FilePath shape: ".gitignore:<pattern>" — see checkGitignoreCoverage.
 	parts := strings.SplitN(f.FilePath, ":", 2)
 	if len(parts) != 2 || parts[1] == "" {
-		return Remediation{Summary: f.Title, Confidence: ConfidenceGuided, ClaudePrompt: buildClaudePrompt(f, "", nil)}
+		return guidedRemediation(f)
 	}
 	pattern := parts[1]
 	recipe := &Recipe{
@@ -229,7 +242,7 @@ func remediateGitignoreCoverage(f Finding) Remediation {
 func remediateExecBit(f Finding) Remediation {
 	rel := f.FilePath
 	if rel == "" {
-		return Remediation{Summary: f.Title, Confidence: ConfidenceGuided, ClaudePrompt: buildClaudePrompt(f, "", nil)}
+		return guidedRemediation(f)
 	}
 	recipe := &Recipe{
 		Commands: []Command{
@@ -249,12 +262,12 @@ func remediateEnvExample(f Finding) Remediation {
 	// FilePath shape: "<file>:<line>:<KEY>" — see evaluateEnvExample.
 	parts := strings.SplitN(f.FilePath, ":", 3)
 	if len(parts) != 3 {
-		return Remediation{Summary: f.Title, Confidence: ConfidenceGuided, ClaudePrompt: buildClaudePrompt(f, "", nil)}
+		return guidedRemediation(f)
 	}
 	file := parts[0]
 	line, err := strconv.Atoi(parts[1])
 	if err != nil || line <= 0 {
-		return Remediation{Summary: f.Title, Confidence: ConfidenceGuided, ClaudePrompt: buildClaudePrompt(f, "", nil)}
+		return guidedRemediation(f)
 	}
 	key := parts[2]
 	// We don't know what the key means — only the user / Claude Code does.
@@ -480,16 +493,15 @@ func RenderRemediationText(w *strings.Builder, f Finding, r Remediation) {
 	w.WriteString("Detected\n")
 	fmt.Fprintf(w, "  %s\n\n", wrap(f.Message, 76, "  "))
 
-	// Gates with no recipe and nothing specific to say set Summary to the
-	// finding's own title, so this block printed the title a third time — after
-	// the header and after Detected, which already carries the advice. Three
-	// identical lines under a heading called "Fix" look like guidance and
-	// contain none. Say what to do next instead.
+	// A summary that only restates the title is worse than none: the reader has
+	// already seen it twice. Gates now say so explicitly via
+	// GuidedNoRecipeSummary; the title comparison stays as a net for any future
+	// gate that reaches for f.Title again.
 	summary := strings.TrimSpace(r.Summary)
-	substituted := summary == "" || strings.EqualFold(summary, strings.TrimSpace(f.Title))
-	if substituted {
-		summary = "No mechanical fix for this gate — it needs judgement. Start from " +
-			"Detected above, or hand the prompt below to Claude Code."
+	noRecipeText := summary == "" || summary == GuidedNoRecipeSummary ||
+		strings.EqualFold(summary, strings.TrimSpace(f.Title))
+	if summary == "" || strings.EqualFold(summary, strings.TrimSpace(f.Title)) {
+		summary = GuidedNoRecipeSummary
 	}
 	w.WriteString("Fix\n")
 	fmt.Fprintf(w, "  %s\n\n", wrap(summary, 76, "  "))
@@ -526,7 +538,7 @@ func RenderRemediationText(w *strings.Builder, f Finding, r Remediation) {
 			}
 			w.WriteString("\n")
 		}
-	} else if !substituted {
+	} else if !noRecipeText {
 		// Only worth saying when Fix carried a real summary; otherwise Fix has
 		// already said it.
 		w.WriteString("No deterministic recipe — this gate needs human or LLM judgement.\n\n")

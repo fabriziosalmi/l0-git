@@ -23,11 +23,11 @@ func heredocDelims(line string) []string {
 // dockerfileInstr is one logical instruction in a Dockerfile after line
 // continuations are folded. Line/EndLine are 1-based.
 type dockerfileInstr struct {
-	Kind     string         // upper-cased directive (FROM, RUN, …)
-	Args     string         // raw argument string, single-spaced after fold
-	Line     int            // first line where the instruction begins
-	EndLine  int            // last line of the instruction (after \-continuations)
-	Override *gateOverride  // pending override comment immediately above
+	Kind     string        // upper-cased directive (FROM, RUN, …)
+	Args     string        // raw argument string, single-spaced after fold
+	Line     int           // first line where the instruction begins
+	EndLine  int           // last line of the instruction (after \-continuations)
+	Override *gateOverride // pending override comment immediately above
 }
 
 // gateOverride is the structured form of a `# l0git: ignore <rules> [reason: …]`

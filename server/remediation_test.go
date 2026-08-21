@@ -389,3 +389,49 @@ func sectionBody(t *testing.T, out, heading string) string {
 	t.Fatalf("heading %q not found in:\n%s", heading, out)
 	return ""
 }
+
+// The MCP and --json channels read Summary directly, with no renderer to save
+// them. A Summary equal to the Title told an agent nothing it did not already
+// have in the same payload.
+func TestRemediationFor_GuidedSummaryIsNotTheTitle(t *testing.T) {
+	guided := []struct {
+		gate  string
+		title string
+	}{
+		{"dockerfile_lint", "Dockerfile has no USER directive"},
+		{"compose_lint", "Compose service is privileged"},
+		{"secrets_scan", "Tracked .env file"},
+		{"html_lint", "Viewport meta blocks user zoom"},
+		{"readme_present", "README missing"},
+	}
+	for _, c := range guided {
+		t.Run(c.gate, func(t *testing.T) {
+			r := RemediationFor(Finding{GateID: c.gate, Title: c.title}, ChannelMCP)
+			if r.Confidence != ConfidenceGuided {
+				t.Fatalf("expected a guided remediation, got %q", r.Confidence)
+			}
+			if r.Summary == c.title {
+				t.Errorf("Summary echoes Title: %q", r.Summary)
+			}
+			if r.Summary == "" {
+				t.Error("Summary is empty; it should say the fix needs judgement")
+			}
+		})
+	}
+}
+
+// Deterministic gates must keep their real, specific summary — the change is
+// about removing an echo, not about flattening every gate to one sentence.
+func TestRemediationFor_DeterministicSummarySurvives(t *testing.T) {
+	r := RemediationFor(Finding{
+		GateID:   "ide_artifact_tracked",
+		Title:    "Editor/IDE artefact tracked in git",
+		FilePath: ".idea/workspace.xml",
+	}, ChannelMCP)
+	if r.Confidence != ConfidenceDeter {
+		t.Fatalf("expected deterministic, got %q", r.Confidence)
+	}
+	if r.Summary == GuidedNoRecipeSummary || !strings.Contains(r.Summary, ".idea/workspace.xml") {
+		t.Errorf("deterministic summary lost its specifics: %q", r.Summary)
+	}
+}
