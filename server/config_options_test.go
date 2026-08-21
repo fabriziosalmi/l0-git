@@ -59,7 +59,7 @@ func TestValidateGateOptions_ReportsWhatUsedToBeSwallowed(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := validateGateOptions(cfgWith(t, c.raw), gateRegistry())
+			got, _ := validateGateOptions(cfgWith(t, c.raw), gateRegistry())
 			if len(got) != 1 {
 				t.Fatalf("expected exactly one problem, got %d: %v", len(got), got)
 			}
@@ -78,7 +78,7 @@ func TestValidateGateOptions_AcceptsValidConfig(t *testing.T) {
 		"network_scan":{"report_loopback":true},
 		"compose_lint":{"additional_orchestrator_images":["my-org/deployer"]}
 	}}`
-	if got := validateGateOptions(cfgWith(t, raw), gateRegistry()); len(got) != 0 {
+	if got, _ := validateGateOptions(cfgWith(t, raw), gateRegistry()); len(got) != 0 {
 		t.Errorf("valid config reported problems: %v", got)
 	}
 }
@@ -87,7 +87,7 @@ func TestValidateGateOptions_AcceptsValidConfig(t *testing.T) {
 // iteration would reshuffle it between otherwise identical runs.
 func TestValidateGateOptions_DeterministicOrder(t *testing.T) {
 	raw := `{"gate_options":{"zzz_nope":{},"aaa_nope":{},"mmm_nope":{}}}`
-	first := validateGateOptions(cfgWith(t, raw), gateRegistry())
+	first, _ := validateGateOptions(cfgWith(t, raw), gateRegistry())
 	if len(first) != 3 {
 		t.Fatalf("expected 3 problems, got %v", first)
 	}
@@ -95,7 +95,7 @@ func TestValidateGateOptions_DeterministicOrder(t *testing.T) {
 		t.Errorf("problems are not in a stable order: %v", first)
 	}
 	for i := 0; i < 20; i++ {
-		if got := validateGateOptions(cfgWith(t, raw), gateRegistry()); !equalStrings(got, first) {
+		if got, _ := validateGateOptions(cfgWith(t, raw), gateRegistry()); !equalStrings(got, first) {
 			t.Fatalf("order changed between runs:\n%v\n%v", first, got)
 		}
 	}
@@ -123,7 +123,7 @@ func TestGateOptions_EveryPrototypeRejectsUnknownFields(t *testing.T) {
 		}
 		t.Run(g.ID, func(t *testing.T) {
 			raw := `{"gate_options":{"` + g.ID + `":{"__definitely_not_an_option__":1}}}`
-			got := validateGateOptions(cfgWith(t, raw), gateRegistry())
+			got, _ := validateGateOptions(cfgWith(t, raw), gateRegistry())
 			if len(got) != 1 || !strings.Contains(got[0], "unknown field") {
 				t.Errorf("prototype does not reject unknown fields, got: %v", got)
 			}
@@ -165,11 +165,28 @@ func TestGateOptions_GatesWithoutAPrototypeReallyIgnoreOptions(t *testing.T) {
 			if err != nil {
 				t.Fatalf("check with options: %v", err)
 			}
-			if len(withNil) != len(withOpts) {
-				t.Errorf("gate has no NewOptions but reacts to them "+
-					"(%d findings with nil, %d with exclude_paths) — give it a prototype "+
-					"so gate_options.%s is validated", len(withNil), len(withOpts), g.ID)
+			// Compare the findings themselves, not how many there are: a gate
+			// could start honouring an option that changes a severity, a
+			// message or a path while the count stays put, and a count-only
+			// assertion would stay green while validation was being bypassed.
+			if a, b := fingerprint(withNil), fingerprint(withOpts); a != b {
+				t.Errorf("gate has no NewOptions but reacts to them — give it a "+
+					"prototype so gate_options.%s is validated\n with nil:  %s\n with opts: %s",
+					g.ID, a, b)
 			}
 		})
 	}
+}
+
+// fingerprint renders findings into a stable, comparable form. Gates are free
+// to emit in any order, so it sorts.
+func fingerprint(fs []Finding) string {
+	parts := make([]string, 0, len(fs))
+	for _, f := range fs {
+		parts = append(parts, strings.Join([]string{
+			f.Severity, f.Title, f.Message, f.FilePath, f.Tags,
+		}, "|"))
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, "\n")
 }

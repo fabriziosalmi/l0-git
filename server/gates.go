@@ -436,7 +436,8 @@ func RunChecks(ctx context.Context, store *Store, projectRoot, gateID string) (*
 	// `gates` slice: `lgit check . <one_gate>` should still tell you that a
 	// different gate's options are malformed, since the file is wrong either
 	// way and you would otherwise only learn on a full run.
-	configProblems = append(configProblems, validateGateOptions(cfg, gateRegistry())...)
+	optionProblems, rejectedOptions := validateGateOptions(cfg, gateRegistry())
+	configProblems = append(configProblems, optionProblems...)
 	out.ConfigError = strings.Join(configProblems, "; ")
 
 	for _, g := range gates {
@@ -451,7 +452,15 @@ func RunChecks(ctx context.Context, store *Store, projectRoot, gateID string) (*
 			continue
 		}
 		out.GatesRun = append(out.GatesRun, g.ID)
-		fs, err := g.Check(ctx, abs, cfg.optionsFor(g.ID))
+		// A gate whose options were rejected runs on its defaults. Handing it
+		// the sub-tree anyway would let its lenient parser apply the parts that
+		// happen to decode, so the run would half-obey a config it had just
+		// warned about.
+		gateOpts := cfg.optionsFor(g.ID)
+		if rejectedOptions[g.ID] {
+			gateOpts = cfg.optionsWithoutGateEntry()
+		}
+		fs, err := g.Check(ctx, abs, gateOpts)
 		if err != nil {
 			return nil, fmt.Errorf("gate %s: %w", g.ID, err)
 		}

@@ -124,9 +124,10 @@ func (c *ProjectConfig) severityOverride(gateID string) (string, bool) {
 // CheckResult.ConfigError, which is the channel the top-level config error
 // already uses, for the reason recorded there — a bad config should not take
 // the whole run with it.
-func validateGateOptions(c *ProjectConfig, gates []Gate) []string {
+func validateGateOptions(c *ProjectConfig, gates []Gate) (problems []string, rejected map[string]bool) {
+	rejected = map[string]bool{}
 	if c == nil || len(c.GateOptions) == 0 {
-		return nil
+		return nil, rejected
 	}
 	byID := make(map[string]Gate, len(gates))
 	for _, g := range gates {
@@ -140,7 +141,6 @@ func validateGateOptions(c *ProjectConfig, gates []Gate) []string {
 	}
 	sort.Strings(ids)
 
-	var problems []string
 	for _, id := range ids {
 		raw := c.GateOptions[id]
 		g, ok := byID[id]
@@ -154,16 +154,24 @@ func validateGateOptions(c *ProjectConfig, gates []Gate) []string {
 				"gate_options.%s: this gate takes no options", id))
 			continue
 		}
-		if len(raw) == 0 {
+		// A JSON null decodes into any pointer without error, so it would slip
+		// past the strict decode below and leave the gate on defaults with
+		// nothing said — the exact silence this function exists to end.
+		trimmed := bytes.TrimSpace(raw)
+		if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+			problems = append(problems, fmt.Sprintf(
+				"gate_options.%s: must be an object, got null", id))
+			rejected[id] = true
 			continue
 		}
-		dec := json.NewDecoder(bytes.NewReader(raw))
+		dec := json.NewDecoder(bytes.NewReader(trimmed))
 		dec.DisallowUnknownFields()
 		if err := dec.Decode(g.NewOptions()); err != nil {
 			problems = append(problems, fmt.Sprintf("gate_options.%s: %v", id, err))
+			rejected[id] = true
 		}
 	}
-	return problems
+	return problems, rejected
 }
 
 // optionsFor returns the gate-specific JSON sub-tree from gate_options merged
@@ -174,7 +182,26 @@ func (c *ProjectConfig) optionsFor(gateID string) json.RawMessage {
 	if c == nil {
 		return nil
 	}
-	raw := c.GateOptions[gateID]
+	return c.withGlobalExcludes(c.GateOptions[gateID])
+}
+
+// optionsWithoutGateEntry is optionsFor with the gate's own sub-tree dropped,
+// for a gate whose options failed validation. The project-level exclude_paths
+// still apply: they parsed fine and have nothing to do with the gate's mistake.
+//
+// Dropping the whole sub-tree rather than letting the gate's lenient parser
+// salvage what it can is deliberate. `{"threshold_mb": 20, "treshold_mb": 1}`
+// used to warn and then apply 20 anyway — a config half-obeyed is the same
+// class of problem as one silently ignored, and it is impossible to document
+// in a sentence a reader will remember.
+func (c *ProjectConfig) optionsWithoutGateEntry() json.RawMessage {
+	if c == nil {
+		return nil
+	}
+	return c.withGlobalExcludes(nil)
+}
+
+func (c *ProjectConfig) withGlobalExcludes(raw json.RawMessage) json.RawMessage {
 	if len(c.ExcludePaths) == 0 {
 		return raw
 	}
