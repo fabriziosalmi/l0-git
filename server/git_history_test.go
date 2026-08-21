@@ -16,8 +16,6 @@ func commitAndRemove(t *testing.T, secret string) string {
 	t.Helper()
 	root := t.TempDir()
 	gitInit(t, root)
-	runGit(t, root, "config", "user.email", "t@t")
-	runGit(t, root, "config", "user.name", "t")
 
 	if err := os.WriteFile(filepath.Join(root, "secret.txt"), []byte(secret+"\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -40,8 +38,6 @@ func commitAndRemoveNamed(t *testing.T, relPath, content string) string {
 	t.Helper()
 	root := t.TempDir()
 	gitInit(t, root)
-	runGit(t, root, "config", "user.email", "t@t")
-	runGit(t, root, "config", "user.name", "t")
 
 	full := filepath.Join(root, relPath)
 	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
@@ -152,7 +148,10 @@ func TestSecretsScanHistory_NotGitRepo(t *testing.T) {
 }
 
 func TestLargeBlobInHistory_DefaultOff(t *testing.T) {
-	root := initRepoWithFiles(t, map[string]string{"hi.txt": "hi"})
+	// initRepoWithCommit, not initRepoWithFiles: this gate reads history, and
+	// asserting "off by default" against a repo with no commits would hold
+	// whether the gate ran or not.
+	root := initRepoWithCommit(t, map[string]string{"hi.txt": "hi"})
 	fs, err := checkLargeBlobInHistory(context.Background(), root, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -165,8 +164,6 @@ func TestLargeBlobInHistory_DefaultOff(t *testing.T) {
 func TestLargeBlobInHistory_FindsRemovedBlob(t *testing.T) {
 	root := t.TempDir()
 	gitInit(t, root)
-	runGit(t, root, "config", "user.email", "t@t")
-	runGit(t, root, "config", "user.name", "t")
 
 	// Commit a 6 MiB blob, then remove it.
 	big := make([]byte, 6*1024*1024)
@@ -220,8 +217,6 @@ func TestLargeBlobInHistory_BelowThresholdSilent(t *testing.T) {
 func TestEnumerateHistoryBlobs_Dedupe(t *testing.T) {
 	root := t.TempDir()
 	gitInit(t, root)
-	runGit(t, root, "config", "user.email", "t@t")
-	runGit(t, root, "config", "user.name", "t")
 	if err := os.WriteFile(filepath.Join(root, "a.txt"), []byte("same content"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -248,4 +243,3 @@ func TestEnumerateHistoryBlobs_Dedupe(t *testing.T) {
 		t.Errorf("expected 1 dedupe'd blob entry for a.txt, got %d (blobs=%+v)", count, blobs)
 	}
 }
-

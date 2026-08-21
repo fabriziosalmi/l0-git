@@ -26,8 +26,6 @@ func initRepoWithMode(t *testing.T, files map[string]string, executable []string
 			t.Fatal(err)
 		}
 	}
-	runGit(t, root, "config", "user.email", "t@t")
-	runGit(t, root, "config", "user.name", "t")
 	runGit(t, root, "add", "-A")
 	for _, rel := range executable {
 		// Forces git mode 100755 portably across Linux/macOS/Windows.
@@ -412,8 +410,6 @@ func TestLargeFileTracked_LFSMarkerSkipsFile(t *testing.T) {
 		make([]byte, 10*1024*1024), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	runGit(t, root, "config", "user.email", "t@t")
-	runGit(t, root, "config", "user.name", "t")
 	runGit(t, root, "add", "-A")
 	runGit(t, root, "commit", "-q", "-m", "x")
 
@@ -436,8 +432,6 @@ func TestLargeFileTracked_NoLFSStillFires(t *testing.T) {
 		make([]byte, 10*1024*1024), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	runGit(t, root, "config", "user.email", "t@t")
-	runGit(t, root, "config", "user.name", "t")
 	runGit(t, root, "add", "-A")
 	runGit(t, root, "commit", "-q", "-m", "x")
 

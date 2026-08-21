@@ -19,8 +19,8 @@ func TestMatchesLFSPatterns_Doublestar(t *testing.T) {
 		patterns []string
 		want     bool
 	}{
-		{"design/logo.psd", []string{"**/*.psd"}, true},     // the regression
-		{"logo.psd", []string{"**/*.psd"}, true},            // zero leading segments
+		{"design/logo.psd", []string{"**/*.psd"}, true}, // the regression
+		{"logo.psd", []string{"**/*.psd"}, true},        // zero leading segments
 		{"assets/img/x.bin", []string{"assets/**/*.bin"}, true},
 		{"assets/x.bin", []string{"assets/**/*.bin"}, true}, // **/ matches empty
 		{"assets/anything.dat", []string{"assets/**"}, true},
@@ -39,9 +39,9 @@ func TestMatchesLFSPatterns_Doublestar(t *testing.T) {
 
 func TestMergeConflictMarkers_DetectsAllThreeMarkerKinds(t *testing.T) {
 	cases := map[string]string{
-		"left":   "ok\n<<<<<<< HEAD\nleft side\n=======\nright side\n>>>>>>> branch\n",
-		"right":  "first line\nsecond line\n>>>>>>> remote/main\n",
-		"diff3":  "a\n||||||| merged common ancestors\nbase\n=======\nbranch\n>>>>>>> branch\n",
+		"left":  "ok\n<<<<<<< HEAD\nleft side\n=======\nright side\n>>>>>>> branch\n",
+		"right": "first line\nsecond line\n>>>>>>> remote/main\n",
+		"diff3": "a\n||||||| merged common ancestors\nbase\n=======\nbranch\n>>>>>>> branch\n",
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -64,8 +64,8 @@ func TestMergeConflictMarkers_DetectsAllThreeMarkerKinds(t *testing.T) {
 // chars, prose) must NOT trigger.
 func TestMergeConflictMarkers_NoFalsePositives(t *testing.T) {
 	body := strings.Join([]string{
-		"<<<< three less-than-only",      // 4 < — too short
-		"<<<<<<<<<X — eight, no space",   // 9 with no space → fail
+		"<<<< three less-than-only",    // 4 < — too short
+		"<<<<<<<<<X — eight, no space", // 9 with no space → fail
 		"normal text",
 		"======= three equals separator", // separator alone (we don't trigger)
 		"some <<<<<<< inline doesn't count because it's not at column 0",
@@ -102,8 +102,6 @@ func TestLargeFileTracked_TripsAtThreshold(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "big.bin"), make([]byte, 7*1024*1024), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	runGit(t, root, "config", "user.email", "t@t")
-	runGit(t, root, "config", "user.name", "t")
 	runGit(t, root, "add", "-A")
 	runGit(t, root, "commit", "-q", "-m", "x")
 

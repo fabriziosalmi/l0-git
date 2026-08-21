@@ -215,8 +215,6 @@ func TestDockerfile_SuggestWhenMissing(t *testing.T) {
 	gitInit(t, root)
 	// Initial commit so git ls-files doesn't error on a fresh repo.
 	mustWrite(t, "/dev/null", "") // no-op, just to exercise the helper
-	runGit(t, root, "config", "user.email", "t@t")
-	runGit(t, root, "config", "user.name", "t")
 	runGit(t, root, "commit", "--allow-empty", "-q", "-m", "init")
 
 	// Default behaviour: silent.

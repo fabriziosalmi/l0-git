@@ -10,11 +10,34 @@ import (
 )
 
 // initRepoWithFiles creates a temp git repo, writes the given files, and
-// stages+commits them so they show up in `git ls-files`.
+// STAGES them. It deliberately does not commit: every working-tree gate
+// enumerates through `git ls-files`, which reads the index, so the commit was
+// pure cost — roughly a quarter of the suite's runtime, and the slowest git
+// operation of the four.
+//
+// History gates (secrets_scan_history, large_blob_in_history) walk objects
+// reachable from a ref and see NOTHING in a repo built this way. They must use
+// initRepoWithCommit, or a test that expects findings will pass vacuously.
 func initRepoWithFiles(t *testing.T, files map[string]string) string {
 	t.Helper()
 	root := t.TempDir()
 	gitInit(t, root)
+	writeAll(t, root, files)
+	runGit(t, root, "add", "-A")
+	return root
+}
+
+// initRepoWithCommit is initRepoWithFiles plus a commit, for the tests that
+// genuinely need history to exist.
+func initRepoWithCommit(t *testing.T, files map[string]string) string {
+	t.Helper()
+	root := initRepoWithFiles(t, files)
+	runGit(t, root, "commit", "-q", "-m", "x")
+	return root
+}
+
+func writeAll(t *testing.T, root string, files map[string]string) {
+	t.Helper()
 	for rel, content := range files {
 		full := filepath.Join(root, rel)
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
@@ -24,16 +47,20 @@ func initRepoWithFiles(t *testing.T, files map[string]string) string {
 			t.Fatal(err)
 		}
 	}
-	runGit(t, root, "config", "user.email", "t@t")
-	runGit(t, root, "config", "user.name", "t")
-	runGit(t, root, "add", "-A")
-	runGit(t, root, "commit", "-q", "-m", "x")
-	return root
 }
 
+// runGit shells out to git with the committer identity supplied inline. Tests
+// used to persist it with two `git config` calls per repo, which cost 478
+// extra processes across the suite and bought nothing — `-c` applies to every
+// subcommand, so `commit` is just as happy.
 func runGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	cmd := exec.Command("git", args...)
+	full := append([]string{
+		"-c", "user.email=t@t",
+		"-c", "user.name=t",
+		"-c", "commit.gpgsign=false",
+	}, args...)
+	cmd := exec.Command("git", full...)
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
@@ -221,8 +248,6 @@ func TestSecretsScan_LargeFileSkipped(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "big.txt"), big, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	runGit(t, root, "config", "user.email", "t@t")
-	runGit(t, root, "config", "user.name", "t")
 	runGit(t, root, "add", "-A")
 	runGit(t, root, "commit", "-q", "-m", "big")
 	fs, err := checkSecretsScan(context.Background(), root, nil)

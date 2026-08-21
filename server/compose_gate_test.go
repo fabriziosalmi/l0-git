@@ -227,8 +227,6 @@ func TestCompose_DisabledRules(t *testing.T) {
 func TestCompose_SuggestWhenMissing(t *testing.T) {
 	root := t.TempDir()
 	gitInit(t, root)
-	runGit(t, root, "config", "user.email", "t@t")
-	runGit(t, root, "config", "user.name", "t")
 	runGit(t, root, "commit", "--allow-empty", "-q", "-m", "init")
 
 	// Default: silent.
