@@ -405,6 +405,8 @@ func TestFixturePath_CamelCaseTestDirectories(t *testing.T) {
 	no := []string{
 		"src/contests/leaderboard.go",
 		"internal/latest/version.go",
+		// An API definition is not a test target.
+		"api/OpenApiSpec/paths.yaml",
 		"src/main.go",
 	}
 	for _, p := range yes {
@@ -865,5 +867,40 @@ func TestNetworkScan_UrlListFileSkipped(t *testing.T) {
 	}
 	if len(fs) != 1 {
 		t.Fatalf("the real config literal must still fire; got: %+v", fs)
+	}
+}
+
+// The dependency / generated-directory skips must not swallow first-party
+// source that happens to share a name. Each of these was a plausible false
+// NEGATIVE in the first draft of the rules.
+func TestSkipRules_DoNotSwallowFirstPartySource(t *testing.T) {
+	mustScan := []string{
+		"k8s/manifests/pods/api.yaml", // lower-case: Kubernetes, not CocoaPods
+		"internal/cache/redis.go",     // an ordinary source package
+		"src/caches/store.ts",
+		"api/OpenApiSpec/paths.yaml",
+	}
+	for _, p := range mustScan {
+		if isDependencyPath(p) {
+			t.Errorf("%s must not be treated as a dependency tree", p)
+		}
+		if isGeneratedDirPath(p) {
+			t.Errorf("%s must not be treated as generated output", p)
+		}
+		if isDefaultFixturePath(p) {
+			t.Errorf("%s must not be treated as a fixture path", p)
+		}
+	}
+	mustSkip := map[string]func(string) bool{
+		"ios/Pods/Alamofire/Request.swift":       isDependencyPath,
+		"webapp/node_modules/x/index.js":         isDependencyPath,
+		".stargazer_cache/profiles.json":         isGeneratedDirPath,
+		"docs/.vitepress/dist/index.html":        isGeneratedDirPath,
+		"proxymateTests/ExfiltrationTests.swift": isDefaultFixturePath,
+	}
+	for p, fn := range mustSkip {
+		if !fn(p) {
+			t.Errorf("%s must be skipped", p)
+		}
 	}
 }

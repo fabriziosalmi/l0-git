@@ -515,7 +515,10 @@ func isDefaultFixturePath(rel string) bool {
 // an ordinary lower-case word that merely ends in "tests" (`contests/`) is
 // left alone.
 func isCamelCaseTestDir(name string) bool {
-	for _, suffix := range []string{"Tests", "Test", "Specs", "Spec"} {
+	// Deliberately no "Spec"/"Specs": Ruby's lower-case `spec/` is already an
+	// exact match above, and a CamelCase `OpenApiSpec/` is an API definition,
+	// not a test target — silencing it could hide a real credential.
+	for _, suffix := range []string{"Tests", "Test"} {
 		if len(name) > len(suffix) && strings.HasSuffix(name, suffix) {
 			return true
 		}
@@ -554,10 +557,13 @@ var dependencyDirNames = map[string]bool{
 	".bundle":          true,
 	".cargo":           true,
 	".pub-cache":       true,
-	"pods":             true, // CocoaPods (matched lower-case)
-	"third_party":      true,
-	"thirdparty":       true,
-	"vendor":           true, // Go -mod=vendor, PHP Composer, vendored web assets
+	// NOTE: CocoaPods' "Pods" is deliberately absent from this map and
+	// matched case-sensitively below — a lower-case `pods/` is a normal
+	// Kubernetes manifest directory, and skipping it would hide real
+	// findings in hand-written YAML.
+	"third_party": true,
+	"thirdparty":  true,
+	"vendor":      true, // Go -mod=vendor, PHP Composer, vendored web assets
 }
 
 // isDependencyPath reports whether rel traverses a third-party dependency
@@ -567,6 +573,11 @@ func isDependencyPath(rel string) bool {
 	parts := strings.Split(filepath.ToSlash(rel), "/")
 	for i := 0; i < len(parts)-1; i++ {
 		if dependencyDirNames[strings.ToLower(parts[i])] {
+			return true
+		}
+		// CocoaPods always capitalises; `pods/` in lower case is a
+		// Kubernetes manifest directory.
+		if parts[i] == "Pods" {
 			return true
 		}
 	}
@@ -615,8 +626,10 @@ func isGeneratedDirPath(rel string) bool {
 		if generatedDirNames[p] {
 			return true
 		}
-		if p == "cache" || p == "caches" ||
-			strings.HasSuffix(p, "_cache") || strings.HasSuffix(p, "-cache") ||
+		// Only the decorated forms. A bare `cache/` is a perfectly ordinary
+		// source package (`internal/cache/redis.go`), and skipping it would
+		// hide real credentials and addresses in first-party code.
+		if strings.HasSuffix(p, "_cache") || strings.HasSuffix(p, "-cache") ||
 			strings.HasSuffix(p, ".cache") {
 			return true
 		}
