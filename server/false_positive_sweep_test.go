@@ -904,3 +904,31 @@ func TestSkipRules_DoNotSwallowFirstPartySource(t *testing.T) {
 		}
 	}
 }
+
+// A strong password contains `$`, `^`, `+`, `*`, `?` constantly. The
+// regex-syntax check must recognise a detection rule without silencing one —
+// a suppressed credential is the leak this gate exists to catch.
+func TestConnectionStrings_RegexSyntaxVsStrongPassword(t *testing.T) {
+	rules := []string{`(\S+:)?\S+@`, `[^:]+`, `[a-zA-Z0-9_\-]+`, `mongodb|postgres`}
+	for _, r := range rules {
+		if !regexMetaRe.MatchString(r) {
+			t.Errorf("%q is regex syntax and must be recognised", r)
+		}
+	}
+	for _, p := range []string{`Xk9$mQ2!vL`, `p+ss?word`, `A^b*c$d`, `readonly_dev_pass`} {
+		if regexMetaRe.MatchString(p) {
+			t.Errorf("%q is a password, not a pattern", p)
+		}
+	}
+	// End to end: a URL with a metacharacter-rich password still fires.
+	fs := scanConnectionLine("conf.py", 1, []byte(`DSN = "postgres://app:Xk9$mQ2!vL@db.acme.io:5432/app"`+"\n"))
+	found := false
+	for _, f := range fs {
+		if strings.HasSuffix(f.FilePath, ":creds_in_url") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("a strong-password credential must still fire: %+v", fs)
+	}
+}

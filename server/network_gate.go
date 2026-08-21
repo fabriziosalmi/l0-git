@@ -249,9 +249,12 @@ func scanNetworkLine(rel string, lineNum int, content []byte, reportLoopback, re
 
 	// An ASN written in prose ("| Cloudflare | ~19% | 310+ | AS13335 |",
 	// "traffic flows from Verizon (AS701) to China Telecom (AS4134)") is
-	// describing routing, not wiring it. Only a config/source file can
+	// describing routing, not wiring it. Only a config or source file can
 	// actually pin a project to an ASN.
-	for _, m := range asnFindAll(content, prose) {
+	if prose {
+		return out
+	}
+	for _, m := range asnRe.FindAll(content, -1) {
 		text := string(m)
 		// Trim "AS" prefix and validate.
 		num, err := strconv.Atoi(text[2:])
@@ -563,12 +566,4 @@ func isLicenseBasename(name string) bool {
 		return true
 	}
 	return strings.HasPrefix(lower, "license-") || strings.HasPrefix(lower, "licence-")
-}
-
-// asnFindAll returns ASN matches, or nothing at all in prose files.
-func asnFindAll(content []byte, prose bool) [][]byte {
-	if prose {
-		return nil
-	}
-	return asnRe.FindAll(content, -1)
 }

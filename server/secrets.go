@@ -528,9 +528,6 @@ func insideStringLiteral(content []byte, at int) bool {
 	return false
 }
 
-// syntheticRunRe is not usable here (Go's RE2 has no backreferences), so
-// hasSequentialRun does the work directly.
-
 // sequentialRunFloor is how many consecutive characters make a string
 // obviously hand-typed filler. Eight is long enough that no real credential
 // has ever contained such a run by chance (probability ~62^-7 per position)

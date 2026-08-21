@@ -508,12 +508,18 @@ func credsAreNonSecret(rawURL string) bool {
 	return isPlaceholderPassword(rawPass)
 }
 
-// regexMetaRe matches the characters that only appear in a pattern, never in
-// a credential a server would accept. Their presence means the "URL" is a
-// detection rule or a format string:
+// regexMetaRe matches regex SYNTAX — an escape sequence, a character class,
+// a group, or an alternation — rather than individual metacharacters. Their
+// presence means the "URL" is a detection rule or a format string:
 //
 //	(?i)(mongodb(\+srv)?://|postgres(ql)?://)(\S+:)?\S+@
-var regexMetaRe = regexp.MustCompile(`[\\()|?*+\[\]^$]`)
+//
+// Deliberately structural. Matching bare `$ ^ + * ?` would have been simpler
+// and wrong: a strong password contains those constantly (`Xk9$mQ2!vL`), and
+// silencing one is a leak this gate exists to catch. A backslash, a bracket
+// class, a parenthesised group, or a pipe never appear in a credential a
+// server would accept inside a URL.
+var regexMetaRe = regexp.MustCompile(`\\[A-Za-z\\.]|\[[^\]]*\]|\([^)]*\)|\|`)
 
 // placeholderWordRe matches a credential segment that is a stand-in word
 // rather than a value: `pass`, `password`, `secret`, `token`, `xxx`, `***`,

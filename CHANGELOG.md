@@ -46,6 +46,13 @@ from the condition they detect.
 - **`html_lint target_blank_no_rel` no longer asserts a vulnerability that does not exist.** Its advice said the new tab "can read `window.opener` and run reverse-tabnabbing attacks". Every evergreen browser has implied `rel="noopener"` for `target="_blank"` since 2021 (Chrome 88, Firefox 79, Safari 12.1, WHATWG HTML #4078), so that hazard is unreachable. What remains — withholding the Referer header, and supporting pre-2021 browsers — is a preference, so the rule drops from **warning** to **info** and says what is actually true.
 - **`network_scan` skips URL-list files.** A 108-line `lista.txt` of bare `http://<ip>:<port>` lines is a scan-target dump; its addresses are the payload. `connection_strings` already recognised the URL-list form via the same exact per-line test — `network_scan` saw only the bare-address form and reported one finding per line.
 
+Self-review of the sweep's own suppressions, held to the same standard as the
+false positives it removed — a skip that silences real source is worse than the
+noise it removes:
+
+- **The regex-syntax check is structural, not per-character.** `creds_in_url` treats a URL as a detection rule when it contains regex *syntax* — an escape sequence, a character class, a parenthesised group, an alternation. Matching bare `$ ^ + * ?` would have been simpler and wrong: a strong password contains those constantly (`Xk9$mQ2!vL`), and silencing one is exactly the leak this gate exists to catch.
+- **`Pods/` is matched case-sensitively**, so a lower-case `k8s/manifests/pods/` of hand-written YAML is still scanned; **a bare `cache/` is no longer treated as tool output**, because `internal/cache/redis.go` is an ordinary source package; and the CamelCase fixture rule **drops `Spec`/`Specs`**, since an `OpenApiSpec/` is an API definition rather than a test target.
+
 - **`vendored_dir_tracked` reports the outermost container.** `.venv/`, `venv/`, and `site-packages/` were missing from the prefix list, so a Python virtualenv was reported as a `build/` directory seven levels inside it.
 
 ## [0.1.26] - 2026-07-19
