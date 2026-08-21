@@ -27,6 +27,16 @@ type Gate struct {
 	// or nil when the user didn't configure anything; gates that don't
 	// take options simply ignore it.
 	Check func(ctx context.Context, projectRoot string, opts json.RawMessage) ([]Finding, error)
+	// NewOptions returns a pointer to a zero value of this gate's options
+	// struct, or nil for gates that take none.
+	//
+	// It exists so `gate_options.<gate_id>` can be validated before any gate
+	// runs. Every option parser decodes with `_ = json.Unmarshal(...)`: a
+	// mistyped key or a string where a number belongs made the decode fail,
+	// the error was discarded, and the gate ran on defaults. The user's
+	// config was ignored with no error, no warning, and exit 0 — a
+	// `"threshold_mb": "20"` silently stayed 5. See validateGateOptions.
+	NewOptions func() any
 }
 
 // gateRegistry returns all built-in gates. Adding a new gate is a one-line
@@ -112,6 +122,7 @@ func gateRegistry() []Gate {
 			Severity:    SeverityError,
 			Tags:        "security,git-hygiene",
 			Check:       checkSecretsScan,
+			NewOptions:  func() any { return &scanOptions{} },
 		},
 		{
 			ID:          "tests_present",
@@ -128,6 +139,7 @@ func gateRegistry() []Gate {
 			Severity:    SeverityWarning,
 			Tags:        "quality,build",
 			Check:       checkConfigParse,
+			NewOptions:  func() any { return &configParseOptions{} },
 		},
 		{
 			ID:          "merge_conflict_markers",
@@ -136,6 +148,7 @@ func gateRegistry() []Gate {
 			Severity:    SeverityError,
 			Tags:        "git-hygiene",
 			Check:       checkMergeConflictMarkers,
+			NewOptions:  func() any { return &scanOptions{} },
 		},
 		{
 			ID:          "large_file_tracked",
@@ -144,6 +157,7 @@ func gateRegistry() []Gate {
 			Severity:    SeverityWarning,
 			Tags:        "git-hygiene",
 			Check:       checkLargeFileTracked,
+			NewOptions:  func() any { return &largeFileOptions{} },
 		},
 		{
 			ID:          "network_scan",
@@ -152,6 +166,7 @@ func gateRegistry() []Gate {
 			Severity:    SeverityInfo,
 			Tags:        "security,network",
 			Check:       checkNetworkScan,
+			NewOptions:  func() any { return &networkScanOptions{} },
 		},
 		{
 			ID:          "connection_strings",
@@ -160,6 +175,7 @@ func gateRegistry() []Gate {
 			Severity:    SeverityInfo,
 			Tags:        "security,network",
 			Check:       checkConnectionStrings,
+			NewOptions:  func() any { return &scanOptions{} },
 		},
 		{
 			ID:          "version_drift",
@@ -176,6 +192,7 @@ func gateRegistry() []Gate {
 			Severity:    SeverityWarning,
 			Tags:        "containers,security,build",
 			Check:       checkDockerfileLint,
+			NewOptions:  func() any { return &dockerfileLintOptions{} },
 		},
 		{
 			ID:          "compose_lint",
@@ -184,6 +201,7 @@ func gateRegistry() []Gate {
 			Severity:    SeverityWarning,
 			Tags:        "containers,security,build",
 			Check:       checkComposeLint,
+			NewOptions:  func() any { return &composeLintOptions{} },
 		},
 		{
 			ID:          "unexpected_executable_bit",
@@ -192,6 +210,7 @@ func gateRegistry() []Gate {
 			Severity:    SeverityWarning,
 			Tags:        "git-hygiene",
 			Check:       checkUnexpectedExecutableBit,
+			NewOptions:  func() any { return &scanOptions{} },
 		},
 		{
 			ID:          "vendored_dir_tracked",
@@ -200,6 +219,7 @@ func gateRegistry() []Gate {
 			Severity:    SeverityWarning,
 			Tags:        "git-hygiene",
 			Check:       checkVendoredDirTracked,
+			NewOptions:  func() any { return &scanOptions{} },
 		},
 		{
 			ID:          "ide_artifact_tracked",
@@ -208,6 +228,7 @@ func gateRegistry() []Gate {
 			Severity:    SeverityWarning,
 			Tags:        "git-hygiene",
 			Check:       checkIdeArtifactTracked,
+			NewOptions:  func() any { return &scanOptions{} },
 		},
 		{
 			ID:          "filename_quality",
@@ -216,6 +237,7 @@ func gateRegistry() []Gate {
 			Severity:    SeverityInfo,
 			Tags:        "git-hygiene,quality",
 			Check:       checkFilenameQuality,
+			NewOptions:  func() any { return &scanOptions{} },
 		},
 		{
 			ID:          "nvmrc_missing",
@@ -232,6 +254,7 @@ func gateRegistry() []Gate {
 			Severity:    SeverityWarning,
 			Tags:        "accessibility,frontend",
 			Check:       checkHtmlLint,
+			NewOptions:  func() any { return &htmlLintOptions{} },
 		},
 		{
 			ID:          "css_lint",
@@ -240,6 +263,7 @@ func gateRegistry() []Gate {
 			Severity:    SeverityWarning,
 			Tags:        "frontend,quality",
 			Check:       checkCssLint,
+			NewOptions:  func() any { return &cssLintOptions{} },
 		},
 		{
 			ID:          "gitignore_coverage",
@@ -248,6 +272,7 @@ func gateRegistry() []Gate {
 			Severity:    SeverityWarning,
 			Tags:        "git-hygiene",
 			Check:       checkGitignoreCoverage,
+			NewOptions:  func() any { return &gitignoreCoverageOptions{} },
 		},
 		{
 			ID:          "code_of_conduct_present",
@@ -280,6 +305,7 @@ func gateRegistry() []Gate {
 			Severity:    SeverityWarning,
 			Tags:        "documentation,accessibility",
 			Check:       checkMarkdownLint,
+			NewOptions:  func() any { return &markdownLintOptions{} },
 		},
 		{
 			ID:          "dead_placeholders",
@@ -288,6 +314,7 @@ func gateRegistry() []Gate {
 			Severity:    SeverityInfo,
 			Tags:        "documentation,quality",
 			Check:       checkDeadPlaceholders,
+			NewOptions:  func() any { return &deadPlaceholdersOptions{} },
 		},
 		{
 			ID:          "secrets_scan_history",
@@ -296,6 +323,7 @@ func gateRegistry() []Gate {
 			Severity:    SeverityWarning,
 			Tags:        "security,history",
 			Check:       checkSecretsScanHistory,
+			NewOptions:  func() any { return &secretsHistoryOptions{} },
 		},
 		{
 			ID:          "large_blob_in_history",
@@ -304,6 +332,7 @@ func gateRegistry() []Gate {
 			Severity:    SeverityWarning,
 			Tags:        "git-hygiene,history",
 			Check:       checkLargeBlobInHistory,
+			NewOptions:  func() any { return &largeBlobHistoryOptions{} },
 		},
 		{
 			ID:          "branch_protection_declared",
@@ -312,6 +341,7 @@ func gateRegistry() []Gate {
 			Severity:    SeverityInfo,
 			Tags:        "governance,security",
 			Check:       checkBranchProtectionDeclared,
+			NewOptions:  func() any { return &branchProtectionOptions{} },
 		},
 	}
 }
@@ -396,11 +426,18 @@ func RunChecks(ctx context.Context, store *Store, projectRoot, gateID string) (*
 	}
 
 	out := &CheckResult{Project: abs, GatesRun: []string{}, Findings: []Finding{}}
+	var configProblems []string
 	if cfgErr != nil {
 		// Surface but don't abort — bad config shouldn't take the whole
 		// run with it, and the user needs visibility to fix it.
-		out.ConfigError = cfgErr.Error()
+		configProblems = append(configProblems, cfgErr.Error())
 	}
+	// Validate against the whole registry rather than the possibly-narrowed
+	// `gates` slice: `lgit check . <one_gate>` should still tell you that a
+	// different gate's options are malformed, since the file is wrong either
+	// way and you would otherwise only learn on a full run.
+	configProblems = append(configProblems, validateGateOptions(cfg, gateRegistry())...)
+	out.ConfigError = strings.Join(configProblems, "; ")
 
 	for _, g := range gates {
 		if cfg.ignored(g.ID) {

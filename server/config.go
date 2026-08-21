@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 )
 
 // ProjectConfig is the optional .l0git.json contract a project can drop at
@@ -103,6 +104,66 @@ func (c *ProjectConfig) severityOverride(gateID string) (string, bool) {
 	}
 	s, ok := c.Severity[gateID]
 	return s, ok
+}
+
+// validateGateOptions strictly decodes every `gate_options` sub-tree against
+// the gate that owns it, and returns one human-readable problem per offence.
+//
+// This is the check that was missing. Each gate parses its own options with
+// `_ = json.Unmarshal(opts, &o)`, so a decode failure — a mistyped key, a
+// string where a number belongs, an object where a list belongs — was thrown
+// away and the gate silently ran on defaults. `"threshold_mb": "20"` left the
+// threshold at 5, `"exclude_path"` excluded nothing, and neither produced an
+// error, a warning, or a non-zero exit. The config file did not do what it
+// said and there was no way to notice.
+//
+// Validation runs against what the user actually wrote, not optionsFor()'s
+// output, which injects the merged top-level exclude_paths.
+//
+// Problems are reported, never fatal: RunChecks folds them into
+// CheckResult.ConfigError, which is the channel the top-level config error
+// already uses, for the reason recorded there — a bad config should not take
+// the whole run with it.
+func validateGateOptions(c *ProjectConfig, gates []Gate) []string {
+	if c == nil || len(c.GateOptions) == 0 {
+		return nil
+	}
+	byID := make(map[string]Gate, len(gates))
+	for _, g := range gates {
+		byID[g.ID] = g
+	}
+	// Deterministic order: the caller renders this into a single string, and
+	// map iteration would reshuffle it between otherwise identical runs.
+	ids := make([]string, 0, len(c.GateOptions))
+	for id := range c.GateOptions {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
+	var problems []string
+	for _, id := range ids {
+		raw := c.GateOptions[id]
+		g, ok := byID[id]
+		if !ok {
+			problems = append(problems, fmt.Sprintf(
+				"gate_options.%s: no gate with that id (run `lgit gates` for the list)", id))
+			continue
+		}
+		if g.NewOptions == nil {
+			problems = append(problems, fmt.Sprintf(
+				"gate_options.%s: this gate takes no options", id))
+			continue
+		}
+		if len(raw) == 0 {
+			continue
+		}
+		dec := json.NewDecoder(bytes.NewReader(raw))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(g.NewOptions()); err != nil {
+			problems = append(problems, fmt.Sprintf("gate_options.%s: %v", id, err))
+		}
+	}
+	return problems
 }
 
 // optionsFor returns the gate-specific JSON sub-tree from gate_options merged
