@@ -36,7 +36,7 @@ export default defineConfig({
       { text: 'Guide', link: '/guide/introduction' },
       { text: 'Gates', link: '/gates/' },
       { text: 'CLI', link: '/cli/' },
-      { text: 'MCP', link: '/mcp/' }
+      { text: 'MCP', link: '/guide/mcp' }
     ],
 
     sidebar: {
@@ -45,87 +45,109 @@ export default defineConfig({
           text: 'Introduction',
           items: [
             { text: 'What is l0-git?', link: '/guide/introduction' },
-            { text: 'Getting Started', link: '/guide/getting-started' },
+            { text: 'Getting started', link: '/guide/getting-started' },
             { text: 'Configuration', link: '/guide/configuration' }
           ]
         },
         {
           text: 'Integration',
           items: [
-            { text: 'VS Code Extension', link: '/guide/vscode' },
-            { text: 'Claude Code / MCP', link: '/guide/mcp' }
+            { text: 'VS Code extension', link: '/guide/vscode' },
+            { text: 'Claude Code / MCP', link: '/guide/mcp' },
+            { text: 'CLI reference', link: '/cli/' }
           ]
         }
       ],
       '/gates/': [
         {
-          text: 'Project Hygiene',
+          text: 'Project hygiene',
+          collapsed: false,
           items: [
-            { text: 'README Present', link: '/gates/readme-present' },
-            { text: 'LICENSE Present', link: '/gates/license-present' },
-            { text: 'CONTRIBUTING Present', link: '/gates/contributing-present' },
-            { text: 'SECURITY Present', link: '/gates/security-present' },
-            { text: 'CHANGELOG Present', link: '/gates/changelog-present' },
-            { text: 'CODE_OF_CONDUCT Present', link: '/gates/code-of-conduct-present' }
-          ]
-        },
-        {
-          text: 'Git & Repository',
-          items: [
-            { text: '.gitignore Present', link: '/gates/gitignore-present' },
-            { text: 'Gitignore Coverage', link: '/gates/gitignore-coverage' },
-            { text: 'Merge Conflict Markers', link: '/gates/merge-conflict-markers' },
-            { text: 'Large File Tracked', link: '/gates/large-file-tracked' },
-            { text: 'IDE Artifact Tracked', link: '/gates/ide-artifact-tracked' },
-            { text: 'Vendored Directory Tracked', link: '/gates/vendored-dir-tracked' },
-            { text: 'Unexpected Executable Bit', link: '/gates/unexpected-executable-bit' },
-            { text: 'Filename Quality', link: '/gates/filename-quality' }
-          ]
-        },
-        {
-          text: 'Security',
-          items: [
-            { text: 'Secrets Scan', link: '/gates/secrets-scan' },
-            { text: 'Connection Strings', link: '/gates/connection-strings' },
-            { text: 'Network Scan', link: '/gates/network-scan' },
-            { text: 'Secrets Scan History', link: '/gates/secrets-scan-history' }
-          ]
-        },
-        {
-          text: 'Quality & Release',
-          items: [
-            { text: 'Tests Present', link: '/gates/tests-present' },
-            { text: 'Version Drift', link: '/gates/version-drift' },
-            { text: 'NVMRC Missing', link: '/gates/nvmrc-missing' }
-          ]
-        },
-        {
-          text: 'Specialized Lints',
-          items: [
-            { text: 'Dockerfile Lint', link: '/gates/dockerfile-lint' },
-            { text: 'Compose Lint', link: '/gates/compose-lint' },
-            { text: 'HTML Lint', link: '/gates/html-lint' },
-            { text: 'CSS Lint', link: '/gates/css-lint' },
-            { text: 'Markdown Lint', link: '/gates/markdown-lint' }
+            { text: 'README present', link: '/gates/readme-present' },
+            { text: 'LICENSE present', link: '/gates/license-present' },
+            { text: 'CONTRIBUTING present', link: '/gates/contributing-present' },
+            { text: 'SECURITY policy present', link: '/gates/security-present' },
+            { text: 'CHANGELOG present', link: '/gates/changelog-present' },
+            { text: 'CODE_OF_CONDUCT present', link: '/gates/code-of-conduct-present' },
+            { text: 'Pull request template present', link: '/gates/pr-template-present' },
+            { text: 'Issue templates present', link: '/gates/issue-template-present' },
+            { text: 'CI workflow present', link: '/gates/ci-workflow-present' },
           ]
         },
         {
           text: 'Governance',
+          collapsed: false,
           items: [
-            { text: 'CODEOWNERS Present', link: '/gates/codeowners-present' },
-            { text: 'Branch Protection', link: '/gates/branch-protection-declared' },
-            { text: 'PR Template Present', link: '/gates/pr-template-present' },
-            { text: 'Issue Template Present', link: '/gates/issue-template-present' }
+            { text: 'CODEOWNERS present', link: '/gates/codeowners-present' },
+            { text: 'Branch protection declared', link: '/gates/branch-protection-declared' },
           ]
         },
         {
-          text: 'Other',
+          text: 'Git hygiene',
+          collapsed: false,
           items: [
-            { text: 'Dead Placeholders', link: '/gates/dead-placeholders' },
-            { text: 'Uncommented Env Example', link: '/gates/env-example-uncommented' },
-            { text: 'Large Blob in History', link: '/gates/large-blob-in-history' }
+            { text: '.gitignore present', link: '/gates/gitignore-present' },
+            { text: '.gitignore coverage', link: '/gates/gitignore-coverage' },
+            { text: 'Merge conflict markers', link: '/gates/merge-conflict-markers' },
+            { text: 'Large file tracked', link: '/gates/large-file-tracked' },
+            { text: 'Vendored directory tracked', link: '/gates/vendored-dir-tracked' },
+            { text: 'Editor/IDE artefact tracked', link: '/gates/ide-artifact-tracked' },
+            { text: 'Unexpected executable bit', link: '/gates/unexpected-executable-bit' },
+            { text: 'File name quality', link: '/gates/filename-quality' },
           ]
-        }
+        },
+        {
+          text: 'Security',
+          collapsed: false,
+          items: [
+            { text: 'Secrets scan', link: '/gates/secrets-scan' },
+            { text: 'Connection strings', link: '/gates/connection-strings' },
+            { text: 'Network scan', link: '/gates/network-scan' },
+          ]
+        },
+        {
+          text: 'Git history (opt-in)',
+          collapsed: false,
+          items: [
+            { text: 'Secrets scan (history)', link: '/gates/secrets-scan-history' },
+            { text: 'Large blob in history', link: '/gates/large-blob-in-history' },
+          ]
+        },
+        {
+          text: 'Containers',
+          collapsed: false,
+          items: [
+            { text: 'Dockerfile lint', link: '/gates/dockerfile-lint' },
+            { text: 'Compose lint', link: '/gates/compose-lint' },
+          ]
+        },
+        {
+          text: 'Frontend & accessibility',
+          collapsed: false,
+          items: [
+            { text: 'HTML lint', link: '/gates/html-lint' },
+            { text: 'CSS lint', link: '/gates/css-lint' },
+          ]
+        },
+        {
+          text: 'Documentation',
+          collapsed: false,
+          items: [
+            { text: 'Markdown lint', link: '/gates/markdown-lint' },
+            { text: 'Dead placeholders', link: '/gates/dead-placeholders' },
+            { text: 'Uncommented .env.example key', link: '/gates/env-example-uncommented' },
+          ]
+        },
+        {
+          text: 'Quality & release',
+          collapsed: false,
+          items: [
+            { text: 'Tests present', link: '/gates/tests-present' },
+            { text: 'Config parse error', link: '/gates/config-parse-error' },
+            { text: 'Version drift', link: '/gates/version-drift' },
+            { text: 'Missing .nvmrc / .node-version', link: '/gates/nvmrc-missing' },
+          ]
+        },
       ]
     },
 
