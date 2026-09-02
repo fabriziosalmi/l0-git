@@ -262,6 +262,7 @@ func (s *Store) List(ctx context.Context, f FindingFilter) ([]Finding, error) {
 	if !ok {
 		order = sortOrderings[""]
 	}
+	// slopless-disable-next-line VBC-004 -- order comes from the sortOrderings whitelist above
 	q += ` ORDER BY ` + order + ` LIMIT ? OFFSET ?`
 	args = append(args, f.Limit, f.Offset)
 
@@ -393,6 +394,7 @@ func (s *Store) Stats(ctx context.Context, project string) (*FindingsStats, erro
 	// Status spans every row (so users see how many were resolved/ignored).
 	// Total derives from it.
 	if err := s.scanCount(ctx, &out.ByStatus,
+		// slopless-disable-next-line VBC-004 -- whereProject and openClause are literals from projectClause/appendCondition; the values travel in projectArgs
 		`SELECT status, COUNT(*) FROM findings`+whereProject+` GROUP BY status`, projectArgs); err != nil {
 		return nil, err
 	}
@@ -406,11 +408,13 @@ func (s *Store) Stats(ctx context.Context, project string) (*FindingsStats, erro
 	openClause := whereProject + appendCondition(whereProject, "status = 'open'")
 
 	if err := s.scanCount(ctx, &out.BySeverity,
+		// slopless-disable-next-line VBC-004 -- whereProject and openClause are literals from projectClause/appendCondition; the values travel in projectArgs
 		`SELECT severity, COUNT(*) FROM findings`+openClause+` GROUP BY severity`, projectArgs); err != nil {
 		return nil, err
 	}
 
 	rows, err := s.db.QueryContext(ctx,
+		// slopless-disable-next-line VBC-004 -- whereProject and openClause are literals from projectClause/appendCondition; the values travel in projectArgs
 		`SELECT gate_id, COUNT(*) AS n FROM findings`+openClause+
 			` GROUP BY gate_id ORDER BY n DESC, gate_id ASC LIMIT 50`, projectArgs...)
 	if err != nil {
@@ -441,6 +445,7 @@ func (s *Store) Stats(ctx context.Context, project string) (*FindingsStats, erro
 
 	// Tags: explode CSV in Go since SQLite has no native split.
 	tagRows, err := s.db.QueryContext(ctx,
+		// slopless-disable-next-line VBC-004 -- whereProject and openClause are literals from projectClause/appendCondition; the values travel in projectArgs
 		`SELECT tags FROM findings`+openClause+` AND tags != ''`, projectArgs...)
 	if err != nil {
 		return nil, err
@@ -472,6 +477,7 @@ func projectClause(project string) (string, []any) {
 
 func appendCondition(existing, cond string) string {
 	if existing == "" {
+		// slopless-disable-next-line VBC-004 -- cond is a literal fragment from the callers
 		return " WHERE " + cond
 	}
 	return " AND " + cond
