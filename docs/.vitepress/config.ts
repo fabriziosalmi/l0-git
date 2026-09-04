@@ -2,6 +2,9 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   base: '/l0-git/',
+  // The hostname carries the base path on purpose: VitePress joins it with each
+  // page's route, so without it every URL in the sitemap would point at a 404.
+  sitemap: { hostname: 'https://fabriziosalmi.github.io/l0-git/' },
   title: "l0-git",
   description: "Deterministic project-hygiene quality gates for the open workspace",
   head: [
