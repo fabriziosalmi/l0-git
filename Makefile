@@ -1,7 +1,10 @@
 # l0-git developer Makefile.
 # Convenience targets only — CI does the canonical builds.
 
-VERSION ?= dev
+# Same format as the release binaries: git describe without the leading v.
+# `make install-mcp` builds through here, so a fixed `dev` stamped over a
+# released binary.
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//' || echo dev)
 LDFLAGS  := -s -w -X main.Version=$(VERSION)
 
 .PHONY: help build test vet extension-bins extension-compile vsix clean install-mcp update update-local status release-patch release-minor release-major release-dry
@@ -45,7 +48,9 @@ vsix: extension-bins extension-compile
 install-mcp: build
 	@echo "Registering lgit MCP server with Claude Code…"
 	@command -v claude >/dev/null 2>&1 || { echo "claude CLI not found in PATH" >&2; exit 1; }
-	claude mcp add l0-git $(CURDIR)/server/lgit mcp
+	-claude mcp remove -s local l0-git >/dev/null 2>&1
+	-claude mcp remove -s user l0-git >/dev/null 2>&1
+	claude mcp add -s user l0-git $(CURDIR)/server/lgit mcp
 
 update:
 	@bash scripts/update.sh
