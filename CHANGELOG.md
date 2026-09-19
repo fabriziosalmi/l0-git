@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-19
+
 ### Added
 
 - **`ignored_file_tracked`** — reports files that are in the git index even though the repository's own `.gitignore` excludes them: committed before the rule existed, or force-added. The index and the ignore rules disagree, and the gate says so without guessing which side is right — the fix is either `git rm --cached` or a `!` negation that writes the exception down. Grouped by directory, and root-level files as one group. Only **committed** `.gitignore` files are consulted, never `.git/info/exclude` or the user's global excludes, so the result is the same on every machine. `.gitkeep` files, env templates and vendored trees are left to the gates that own them. On the author's 100 public repositories it found 417 such files in 26 repositories, among them private keys under an excluded `data/`, a committed `.env`, a coverage report and 259 generated reports.
