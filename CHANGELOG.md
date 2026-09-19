@@ -258,21 +258,26 @@ noise it removes:
 
 ## [0.1.16] - 2026-05-11
 
-### Changed
+### Fixed
 
-- Release 0.1.16 (no notes — fill me in)
+- **The Overview dashboard's CSP nonce was predictable.** It was generated with `Math.random`; it now draws 24 bytes from Node's `crypto.randomBytes`, which is the point of a per-render nonce.
+- **The Overview dashboard is operable from the keyboard.** Clickable rows and chips carry `role="button"` and `tabindex="0"`, respond to Enter and Space, and show `:focus-visible` styles — every filter the mouse can drive, Tab users can too.
+- **Run and Refresh no longer start parallel scans on repeated clicks.** Both disable themselves and mark the page `aria-busy` until the next render replaces them.
+- **A failed stats call renders a consistent error page** instead of diverging from the dashboard's own styling and security policy.
 
 ## [0.1.15] - 2026-05-11
 
-### Changed
+### Fixed
 
-- Release 0.1.15 (no notes — fill me in)
+- **l0-git reported findings on its own source.** `network_scan` skips `CHANGELOG`/`HISTORY`/`RELEASES`/`CHANGES` — release notes describe network behaviour rather than wiring it — and matches in documentation ranges (RFC 5737, 2544, 6598, MCAST-TEST-NET) no longer produce findings. `.l0git.json` completes the exclusions for the gate sources that necessarily contain what they detect.
+- **`markdown_lint` resolves extensionless links** by trying `target.md`, `target.markdown`, `target/index.md` and `target/index.markdown`, as VitePress, MkDocs and Docusaurus do. A link with a mistyped extension still fires.
+- **The documentation site did not build or style correctly.** `docs/package.json` declares `"type": "module"` for VitePress's ESM build, and the base path is set to `/l0-git/`. The same change moved `logo.svg` into `docs/.vitepress/public`, which VitePress does not publish; the navbar logo and favicon returned 404 until 0.1.28 moved it back to `docs/public`.
 
 ## [0.1.14] - 2026-05-11
 
-### Changed
+### Added
 
-- Release 0.1.14 (no notes — fill me in)
+- **Documentation site.** A VitePress site under `docs/`, deployed to GitHub Pages by a new workflow: introduction, getting started, configuration, CLI reference, a gate index, and pages for `secrets_scan` and `dockerfile_lint`. The sidebar also linked gate pages that did not exist yet; they were written in 0.1.28.
 
 ## [0.1.13] - 2026-05-11
 
@@ -396,6 +401,18 @@ noise it removes:
 - Sidebar empty state now distinguishes "no actionable findings, N info
   hidden" from "no findings at all" so a clean tree no longer disguises
   pending audit work.
+
+## [0.1.5] - 2026-05-07
+
+### Added
+
+- **Governance files for the project itself**: `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1) and `.github/CODEOWNERS`.
+
+### Fixed
+
+- **l0-git scans clean against itself.** `.l0git.json` excludes, per gate, the files that legitimately contain the patterns they detect — gate sources, the README and the CHANGELOG — for `dead_placeholders`, `network_scan` and `connection_strings`.
+- **The CI workflow scaffold no longer trips `dead_placeholders`.** The stub the extension writes for `ci_workflow_present` contained a literal `TODO:`, so a project adopting it immediately reported a placeholder.
+- **Dead code removed** from `secrets_history_gate.go` and a test file: unused imports held in place by `var _ = …` stubs after an earlier refactor.
 
 ## [0.1.4] - 2026-05-07
 
