@@ -467,3 +467,37 @@ func TestConnectionStrings_RealEndpointsStillFire(t *testing.T) {
 		}
 	}
 }
+
+func credsSeverity(t *testing.T, url string) string {
+	t.Helper()
+	for _, f := range scanConnectionLine("x.py", 1, []byte(`u = "`+url+`"`+"\n")) {
+		if strings.HasSuffix(f.FilePath, ":creds_in_url") {
+			return f.Severity
+		}
+	}
+	return ""
+}
+
+// A password-only userinfo is still a credential. These were reported at info
+// as a generic db_uri, and rediss:// not at all.
+func TestConnectionStrings_EmptyUsernameCredsFire(t *testing.T) {
+	for _, u := range []string{
+		"redis://:Xk9mQ2vR7tLp4Zw8@cache.acme-corp.io:6379/0",
+		"rediss://:Xk9mQ2vR7tLp4Zw8@cache.acme-corp.io:6380",
+		"amqp://:Xk9mQ2vR7tLp4Zw8@mq.acme-corp.io:5672",
+	} {
+		if got := credsSeverity(t, u); got != SeverityError {
+			t.Errorf("%s: severity %q, want error", u, got)
+		}
+	}
+	// The template rules apply to a password-only credential exactly as to
+	// any other.
+	for _, u := range []string{
+		"redis://:${REDIS_PASSWORD}@cache.acme-corp.io:6379",
+		"redis://:{password}@cache.acme-corp.io:6379",
+	} {
+		if got := credsSeverity(t, u); got != "" {
+			t.Errorf("%s: templated password reported at %q", u, got)
+		}
+	}
+}

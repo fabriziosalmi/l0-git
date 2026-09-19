@@ -35,7 +35,12 @@ var connectionPatterns = []connectionPattern{
 		severity: SeverityError,
 		title:    "Credentials in connection URL",
 		advice:   "Remove the inline user:password from the URL — read it from a vault, env var, or secret manager instead. Also rotate, since the URL has been committed.",
-		re:       regexp.MustCompile(`\b[a-zA-Z][a-zA-Z0-9+\-.]*://[^\s/@:"']+:[^\s/@"']+@[^\s"']+`),
+		// The username may be EMPTY: `redis://:password@host` is how Redis,
+		// and plenty of AMQP clients, spell a password-only credential. With
+		// `+` there the rule never matched those, so a production Redis
+		// password surfaced as an info-level db_uri — or, for rediss://,
+		// not at all.
+		re: regexp.MustCompile(`\b[a-zA-Z][a-zA-Z0-9+\-.]*://[^\s/@:"']*:[^\s/@"']+@[^\s"']+`),
 	},
 	{
 		id:       "ftp",
