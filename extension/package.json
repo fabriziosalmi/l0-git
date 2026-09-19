@@ -2,7 +2,7 @@
   "name": "l0-git",
   "displayName": "l0-git",
   "description": "36 deterministic quality gates for the open repository — secrets, Dockerfiles, CI, git hygiene — in the sidebar and Problems pane. The same findings in the CLI and in Claude Code over MCP.",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "publisher": "fabriziosalmi",
   "license": "MIT",
   "icon": "media/icon.png",

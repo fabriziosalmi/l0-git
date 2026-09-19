@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-19
+
 ### Added
 
 - A Marketplace page for the extension: README with a real Overview render, a banner and the CLI demo; keywords, gallery banner and pricing; a CHANGELOG pointer. The icon is now 256 px.
