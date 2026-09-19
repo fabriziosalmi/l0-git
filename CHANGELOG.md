@@ -12,6 +12,7 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- **CI fails when l0-git reports findings on itself.** A new `self-scan` job runs `lgit check .` and fails the build on any finding, or on a `.l0git.json` that does not validate, annotating each finding on its file. It exists because the worked examples added to the connection-strings documentation in this release were reported — correctly — by the gate they document, and only a manual self-scan before tagging noticed.
 - **Credentials to a host nobody else can reach are a warning, not an error.** `creds_in_url` drops to warning when the host is `localhost`, a loopback address, or a single-label name such as a docker-compose service. On the author's public repositories that was 23 of 26 errors: `postgresql://…:nis2secret@localhost`, `…:proximity_dev_password@db`. They are downgraded, not dropped — the password is still committed and passwords get reused. Private addresses, `.internal`, `.local` and templated hosts stay at error.
 
 ### Fixed
