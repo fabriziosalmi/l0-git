@@ -4,7 +4,8 @@
       "exclude_paths": [
         "server/conn_gate.go",
         "README.md",
-        "CHANGELOG.md"
+        "CHANGELOG.md",
+        "docs/gates/connection-strings.md"
       ]
     },
     "network_scan": {

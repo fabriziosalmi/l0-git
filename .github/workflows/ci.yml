@@ -60,6 +60,35 @@ jobs:
         if: runner.os == 'Windows'
         run: go test -count=1 -timeout 300s ./...
 
+  # l0-git must pass its own gates. Nothing else enforced that: #30 added
+  # credential URLs to docs/gates/connection-strings.md as worked examples, the
+  # gate correctly reported them, and it surfaced only in a manual self-scan
+  # just before a release. A finding here fails the build.
+  self-scan:
+    name: self-scan (lgit check .)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.x'
+          cache-dependency-path: server/go.sum
+      - name: Build lgit
+        working-directory: server
+        run: go build -o lgit .
+      - name: lgit check . must report nothing
+        run: |
+          LGIT_DB="$RUNNER_TEMP/self-scan.db" ./server/lgit check . > self-scan.json
+          jq -e '.config_error == null or .config_error == ""' self-scan.json >/dev/null \
+            || { echo "::error::.l0git.json has a problem: $(jq -r .config_error self-scan.json)"; exit 1; }
+          n=$(jq '.findings | length' self-scan.json)
+          if [ "$n" -ne 0 ]; then
+            jq -r '.findings[] | "::error file=\(.file_path | split(":")[0])::\(.gate_id) (\(.severity)): \(.message)"' self-scan.json
+            echo "lgit check . reported $n finding(s) on l0-git itself"
+            exit 1
+          fi
+          echo "clean: $(jq '.gates_run | length' self-scan.json) gates, 0 findings"
+
   extension:
     name: extension (node ${{ matrix.node }})
     runs-on: ubuntu-latest
