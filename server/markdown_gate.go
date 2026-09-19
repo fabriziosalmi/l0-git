@@ -324,7 +324,57 @@ func localTargetExists(rel, root, dest string) bool {
 			return true
 		}
 	}
+	// Generated-page fallback: Jekyll and Hugo publish `page.md` as
+	// `page.html`, and their sources link to the published name. The
+	// public-repo sweep found fifteen of those, all in one Jekyll site, all
+	// pointing at a sibling `.md` that exists.
+	//
+	// Narrower than the extensionless fallback above, deliberately: on GitHub
+	// a `page.html` link to a file that only exists as `page.md` IS broken, so
+	// the fallback applies only when a site-generator config sits in one of
+	// the markdown file's ancestor directories.
+	if strings.EqualFold(filepath.Ext(decoded), ".html") && underSiteGenerator(root, rel) {
+		stem := strings.TrimSuffix(target, filepath.Ext(target))
+		for _, ext := range []string{".md", ".markdown"} {
+			if _, err := os.Stat(stem + ext); err == nil {
+				return true
+			}
+		}
+	}
 	return false
+}
+
+// siteGeneratorMarkers are config files and directories whose presence means
+// the markdown around them is built into a site rather than only read on a
+// forge.
+var siteGeneratorMarkers = []string{
+	"_config.yml", "_config.yaml", // Jekyll
+	"hugo.toml", "hugo.yaml", "hugo.json", // Hugo
+	"mkdocs.yml", "mkdocs.yaml",
+	"docusaurus.config.js", "docusaurus.config.ts",
+	".vitepress", ".vuepress",
+}
+
+// underSiteGenerator reports whether any directory from rel's own up to the
+// project root holds a siteGeneratorMarkers entry.
+func underSiteGenerator(root, rel string) bool {
+	dir := filepath.Dir(filepath.Join(root, rel))
+	cleanRoot := filepath.Clean(root)
+	for {
+		for _, m := range siteGeneratorMarkers {
+			if _, err := os.Stat(filepath.Join(dir, m)); err == nil {
+				return true
+			}
+		}
+		if dir == cleanRoot || !strings.HasPrefix(dir, cleanRoot) {
+			return false
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return false
+		}
+		dir = parent
+	}
 }
 
 // =============================================================================

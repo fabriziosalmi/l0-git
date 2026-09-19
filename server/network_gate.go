@@ -33,6 +33,28 @@ var asnRe = regexp.MustCompile(`\bAS[0-9]{1,7}\b`)
 //   - RFC 2544 benchmarking: 198.18.0.0/15 (TEST-NET-2 per IANA)
 //   - IANA MCAST-TEST-NET: 233.252.0.0/24
 //   - RFC 6598 shared address space (CGNAT): 100.64.0.0/10
+//
+// specialPurposeNets are the IANA IPv4 Special-Purpose Address Registry
+// entries that are NOT globally reachable and are not already covered by the
+// stdlib predicates (private, loopback, link-local, multicast) or by docNets.
+// They are reported under the "reserved" category at info, like 240.0.0.0/4.
+//
+// The public-repo sweep found `192.0.0.0/24` classified as a public address
+// at warning — in an SSRF blocklist, commented `# IETF protocol assignments`.
+// SSRF and egress blocklists are exactly where these ranges appear in real
+// code, so misclassifying them turned the most defensive file in a project
+// into its noisiest.
+//
+//   - 0.0.0.0/8       "this network" (RFC 791); 0.0.0.0 itself is handled as
+//     unspecified before this list is consulted
+//   - 192.0.0.0/24    IETF protocol assignments (RFC 6890), incl. DS-Lite
+//   - 192.88.99.0/24  deprecated 6to4 relay anycast (RFC 7526)
+var specialPurposeNets = mustParseNets(
+	"0.0.0.0/8",
+	"192.0.0.0/24",
+	"192.88.99.0/24",
+)
+
 var docNets = mustParseNets(
 	"192.0.2.0/24",
 	"198.51.100.0/24",
@@ -322,6 +344,11 @@ func classifyIPv4(ip net.IP) (string, string) {
 			return SeverityInfo, "doc-range"
 		}
 	}
+	for _, n := range specialPurposeNets {
+		if n.Contains(ip) {
+			return SeverityInfo, "reserved"
+		}
+	}
 	if ip.IsPrivate() {
 		return SeverityInfo, "private"
 	}
@@ -508,11 +535,14 @@ func looksLikeVersionLiteral(content []byte, start, end int) bool {
 var publicResolvers = map[string]bool{
 	"8.8.8.8": true, "8.8.4.4": true, // Google
 	"1.1.1.1": true, "1.0.0.1": true, "1.1.1.2": true, "1.0.0.2": true, // Cloudflare
+	"1.1.1.3": true, "1.0.0.3": true, // Cloudflare for Families (malware + adult filter)
 	"9.9.9.9": true, "9.9.9.10": true, "9.9.9.11": true, // Quad9
 	"149.112.112.112": true, "149.112.112.10": true, "149.112.112.11": true,
 	"208.67.222.222": true, "208.67.220.220": true, // OpenDNS
 	"208.67.222.220": true, "208.67.220.222": true,
 	"94.140.14.14": true, "94.140.15.15": true, // AdGuard
+	"94.140.14.15": true, "94.140.15.16": true, // AdGuard family
+	"94.140.14.140": true, "94.140.14.141": true, // AdGuard non-filtering
 	"76.76.2.0": true, "76.76.10.0": true, // ControlD
 	"185.228.168.9": true, "185.228.169.9": true, // CleanBrowsing
 	"64.6.64.6": true, "64.6.65.6": true, // Verisign

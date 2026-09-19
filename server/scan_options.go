@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -208,7 +209,7 @@ func (s scanOptions) shouldSkipContent(rel string) bool {
 	if skipEnabled(s.SkipDefaultDependencyPaths) && isDependencyPath(rel) {
 		return true
 	}
-	if skipEnabled(s.SkipDefaultGeneratedDirs) && isGeneratedDirPath(rel) {
+	if skipEnabled(s.SkipDefaultGeneratedDirs) && (isGeneratedDirPath(rel) || isCoverageReportPage(rel)) {
 		return true
 	}
 	// Binary payloads are never source. isBinary (NUL byte in the first
@@ -639,6 +640,7 @@ var generatedDirNames = map[string]bool{
 	".ipynb_checkpoints": true,
 	"htmlcov":            true,
 	".nyc_output":        true,
+	"lcov-report":        true, // istanbul / jest / nyc HTML coverage
 	".sass-cache":        true,
 	".serverless":        true,
 }
@@ -659,6 +661,50 @@ func isGeneratedDirPath(rel string) bool {
 		// hide real credentials and addresses in first-party code.
 		if strings.HasSuffix(p, "_cache") || strings.HasSuffix(p, "-cache") ||
 			strings.HasSuffix(p, ".cache") {
+			return true
+		}
+	}
+	return false
+}
+
+// coverageSourceExts are the source extensions istanbul-family reporters
+// (vitest, jest, nyc, c8) append `.html` to when they render a file.
+var coverageSourceExts = map[string]bool{
+	".js": true, ".jsx": true, ".mjs": true, ".cjs": true,
+	".ts": true, ".tsx": true, ".mts": true, ".cts": true,
+	".vue": true, ".svelte": true,
+}
+
+// isCoverageReportPage reports whether rel is a page of an HTML coverage
+// report: a file named `<name>.<source-ext>.html` inside a `coverage/`
+// directory, which is how istanbul renders each covered source file.
+//
+// `htmlcov/` (coverage.py) was already skipped by name, but the JavaScript
+// equivalent was not, and the public-repo sweep found one committed vitest
+// report producing 288 html_lint findings from a single file — every line
+// number in the report is an anchor with no text.
+//
+// The directory name alone is not enough: `coverage/` is also an ordinary
+// first-party name (a product feature, a docs section, `src/coverage/`). The
+// double extension is what makes it unambiguous — nobody hand-writes
+// `KeyboardPlugin.ts.html`. A report's own `index.html` is deliberately not
+// matched by this; it is one page, not hundreds.
+func isCoverageReportPage(rel string) bool {
+	// Everything below works on the slash form with package path, not
+	// filepath: filepath.Dir on Windows hands back backslashes, and splitting
+	// that on "/" found no `coverage` component at all — the skip was inert on
+	// Windows, and only CI's Windows row noticed.
+	slash := filepath.ToSlash(rel)
+	base := strings.ToLower(path.Base(slash))
+	if !strings.HasSuffix(base, ".html") {
+		return false
+	}
+	inner := strings.TrimSuffix(base, ".html")
+	if !coverageSourceExts[path.Ext(inner)] {
+		return false
+	}
+	for _, p := range strings.Split(path.Dir(slash), "/") {
+		if strings.EqualFold(p, "coverage") {
 			return true
 		}
 	}

@@ -253,3 +253,62 @@ func TestDockerfile_DisabledRules(t *testing.T) {
 		}
 	}
 }
+
+// A stage built FROM an earlier stage starts with that stage's USER. The
+// public-repo sweep did not contain this layout, but it is the commonest
+// multi-stage shape there is, and a synthetic reproduction fired missing_user
+// on a stage that runs as a non-root user.
+func TestDockerfile_MissingUser_InheritedFromParentStage(t *testing.T) {
+	cases := map[string]string{
+		"direct parent": "FROM python:3.12-slim AS base\nRUN useradd -m app\nUSER app\n\n" +
+			"FROM base AS production\nCOPY . /app\nCMD [\"python\", \"/app/main.py\"]\n",
+		"chain of three": "FROM python:3.12-slim AS base\nUSER app\n" +
+			"FROM base AS deps\nRUN pip install x\n" +
+			"FROM deps AS final\nCMD [\"x\"]\n",
+		"alias case differs": "FROM node:20 AS Base\nUSER node\nFROM base\nCMD [\"node\"]\n",
+		"uid:gid form":       "FROM debian:12 AS base\nUSER 1000:1000\nFROM base AS run\nENTRYPOINT [\"/app\"]\n",
+		"platform flag": "FROM --platform=linux/amd64 golang:1.22 AS base\nUSER nobody\n" +
+			"FROM --platform=linux/amd64 base AS run\nCMD [\"/app\"]\n",
+	}
+	for name, src := range cases {
+		t.Run(name, func(t *testing.T) {
+			if f := findFindingByRule(runRules(t, src), "missing_user"); f != nil {
+				t.Errorf("stage inherits a non-root USER, missing_user must not fire: %+v", f)
+			}
+		})
+	}
+}
+
+// What inheritance must NOT excuse: every one of these runs as root.
+func TestDockerfile_MissingUser_InheritanceDoesNotHideRoot(t *testing.T) {
+	cases := map[string]string{
+		"parent has no USER": "FROM python:3.12-slim AS base\nRUN pip install x\n" +
+			"FROM base AS production\nCMD [\"x\"]\n",
+		"parent sets USER root": "FROM python:3.12-slim AS base\nUSER root\n" +
+			"FROM base AS production\nCMD [\"x\"]\n",
+		"parent sets USER 0": "FROM python:3.12-slim AS base\nUSER 0\n" +
+			"FROM base AS production\nCMD [\"x\"]\n",
+		// USER comes AFTER the child's FROM in file order, so the child could
+		// not have inherited it; nor can a forward reference exist in Docker.
+		"registry image, not an alias": "FROM python:3.12-slim AS base\nUSER app\n" +
+			"FROM python:3.12-slim AS production\nCMD [\"x\"]\n",
+		"parent reverts to root": "FROM python:3.12-slim AS base\nUSER app\nUSER root\n" +
+			"FROM base AS production\nCMD [\"x\"]\n",
+	}
+	for name, src := range cases {
+		t.Run(name, func(t *testing.T) {
+			if findFindingByRule(runRules(t, src), "missing_user") == nil {
+				t.Errorf("stage runs as root, missing_user must fire")
+			}
+		})
+	}
+}
+
+// A child that explicitly switches back to root is reported by user_root on
+// its own line, and inheritance does not change that.
+func TestDockerfile_UserRoot_InChildOfNonRootStage(t *testing.T) {
+	src := "FROM python:3.12-slim AS base\nUSER app\nFROM base AS debug\nUSER root\nCMD [\"x\"]\n"
+	if findFindingByRule(runRules(t, src), "user_root") == nil {
+		t.Error("USER root in a child stage must still fire user_root")
+	}
+}

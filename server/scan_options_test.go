@@ -298,3 +298,43 @@ func TestNoisyDataFile_ListAndLog(t *testing.T) {
 		t.Errorf("secrets must still scan app.log")
 	}
 }
+
+func TestIsCoverageReportPage(t *testing.T) {
+	report := []string{
+		"packages/plugin-keyboard/coverage/KeyboardPlugin.ts.html", // verbatim from the sweep
+		"coverage/src/app/index.tsx.html",
+		"coverage/lcov/utils.mjs.html",
+		"Coverage/Button.vue.html",
+	}
+	for _, p := range report {
+		if !isCoverageReportPage(p) {
+			t.Errorf("%s is an istanbul report page and should be skipped", p)
+		}
+	}
+	// First-party files that share the directory name or the extension must
+	// keep being scanned — `coverage/` is an ordinary name for a feature or a
+	// docs section, and a skip here would hide real content.
+	firstParty := []string{
+		"coverage/index.html",         // could be hand-written; one page either way
+		"coverage/report.md",          // not HTML
+		"src/coverage/handler.go",     // a Go package called coverage
+		"docs/coverage/overview.html", // no double extension
+		"docs/api.ts.html",            // double extension, but not under coverage/
+		"coverage/data.json.html",     // .json is not a source extension
+		"mycoverage/x.ts.html",        // directory name must match exactly
+	}
+	for _, p := range firstParty {
+		if isCoverageReportPage(p) {
+			t.Errorf("%s is not a coverage report page and must still be scanned", p)
+		}
+	}
+}
+
+func TestContentGates_SkipLcovReportDir(t *testing.T) {
+	if !isGeneratedDirPath("coverage/lcov-report/src/app.js.html") {
+		t.Error("lcov-report/ is jest/nyc output and should be skipped")
+	}
+	if !isGeneratedDirPath("lcov-report/index.html") {
+		t.Error("a top-level lcov-report/ should be skipped too")
+	}
+}
