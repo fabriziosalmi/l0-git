@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-19
+
 ### Changed
 
 - **`make update` and `make install-mcp` register the MCP server at user scope.** They used Claude Code's default, local scope, so the `l0-git` tools existed only inside the l0-git project itself — never in the repository you actually wanted to check. Both scopes are cleared by name first, since an unscoped remove refuses to choose when the server exists in both.
