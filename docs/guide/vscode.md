@@ -14,14 +14,20 @@ a finding you ignore in the editor stays ignored in CI.
 
 ## Install
 
-From the Marketplace: open the Extensions view (`Ctrl/Cmd+Shift+X`), search for
-**l0-git**, install.
-
-From a release artefact:
+Every [GitHub release](https://github.com/fabriziosalmi/l0-git/releases) carries
+the extension as `l0-git-<version>.vsix`, with the `lgit` binary for macOS,
+Linux and Windows bundled inside. Download it, then:
 
 ```sh
 code --install-extension l0-git-<version>.vsix
 ```
+
+Or, in VS Code: Extensions view → `…` menu → **Install from VSIX…**.
+
+::: info Not on the Marketplace yet
+The extension is not published to the Visual Studio Marketplace or Open VSX, so
+searching for it in the Extensions view finds nothing. Install the `.vsix`.
+:::
 
 ## Finding the binary
 
@@ -124,8 +130,8 @@ permission model.
 
 | Setting | Default | Description |
 |---|---|---|
-| `l0-git.binaryPath` | `""` | Absolute path to `lgit`. Empty uses the discovery order above. |
-| `l0-git.dbPath` | `""` | Override the SQLite path (sets `LGIT_DB`). Empty uses `~/.l0-git/findings.db`. |
+| `l0-git.binaryPath` | `""` | Absolute path to `lgit`. Empty uses the discovery order above. User settings only. |
+| `l0-git.dbPath` | `""` | Override the SQLite path (sets `LGIT_DB`). Empty uses `~/.l0-git/findings.db`. User settings only. |
 | `l0-git.notifyOnNew` | `true` | Toast on each new **error**. Warnings and info never toast. |
 | `l0-git.runOnStartup` | `true` | Run gate checks when the workspace opens. |
 | `l0-git.autoStartMCP` | `false` | Spawn the MCP stdio server on activation. Usually unnecessary — see [Claude Code / MCP](./mcp). |
@@ -137,3 +143,14 @@ With `l0-git.showBlame` on, each finding row gets
 `<short-sha> · <author> · <relative-time>` from `git blame --line-porcelain`.
 One blame call per affected file, fired in parallel. Off by default because the
 cost is real on very large repositories.
+
+## Workspace trust
+
+The extension stays off in Restricted Mode. The gates run `git` inside the
+repository, git reads that repository's own configuration, and some git settings
+name programs to run. Trusting the workspace comes first, the same rule VS
+Code's built-in Git support follows.
+
+`l0-git.binaryPath` and `l0-git.dbPath` are machine-scoped: VS Code ignores them
+in a workspace's `.vscode/settings.json`. A repository you open cannot choose
+which executable the extension launches, or where it writes.

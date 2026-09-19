@@ -1,7 +1,7 @@
 {
   "name": "l0-git",
   "displayName": "l0-git",
-  "description": "Quality gates for the open project. Watches the workspace, runs rules, and surfaces findings in a sidebar view. Backed by a Go MCP server so Claude Code can read the same findings.",
+  "description": "36 deterministic quality gates for the open repository — secrets, Dockerfiles, CI, git hygiene — in the sidebar and Problems pane. The same findings in the CLI and in Claude Code over MCP.",
   "version": "0.2.1",
   "publisher": "fabriziosalmi",
   "license": "MIT",
@@ -13,7 +13,7 @@
   "bugs": {
     "url": "https://github.com/fabriziosalmi/l0-git/issues"
   },
-  "homepage": "https://github.com/fabriziosalmi/l0-git#readme",
+  "homepage": "https://fabriziosalmi.github.io/l0-git/",
   "engines": {
     "vscode": "^1.85.0",
     "node": ">=18"
@@ -22,6 +22,33 @@
     "Linters",
     "Other"
   ],
+  "keywords": [
+    "quality gates",
+    "lint",
+    "security",
+    "secrets",
+    "git",
+    "dockerfile",
+    "docker compose",
+    "gitignore",
+    "mcp",
+    "claude code"
+  ],
+  "galleryBanner": {
+    "color": "#111318",
+    "theme": "dark"
+  },
+  "pricing": "Free",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "l0-git runs git inside the repository, and git reads that repository's own configuration, which can name programs to run."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "The gates need the files and the .git directory on disk."
+    }
+  },
   "main": "./out/extension.js",
   "activationEvents": [
     "onStartupFinished"
@@ -214,12 +241,14 @@
         "l0-git.binaryPath": {
           "type": "string",
           "default": "",
-          "description": "Absolute path to the lgit binary. If empty, the extension uses the bundled binary at ../server/lgit relative to the extension root, or 'lgit' on PATH."
+          "description": "Absolute path to the lgit binary. Empty uses the binary bundled with the extension, then common install locations, then 'lgit' on PATH. User settings only: a workspace cannot choose which executable runs.",
+          "scope": "machine"
         },
         "l0-git.dbPath": {
           "type": "string",
           "default": "",
-          "description": "Override SQLite DB path (sets LGIT_DB env var). If empty, uses ~/.l0-git/findings.db."
+          "description": "Override SQLite DB path (sets LGIT_DB env var). If empty, uses ~/.l0-git/findings.db. User settings only.",
+          "scope": "machine"
         },
         "l0-git.notifyOnNew": {
           "type": "boolean",
