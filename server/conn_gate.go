@@ -335,6 +335,9 @@ func scanConnectionLine(rel string, lineNum int, content []byte) []Finding {
 				continue
 			}
 			text := strings.TrimSpace(string(content[start:end]))
+			if p.id != "creds_in_url" && !hasPlausibleAuthority(text) {
+				continue
+			}
 			if p.id == "http_remote" && httpHostExempt(text) {
 				continue
 			}
@@ -377,9 +380,41 @@ func scanConnectionLine(rel string, lineNum int, content []byte) []Finding {
 	return out
 }
 
+// hasPlausibleAuthority reports whether a matched `scheme://…` has something
+// after the `://` that could be a host, a userinfo, or a template for one.
+//
+// The scheme regexes accept anything but whitespace and quotes after `://`, so
+// they also match the scheme NAME where prose or a pattern mentions it:
+//
+//	`http://` / `https://` / `ftp://` URLs supplied as input parameters.
+//	"pattern": "(?:…|ftp://|file://)|…"
+//
+// The public-repo sweep reported seven of those, six at warning. A connection
+// string needs something to connect to; an empty authority, or one starting
+// with a character no host, userinfo or template can start with, is a mention.
+//
+// This is a deny-list on purpose. An allow-list of host characters would also
+// drop odd-but-real URLs, and in a gate that exists to surface legacy and
+// cleartext endpoints the cheaper mistake is to report one mention too many.
+func hasPlausibleAuthority(match string) bool {
+	i := strings.Index(match, "://")
+	if i < 0 {
+		return true
+	}
+	rest := match[i+3:]
+	if rest == "" {
+		return false
+	}
+	switch rest[0] {
+	case '`', '|', '\\', ')', ']', '}', '/':
+		return false
+	}
+	return true
+}
+
 // placeholderTokenRe matches a single template-placeholder token used in
 // install scripts, CI workflows, and docs to stand in for credentials
-// supplied at runtime: ${VAR} / $VAR / %s / <name> / {{ var }}.
+// supplied at runtime: ${VAR} / $VAR / %s / <name> / {{ var }} / {var}.
 var placeholderTokenRe = regexp.MustCompile(
 	`^(?:` +
 		`\$\{[^}]+\}` + // ${VAR}, ${VAR:-default}, ${PG_DB_PASS}
@@ -387,6 +422,13 @@ var placeholderTokenRe = regexp.MustCompile(
 		`|%[sdvqxX]` + // printf verbs: %s %d %v %q %x %X
 		`|<[A-Za-z_][A-Za-z0-9_-]*>` + // <user>, <DB_PASS>
 		`|\{\{\s*[A-Za-z_][A-Za-z0-9_.-]*\s*\}\}` + // {{ user }}, {{var}}
+		// Python f-string / str.format fields: {passwd}, {settings.RABBITMQ_PASS},
+		// {cfg.db.password!r}, {}, {0}. The public-repo sweep found
+		// `amqp://{user}:{passwd}@{host}` reported at ERROR as a committed
+		// credential — the password there is an interpolation, not a value.
+		// The field must be the WHOLE password, so `pa{ss}word` still fires.
+		`|\{(?:[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*|\d*)(?:![rsa])?\}` +
+		`|#\{[^}]+\}` + // Ruby interpolation: #{password}
 		`)$`,
 )
 

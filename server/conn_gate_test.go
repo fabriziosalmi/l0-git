@@ -146,6 +146,15 @@ func TestConnectionStrings_CredsArePlaceholder(t *testing.T) {
 		"postgresql://nodeapp:$DBPASS@localhost/nodeapp",
 		"postgresql://alma:${DB_PASSWORD}@postgres:5432/alma",
 		"https://admin:${PASS}@example.com",
+		// Python f-string / str.format and Ruby interpolation. The first two
+		// are verbatim from the public-repo sweep, where they were reported
+		// at ERROR as committed credentials.
+		"amqp://{user}:{passwd}@{host}:5672/",
+		"pyamqp://{settings.RABBITMQ_USER}:{settings.RABBITMQ_PASS}@{settings.RABBITMQ_HOST}:5672//",
+		"postgresql://app:{cfg.db.password!r}@db/app",
+		"postgresql://app:{}@db/app",
+		"redis://app:{0}@cache:6379",
+		"mysql://app:#{password}@db/app",
 	}
 	for _, url := range cases {
 		t.Run(url, func(t *testing.T) {
@@ -178,6 +187,11 @@ func TestConnectionStrings_RealCredsStillFire(t *testing.T) {
 		// Literal pass that LOOKS like a token but is not a
 		// placeholder pattern.
 		"https://api:sk-1234567890abcdef@hooks.example.com",
+		// Braces inside a literal password are not interpolation: the field
+		// must be the whole password for it to count as a template.
+		"postgres://app:pa{ss}word@db.production.io/app",
+		"postgres://app:{x}Tr0ub4dor@db.production.io/app",
+		"postgres://app:Tr0ub4dor{x}@db.production.io/app",
 	}
 	for _, url := range cases {
 		t.Run(url, func(t *testing.T) {
@@ -409,5 +423,47 @@ func TestConn_DataDirDatasetSkipped(t *testing.T) {
 	}
 	if !rootHit {
 		t.Errorf("top-level config.json must still be scanned: %+v", fs)
+	}
+}
+
+// Scheme names quoted in prose or inside a pattern are not connection strings.
+// The first two lines are verbatim from the public-repo sweep.
+func TestConnectionStrings_SchemeMentionWithoutHostIgnored(t *testing.T) {
+	lines := []string{
+		"- **Patterns detect**: `http://` / `https://` / `ftp://` URLs supplied as input parameters.",
+		`"pattern": "(?i)(?:curl|wget)\\s+(?:https?://|ftp://|file://)|\\b(?:bash|sh)\\s+-c"`,
+		"Unsupported schemes (ftp://) are rejected.",
+		"schemes: [telnet://|rsync://]",
+		"use ldap:// only on the management network",
+	}
+	for _, l := range lines {
+		for _, f := range scanConnectionLine("docs/x.md", 1, []byte(l+"\n")) {
+			t.Errorf("scheme mention reported as a connection string: %q -> %s", l, f.FilePath)
+		}
+	}
+}
+
+// Anything with something to connect to must still be reported — including a
+// templated host, which is still a use of the protocol.
+func TestConnectionStrings_RealEndpointsStillFire(t *testing.T) {
+	cases := map[string]string{
+		"ftp://ftp.gnu.org/gnu/":           ":ftp",
+		"ftp://${FTP_HOST}/incoming":       ":ftp",
+		"ftp://[2001:db8::1]/pub":          ":ftp",
+		"telnet://10.20.30.40":             ":telnet",
+		"rsync://mirror.acme-corp.io/repo": ":rsync",
+		"ldap://ldap.acme-corp.io:389":     ":ldap_unencrypted",
+		"http://api.acme-corp.io/v1/items": ":http_remote",
+	}
+	for url, suffix := range cases {
+		fired := false
+		for _, f := range scanConnectionLine("src/x.go", 1, []byte(`u := "`+url+`"`+"\n")) {
+			if strings.HasSuffix(f.FilePath, suffix) {
+				fired = true
+			}
+		}
+		if !fired {
+			t.Errorf("%s must still report %s", url, suffix)
+		}
 	}
 }
