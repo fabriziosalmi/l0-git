@@ -20,8 +20,11 @@ make install-mcp
 That is a thin wrapper around:
 
 ```sh
-claude mcp add l0-git /absolute/path/to/lgit mcp
+claude mcp add -s user l0-git /absolute/path/to/lgit mcp
 ```
+
+`-s user` matters: without it Claude Code registers the server for the current
+directory only, and the l0-git tools vanish in every other project.
 
 Or write it into `~/.claude.json` yourself:
 
