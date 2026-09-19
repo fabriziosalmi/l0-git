@@ -68,6 +68,11 @@ not append duplicates — it updates what is already there, and a violation that
 went away flips to `resolved` rather than vanishing. `ignored` is sticky: mark
 something once and later runs will not resurface it.
 
+Several findings of one gate at the same location — three addresses on a line,
+two broken links — share that key, so they are stored as **one** finding that
+lists every one of them, at the highest severity among them. What you ignore is
+what you can see.
+
 ## What next
 
 - [Getting started](./getting-started) — install and first scan.
