@@ -175,19 +175,24 @@ if [ "$NO_MCP" -eq 0 ]; then
   step "Registering MCP server with Claude Code…"
   if command -v claude >/dev/null 2>&1; then
     if [ "$DRY_RUN" -eq 0 ]; then
-      claude mcp remove l0-git 2>/dev/null || true
-      if claude mcp add l0-git "$BINARY" mcp 2>&1 | sed 's/^/    /'; then
+      # User scope, so the tools exist in every project — checking a repo
+      # other than l0-git itself is the point. Remove from both scopes by
+      # name: with the same server in two scopes, an unscoped remove refuses
+      # to pick one, and `|| true` would have hidden that.
+      claude mcp remove -s local l0-git >/dev/null 2>&1 || true
+      claude mcp remove -s user l0-git >/dev/null 2>&1 || true
+      if claude mcp add -s user l0-git "$BINARY" mcp 2>&1 | sed 's/^/    /'; then
         ok "MCP registered: l0-git → $BINARY"
       else
         warn "claude mcp add failed — verify with: claude mcp list"
       fi
     else
-      dry "claude mcp remove l0-git"
-      dry "claude mcp add l0-git $BINARY mcp"
+      dry "claude mcp remove -s local l0-git; claude mcp remove -s user l0-git"
+      dry "claude mcp add -s user l0-git $BINARY mcp"
     fi
   else
     warn "claude CLI not found in PATH — skipping MCP registration"
-    info "Run manually: claude mcp add l0-git $BINARY mcp"
+    info "Run manually: claude mcp add -s user l0-git $BINARY mcp"
   fi
 else
   info "MCP registration skipped (--no-mcp)"
