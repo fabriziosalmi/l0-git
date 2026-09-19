@@ -41,7 +41,7 @@ curl -fsSL "https://github.com/fabriziosalmi/l0-git/releases/latest/download/lgi
 sudo mv "lgit-$OS-$ARCH" /usr/local/bin/lgit
 ```
 
-Binaries are published for linux, darwin and windows × amd64 and arm64. From
+Binaries are published for linux and darwin (amd64, arm64) and windows (amd64). From
 source: `make build` (needs Go, version pinned in [`server/go.mod`](server/go.mod)).
 
 ## Quick start

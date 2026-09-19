@@ -227,6 +227,7 @@ button.secondary:hover { background: var(--vscode-button-secondaryHoverBackgroun
 .spark .bar:hover { opacity: 1; }
 .spark .bar .bar-tip { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font-size: 0.7em; color: var(--muted); white-space: nowrap; }
 .spark-axis { display: flex; gap: 4px; margin-top: 4px; font-size: 0.7em; color: var(--muted); }
+.spark-hint { margin: 10px 0 0 0; }
 .spark-axis div { flex: 1; min-width: 14px; text-align: center; font-variant-numeric: tabular-nums; }
 .empty { color: var(--muted); font-style: italic; padding: 6px 0; font-size: 0.9em; }
 .full-row { grid-column: 1 / -1; }
@@ -414,7 +415,7 @@ function sparklineHint(days: DayCount[]): string {
   if (!days || days.length === 0) return "";
   const nonZero = days.filter((d) => d.count > 0).length;
   if (nonZero <= 1 && days.length >= 7) {
-    return `<div class="card-hint">Trend will fill in as the database accumulates a week of history.</div>`;
+    return `<div class="card-hint spark-hint">Trend will fill in as the database accumulates a week of history.</div>`;
   }
   return "";
 }

@@ -6,9 +6,19 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- A Marketplace page for the extension: README with a real Overview render, a banner and the CLI demo; keywords, gallery banner and pricing; a CHANGELOG pointer. The icon is now 256 px.
+
 ### Fixed
 
 - `lgit list`, `stats` and `clear` (and the matching MCP tools) now accept any spelling of the project path. Findings are stored under the absolute, cleaned path, and the filter was compared as a raw string, so `-project=/repo/` or `/x/../repo` returned 0 findings, and `clear` removed nothing while reporting success.
+- Overview dashboard: the "Trend will fill in…" caption overlapped the date labels of the 7-day chart.
+- Docs: the VS Code guide said to install the extension from the Marketplace, where it is not published. It now points to the `.vsix` on each GitHub release. The README claimed Windows arm64 binaries, which the release has never built.
+
+### Security
+
+- The VS Code settings `l0-git.binaryPath` and `l0-git.dbPath` are now machine-scoped. Before, a repository's `.vscode/settings.json` could set `binaryPath`, and once the workspace was trusted the extension would launch whatever executable that repository named. The extension now also declares that it needs workspace trust and a real file system, rather than leaving it to VS Code's defaults.
 
 ## [0.2.1] - 2026-09-19
 
