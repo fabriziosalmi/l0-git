@@ -140,6 +140,7 @@ func TestRunChecks_EmptyDir(t *testing.T) {
 		"gitignore_present",
 		"html_lint",            // skipped (not git)
 		"ide_artifact_tracked", // skipped (not git)
+		"ignored_file_tracked", // skipped (not git)
 		"issue_template_present",
 		"large_file_tracked", // skipped (not git)
 		"license_present",

@@ -231,6 +231,15 @@ func gateRegistry() []Gate {
 			NewOptions:  func() any { return &scanOptions{} },
 		},
 		{
+			ID:          "ignored_file_tracked",
+			Title:       "Tracked file matches .gitignore",
+			Description: "Reports files that are in the git index even though the repository's own .gitignore excludes them — committed before the rule existed, or force-added. Grouped by directory. Only committed .gitignore files are consulted, never .git/info/exclude or the user's global excludes, so the result is the same on every machine. .gitkeep files, env templates and vendored trees are left to the gates that own them.",
+			Severity:    SeverityWarning,
+			Tags:        "git-hygiene",
+			Check:       checkIgnoredFileTracked,
+			NewOptions:  func() any { return &scanOptions{} },
+		},
+		{
 			ID:          "filename_quality",
 			Title:       "File name quality",
 			Description: "Surfaces tracked filenames containing spaces, control chars, or non-ASCII characters — these break unquoted shell pipelines and CI scripts.",
