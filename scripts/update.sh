@@ -154,6 +154,10 @@ step "Building lgit binary…"
 NEW_VERSION="$(git describe --tags --always --dirty 2>/dev/null \
                || git rev-parse --short HEAD 2>/dev/null \
                || echo "dev")"
+# Same format as the release binaries and extension/package.json: no leading
+# "v". `git describe` returns v0.2.0, the release stamps 0.2.0, and the two
+# builds of one release reported different versions.
+NEW_VERSION="${NEW_VERSION#v}"
 if [ "$DRY_RUN" -eq 0 ]; then
   BUILD_START="$(date +%s)"
   (cd server && go build -trimpath \

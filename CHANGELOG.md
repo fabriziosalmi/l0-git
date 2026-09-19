@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **The binary bundled in the VS Code extension reported its version as `dev`.** `extension/scripts/build-bins.sh` compiled without `-X main.Version`, so from inside the editor there was no way to tell which release was running. It now stamps the tag in CI and `git describe` locally. The three build paths also disagreed on format — the release binaries said `0.2.0`, `make update` said `v0.2.0` — and all three now use the release format, with no leading `v`.
+
 ## [0.2.0] - 2026-09-19
 
 ### Added
