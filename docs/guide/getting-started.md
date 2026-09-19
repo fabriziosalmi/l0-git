@@ -24,8 +24,11 @@ Confirm it landed:
 
 ```sh
 $ lgit version
-0.1.27
+0.2.1
 ```
+
+It prints the release number without a leading `v` — the same string the
+VS Code extension and the MCP server report.
 
 ::: tip Downloaded through a browser on macOS?
 Gatekeeper quarantines it. `xattr -d com.apple.quarantine lgit` clears the flag.

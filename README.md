@@ -106,7 +106,7 @@ in the editor stays ignored when CI runs.
 ## Use with Claude Code
 
 ```sh
-make install-mcp     # claude mcp add l0-git $(pwd)/server/lgit mcp
+make install-mcp     # claude mcp add -s user l0-git $(pwd)/server/lgit mcp
 ```
 
 `lgit mcp` speaks MCP over stdio and exposes eight tools — `gates_check`,
