@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"regexp"
 	"strings"
 )
@@ -35,7 +37,42 @@ func isKnownNonSecret(value string) bool {
 	if canonicalDocExamples[value] {
 		return true
 	}
+	if isJWTIODebuggerToken(value) {
+		return true
+	}
 	return false
+}
+
+// isJWTIODebuggerToken recognises tokens minted by the jwt.io debugger by
+// their claims rather than by exact string.
+//
+// canonicalDocExamples lists the page's two pre-filled tokens verbatim, but
+// editing any claim in the debugger re-signs the token, so a docs page that
+// changed `"name": "John Doe"` to `"Jane Doe"` and added a role produced a
+// token no exact-string list can know. The public-repo sweep reported one of
+// those at ERROR from a JWT-decoder demo page, in a variable called EXAMPLE.
+//
+// Two claims survive that editing untouched and are jwt.io's defaults:
+// `"sub": "1234567890"` and `"iat": 1516239022` (2018-01-18). Both must be
+// present — each alone is plausible in a real token (a sequential test user id,
+// a coincidental timestamp), but a real issuer emitting both is not.
+func isJWTIODebuggerToken(value string) bool {
+	parts := strings.Split(value, ".")
+	if len(parts) != 3 || !strings.HasPrefix(parts[1], "eyJ") {
+		return false
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(parts[1], "="))
+	if err != nil {
+		return false
+	}
+	var claims struct {
+		Sub json.RawMessage `json:"sub"`
+		Iat json.RawMessage `json:"iat"`
+	}
+	if err := json.Unmarshal(raw, &claims); err != nil {
+		return false
+	}
+	return string(claims.Sub) == `"1234567890"` && string(claims.Iat) == `1516239022`
 }
 
 // =============================================================================

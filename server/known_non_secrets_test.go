@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"strings"
 	"testing"
 )
@@ -309,5 +310,79 @@ func TestSecretsScan_StripeTestKeyNotFlagged(t *testing.T) {
 		if strings.HasSuffix(f.FilePath, ":stripe_live") {
 			t.Errorf("Stripe test key must not be flagged, got: %+v", f)
 		}
+	}
+}
+
+// makeJWT assembles a syntactically valid token around the given claims JSON.
+// The signature is arbitrary high-entropy text: nothing here verifies it, and
+// the jwt.io recognition deliberately does not depend on it.
+func makeJWT(claims string) string {
+	enc := base64.RawURLEncoding
+	return enc.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`)) + "." +
+		enc.EncodeToString([]byte(claims)) + "." +
+		"Xk9mQ2vR7tLp4Zw8Yb3Nc6Hd1Fj5Gs0AqTe"
+}
+
+// Editing any claim in the jwt.io debugger re-signs the token, so exact-string
+// matching could only ever recognise the two pre-filled ones. This variant is
+// the shape the public-repo sweep reported at ERROR from a decoder demo page.
+func TestKnownNonSecret_JWTIODebuggerVariant(t *testing.T) {
+	variants := []string{
+		`{"sub":"1234567890","name":"Jane Doe","role":"admin","iat":1516239022,"exp":1900650622}`,
+		`{"sub":"1234567890","name":"John Doe","admin":true,"iat":1516239022}`,
+		`{"iat":1516239022,"sub":"1234567890"}`,
+	}
+	for _, c := range variants {
+		if !isKnownNonSecret(makeJWT(c)) {
+			t.Errorf("jwt.io debugger variant not recognised: %s", c)
+		}
+	}
+}
+
+// Each fingerprint claim alone is plausible in a real token — a sequential test
+// user id, a coincidental timestamp. Only both together identify jwt.io, and a
+// token carrying just one of them must still be reported.
+func TestKnownNonSecret_JWTWithOnlyOneFingerprintStillFires(t *testing.T) {
+	real := []string{
+		`{"sub":"1234567890","name":"Jane Doe","iat":1717171717}`,
+		`{"sub":"u_8f3a9c","iat":1516239022}`,
+		`{"sub":"1234567890"}`,
+		`{"iat":1516239022}`,
+		// Same digits, different JSON types: not what the debugger emits.
+		`{"sub":1234567890,"iat":1516239022}`,
+		`{"sub":"1234567890","iat":"1516239022"}`,
+	}
+	for _, c := range real {
+		if isKnownNonSecret(makeJWT(c)) {
+			t.Errorf("token with a single jwt.io fingerprint was dismissed: %s", c)
+		}
+	}
+}
+
+func TestSecretsScan_JWTIOVariantNotFlaggedButRealTokenIs(t *testing.T) {
+	variant := makeJWT(`{"sub":"1234567890","name":"Jane Doe","role":"admin","iat":1516239022}`)
+	real := makeJWT(`{"sub":"u_8f3a9c","role":"admin","iat":1717171717}`)
+	root := initRepoWithFiles(t, map[string]string{
+		"docs/decoder.html": "var EXAMPLE = '" + variant + "';\n",
+		"src/client.js":     "const token = '" + real + "';\n",
+	})
+	fs, err := checkSecretsScan(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sawReal bool
+	for _, f := range fs {
+		if !strings.HasSuffix(f.FilePath, ":jwt") {
+			continue
+		}
+		if strings.HasPrefix(f.FilePath, "docs/decoder.html") {
+			t.Errorf("jwt.io variant must not be flagged: %+v", f)
+		}
+		if strings.HasPrefix(f.FilePath, "src/client.js") {
+			sawReal = true
+		}
+	}
+	if !sawReal {
+		t.Errorf("a real-shaped token must still be reported; got %+v", fs)
 	}
 }
