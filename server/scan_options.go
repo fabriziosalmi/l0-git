@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -689,16 +690,20 @@ var coverageSourceExts = map[string]bool{
 // `KeyboardPlugin.ts.html`. A report's own `index.html` is deliberately not
 // matched by this; it is one page, not hundreds.
 func isCoverageReportPage(rel string) bool {
+	// Everything below works on the slash form with package path, not
+	// filepath: filepath.Dir on Windows hands back backslashes, and splitting
+	// that on "/" found no `coverage` component at all — the skip was inert on
+	// Windows, and only CI's Windows row noticed.
 	slash := filepath.ToSlash(rel)
-	base := strings.ToLower(filepath.Base(slash))
+	base := strings.ToLower(path.Base(slash))
 	if !strings.HasSuffix(base, ".html") {
 		return false
 	}
 	inner := strings.TrimSuffix(base, ".html")
-	if !coverageSourceExts[filepath.Ext(inner)] {
+	if !coverageSourceExts[path.Ext(inner)] {
 		return false
 	}
-	for _, p := range strings.Split(filepath.Dir(slash), "/") {
+	for _, p := range strings.Split(path.Dir(slash), "/") {
 		if strings.EqualFold(p, "coverage") {
 			return true
 		}
