@@ -164,22 +164,60 @@ func checkAddInstruction(instrs []dockerfileInstr) []dockerfileViolation {
 	return out
 }
 
-// checkMissingUser fires once per build stage that has an ENTRYPOINT or
-// CMD but no preceding USER. A FROM resets the "has USER" state because
-// each stage starts fresh.
+// checkMissingUser fires once per build stage that has an ENTRYPOINT or CMD
+// and no USER in effect.
+//
+// "In effect" includes inheritance. `FROM <registry image>` starts from that
+// image's default user, which for the images this gate cares about is root,
+// so the stage needs its own USER. `FROM <earlier stage>` is different: the
+// stage starts from THAT stage's filesystem and config, including its USER.
+//
+//	FROM python:3.12-slim AS base
+//	RUN useradd -m app
+//	USER app
+//	FROM base AS production
+//	CMD ["python", "main.py"]   ← runs as app
+//
+// Resetting on every FROM reported that production stage as running as root,
+// which is the commonest multi-stage layout there is: a base stage that sets
+// up the user, and dev/prod stages built on it.
+//
+// Only a NON-root inherited user counts. Inheriting an explicit `USER root`
+// still leaves the child running as root with no USER of its own, so it still
+// fires — the parent's line is separately reported by user_root.
 func checkMissingUser(instrs []dockerfileInstr) []dockerfileViolation {
 	out := []dockerfileViolation{}
+	aliases := stageAliases(instrs)
+	// Effective user at the current point of each named stage. Updated as
+	// USER lines are seen, so a later stage can only ever observe a user its
+	// parent actually set before the parent ended.
+	effective := map[string]string{}
+	curAlias := ""
+	curUser := ""
 	hasUser := false
-	stageStart := -1
+	inStage := false
 	for i, ins := range instrs {
 		switch ins.Kind {
 		case "FROM":
-			stageStart = i
-			hasUser = false
+			inStage = true
+			parent := strings.ToLower(fromImage(ins.Args))
+			curAlias = stageAlias(ins.Args)
+			curUser = ""
+			if aliases[parent] {
+				curUser = effective[parent]
+			}
+			hasUser = curUser != "" && !isRootUser(curUser)
+			if curAlias != "" {
+				effective[curAlias] = curUser
+			}
 		case "USER":
+			curUser = userOf(ins.Args)
 			hasUser = true
+			if curAlias != "" {
+				effective[curAlias] = curUser
+			}
 		case "ENTRYPOINT", "CMD":
-			if !hasUser && stageStart >= 0 {
+			if !hasUser && inStage {
 				out = append(out, dockerfileViolation{
 					instrIdx: i,
 					msg:      "ENTRYPOINT/CMD with no preceding USER directive in this stage",
@@ -193,6 +231,29 @@ func checkMissingUser(instrs []dockerfileInstr) []dockerfileViolation {
 	return out
 }
 
+// stageAlias returns the lowercased `AS <name>` of a FROM line, or "".
+func stageAlias(args string) string {
+	fields := strings.Fields(args)
+	for i := 0; i+1 < len(fields); i++ {
+		if strings.EqualFold(fields[i], "AS") {
+			return strings.ToLower(fields[i+1])
+		}
+	}
+	return ""
+}
+
+// userOf returns the user part of a USER argument ("user", "user:group",
+// "uid[:gid]").
+func userOf(args string) string {
+	u := strings.TrimSpace(args)
+	if c := strings.Index(u, ":"); c >= 0 {
+		u = u[:c]
+	}
+	return u
+}
+
+func isRootUser(u string) bool { return u == "root" || u == "0" }
+
 func checkUserRoot(instrs []dockerfileInstr) []dockerfileViolation {
 	out := []dockerfileViolation{}
 	for i, ins := range instrs {
@@ -200,12 +261,7 @@ func checkUserRoot(instrs []dockerfileInstr) []dockerfileViolation {
 			continue
 		}
 		args := strings.TrimSpace(ins.Args)
-		// USER may be "user", "user:group", or "uid[:gid]".
-		userPart := args
-		if c := strings.Index(args, ":"); c >= 0 {
-			userPart = args[:c]
-		}
-		if userPart == "root" || userPart == "0" {
+		if isRootUser(userOf(args)) {
 			out = append(out, dockerfileViolation{
 				instrIdx: i,
 				msg:      fmt.Sprintf("USER %s sets root", args),
