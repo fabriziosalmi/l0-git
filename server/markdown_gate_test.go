@@ -382,3 +382,62 @@ func TestMD_IllustrativeJSONNotFlagged(t *testing.T) {
 		t.Errorf("genuinely invalid JSON (with a URL) must still fire")
 	}
 }
+
+func mdLinkFindings(t *testing.T, files map[string]string) []Finding {
+	t.Helper()
+	root := initRepoWithFiles(t, files)
+	fs, err := checkMarkdownLint(context.Background(), root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []Finding
+	for _, f := range fs {
+		if strings.HasSuffix(f.FilePath, ":link_local_broken") {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// Jekyll publishes page.md as page.html and its sources link to the published
+// name. Shape taken from the public-repo sweep (docs/_config.yml + _pages/).
+func TestMD_HTMLLinkToSiblingMarkdownUnderSiteGenerator(t *testing.T) {
+	got := mdLinkFindings(t, map[string]string{
+		"docs/_config.yml":                   "title: x\n",
+		"docs/_pages/api-reference.md":       "# API\n\nSee [the CLI](cli-reference.html).\n",
+		"docs/_pages/cli-reference.md":       "# CLI\n",
+		"docs/_pages/getting-started.md":     "# Start\n\n[Config](configuration.HTML)\n",
+		"docs/_pages/configuration.markdown": "# Config\n",
+	})
+	if len(got) != 0 {
+		t.Errorf("generated-page links resolve under a site generator, got: %+v", got)
+	}
+}
+
+// Without a generator, a `.html` link to a file that only exists as `.md` is
+// broken for everyone reading on the forge — it must keep firing. So must a
+// `.html` link with no `.md` behind it, generator or not.
+func TestMD_HTMLLinkStillBrokenWithoutGeneratorOrSource(t *testing.T) {
+	cases := map[string]map[string]string{
+		"no generator": {
+			"docs/api.md": "[cli](cli.html)\n",
+			"docs/cli.md": "# CLI\n",
+		},
+		"generator but no source": {
+			"docs/_config.yml": "title: x\n",
+			"docs/api.md":      "[cli](cli.html)\n",
+		},
+		"generator only in a sibling tree": {
+			"site/_config.yml": "title: x\n",
+			"docs/api.md":      "[cli](cli.html)\n",
+			"docs/cli.md":      "# CLI\n",
+		},
+	}
+	for name, files := range cases {
+		t.Run(name, func(t *testing.T) {
+			if len(mdLinkFindings(t, files)) != 1 {
+				t.Errorf("link must still be reported as broken")
+			}
+		})
+	}
+}
