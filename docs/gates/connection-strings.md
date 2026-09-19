@@ -29,10 +29,27 @@ Each category carries its own severity:
 | `http_remote` | info | plain `http://` to a remote host |
 
 Three tiers, three reasons. **Credentials** are a leaked secret, whatever the
-protocol. The **legacy cleartext protocols** are a transport choice that moves
+protocol — including a password-only one like `redis://:password@host`. The **legacy cleartext protocols** are a transport choice that moves
 data unauthenticated and unencrypted, and is worth changing. **Database URIs,
 JDBC, LDAP and plain HTTP** are worth seeing but are mostly configuration, docs
 and links — reporting them above info would bury the two tiers above.
+
+### Credentials to a host nobody else can reach
+
+A `creds_in_url` finding drops from error to **warning** when the host is
+`localhost`, a loopback address, or a single-label name such as a
+docker-compose service (`db`, `postgres`, `redis`):
+
+```text
+postgresql://app:app_dev_password@db:5432/app          → warning
+postgresql://app:app_dev_password@db-prod.internal/app → error
+```
+
+It is still reported. The password is in the repository and passwords get
+reused; what changes is how far the leak reaches. Private addresses,
+`.internal` and `.local` stay at error — anyone on that network can use the
+credential — and so does a templated host like `${DB_HOST}`, which can resolve
+to production.
 
 ### Not reported
 
