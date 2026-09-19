@@ -139,7 +139,7 @@ func TestStore_ListFilters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(p1) != 1 || p1[0].Project != "/p1" {
+	if len(p1) != 1 || p1[0].Project != normalizeProject("/p1") {
 		t.Fatalf("List p1: got %+v", p1)
 	}
 }

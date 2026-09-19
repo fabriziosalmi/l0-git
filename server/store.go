@@ -142,6 +142,7 @@ func (s *Store) Close() error { return s.db.Close() }
 // (project, gate_id, file_path) tuple already exists. Resolved/ignored
 // findings get reopened when re-detected.
 func (s *Store) Upsert(ctx context.Context, f Finding) (*Finding, error) {
+	f.Project = normalizeProject(f.Project)
 	now := time.Now().UnixMilli()
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO findings (project, gate_id, severity, title, message, file_path, tags, status, created_at, updated_at)
@@ -161,6 +162,7 @@ func (s *Store) Upsert(ctx context.Context, f Finding) (*Finding, error) {
 }
 
 func (s *Store) GetByKey(ctx context.Context, project, gateID, filePath string) (*Finding, error) {
+	project = normalizeProject(project)
 	row := s.db.QueryRowContext(ctx, `
 		SELECT id, project, gate_id, severity, title, message, file_path, tags, status, created_at, updated_at
 		FROM findings
@@ -286,6 +288,7 @@ func (s *Store) List(ctx context.Context, f FindingFilter) ([]Finding, error) {
 // is NOT in keep. Returns the number of rows updated. Used after a fresh check
 // to retire findings that the gate no longer reports.
 func (s *Store) MarkResolved(ctx context.Context, project, gateID string, keep []string) (int, error) {
+	project = normalizeProject(project)
 	now := time.Now().UnixMilli()
 	if len(keep) == 0 {
 		res, err := s.db.ExecContext(ctx, `
@@ -470,11 +473,14 @@ func (s *Store) Stats(ctx context.Context, project string) (*FindingsStats, erro
 	return out, nil
 }
 
-// normalizeProject puts a project filter into the form RunChecks stores:
-// filepath.Abs, which also cleans it. Findings are keyed by that exact string,
-// so without this `-project=/repo/` or `/x/../repo` matched nothing and list,
-// stats and clear answered "0" for a project that had findings — a wrong
-// answer in silence. Empty stays empty: it means "every project".
+// normalizeProject is the one spelling the store keys projects by:
+// filepath.Abs, which also cleans. Every method that takes a project applies
+// it, on the way in and on the way out, so `-project=/repo/` or `/x/../repo`
+// finds what `lgit check /repo` stored. Before, only RunChecks normalised, and
+// list, stats and clear answered "0" for a project that had findings — a wrong
+// answer in silence. Normalising reads alone is not enough: on Windows
+// Abs("/p") is `D:\p`, so an unnormalised write would no longer match.
+// Empty stays empty: it means "every project".
 func normalizeProject(project string) string {
 	if project == "" {
 		return ""
