@@ -233,7 +233,7 @@ func (s *Store) List(ctx context.Context, f FindingFilter) ([]Finding, error) {
 	args := []any{}
 	if f.Project != "" {
 		q += ` AND project = ?`
-		args = append(args, f.Project)
+		args = append(args, normalizeProject(f.Project))
 	}
 	if f.Status != "" {
 		q += ` AND status = ?`
@@ -340,6 +340,7 @@ func (s *Store) Ignore(ctx context.Context, id int64) (bool, error) {
 }
 
 func (s *Store) ClearProject(ctx context.Context, project string) (int, error) {
+	project = normalizeProject(project)
 	res, err := s.db.ExecContext(ctx, `DELETE FROM findings WHERE project = ?`, project)
 	if err != nil {
 		return 0, err
@@ -379,6 +380,7 @@ type DayCount struct {
 // Stats computes every aggregation the Overview webview needs in one trip.
 // Empty project means "across all projects" — useful for a global view.
 func (s *Store) Stats(ctx context.Context, project string) (*FindingsStats, error) {
+	project = normalizeProject(project)
 	out := &FindingsStats{
 		Project:    project,
 		BySeverity: map[string]int{},
@@ -466,6 +468,21 @@ func (s *Store) Stats(ctx context.Context, project string) (*FindingsStats, erro
 	out.Last7Days = build7DayTrend(dayRows, time.Now())
 
 	return out, nil
+}
+
+// normalizeProject puts a project filter into the form RunChecks stores:
+// filepath.Abs, which also cleans it. Findings are keyed by that exact string,
+// so without this `-project=/repo/` or `/x/../repo` matched nothing and list,
+// stats and clear answered "0" for a project that had findings — a wrong
+// answer in silence. Empty stays empty: it means "every project".
+func normalizeProject(project string) string {
+	if project == "" {
+		return ""
+	}
+	if abs, err := filepath.Abs(project); err == nil {
+		return abs
+	}
+	return filepath.Clean(project)
 }
 
 func projectClause(project string) (string, []any) {

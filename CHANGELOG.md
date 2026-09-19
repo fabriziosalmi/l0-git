@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- `lgit list`, `stats` and `clear` (and the matching MCP tools) now accept any spelling of the project path. Findings are stored under the absolute, cleaned path, and the filter was compared as a raw string, so `-project=/repo/` or `/x/../repo` returned 0 findings, and `clear` removed nothing while reporting success.
+
 ## [0.2.1] - 2026-09-19
 
 ### Changed
