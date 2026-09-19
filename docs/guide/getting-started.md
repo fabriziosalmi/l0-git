@@ -143,4 +143,4 @@ See [Configuration](./configuration) for the full schema, including the
 
 - [VS Code extension](./vscode) — the same findings in the editor.
 - [Claude Code / MCP](./mcp) — let an agent run the gates and read the fixes.
-- [Gate reference](/gates/) — what all 35 gates actually check.
+- [Gate reference](/gates/) — what all 36 gates actually check.

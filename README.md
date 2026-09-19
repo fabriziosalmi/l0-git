@@ -25,7 +25,7 @@ One Go binary. No CGO, no Python, no rule engine, no YAML DSL.
 
 ## See it work
 
-<img src="docs/public/demo-cli.svg" alt="Terminal session: lgit check reports 35 gates and 19 findings, lgit list filters to the two errors, and lgit fix prints a deterministic recipe with the exact git commands to run." width="700">
+<img src="docs/public/demo-cli.svg" alt="Terminal session: lgit check reports 36 gates and 19 findings, lgit list filters to the two errors, and lgit fix prints a deterministic recipe with the exact git commands to run." width="700">
 
 `lgit check` runs the gates and persists what it found. `lgit list` queries it.
 `lgit fix` explains one finding — and for the eight gates with deterministic
@@ -60,14 +60,14 @@ subcommand and flag.
 
 ## What it checks
 
-35 gates. Follow a link for what each one actually looks at, its options, and
+36 gates. Follow a link for what each one actually looks at, its options, and
 how to silence it.
 
 | Theme | Gates |
 |---|---|
 | [Project hygiene](https://fabriziosalmi.github.io/l0-git/gates/#project-hygiene) | README, LICENSE, CONTRIBUTING, SECURITY, CHANGELOG, CODE_OF_CONDUCT, PR and issue templates, CI workflow |
 | [Governance](https://fabriziosalmi.github.io/l0-git/gates/#governance) | CODEOWNERS, branch protection declared as code |
-| [Git hygiene](https://fabriziosalmi.github.io/l0-git/gates/#git-hygiene) | `.gitignore` presence and coverage, merge markers, large files, vendored dirs, IDE artefacts, executable bits, filename quality |
+| [Git hygiene](https://fabriziosalmi.github.io/l0-git/gates/#git-hygiene) | `.gitignore` presence and coverage, tracked files the `.gitignore` excludes, merge markers, large files, vendored dirs, IDE artefacts, executable bits, filename quality |
 | [Security](https://fabriziosalmi.github.io/l0-git/gates/#security) | Secrets scan, connection strings, network literals |
 | [Git history](https://fabriziosalmi.github.io/l0-git/gates/#git-history-opt-in) | Secrets and large blobs still in `.git` (opt-in) |
 | [Containers](https://fabriziosalmi.github.io/l0-git/gates/#containers) | Dockerfile lint, Compose lint |
