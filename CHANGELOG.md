@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- **Credentials to a host nobody else can reach are a warning, not an error.** `creds_in_url` drops to warning when the host is `localhost`, a loopback address, or a single-label name such as a docker-compose service. On the author's public repositories that was 23 of 26 errors: `postgresql://…:nis2secret@localhost`, `…:proximity_dev_password@db`. They are downgraded, not dropped — the password is still committed and passwords get reused. Private addresses, `.internal`, `.local` and templated hosts stay at error.
+
+### Fixed
+
+- **Password-only credential URLs were not treated as credentials.** The rule required a non-empty username, so `redis://:password@host` — how Redis spells a password-only credential — surfaced as an info-level `db_uri`, and over `rediss://` produced nothing at all.
+
 ### Fixed
 
 Found by running every gate over all 100 of the author's public repositories (fresh clones, 3,460 findings) and reading the 38 errors one by one and the warnings by matched literal. Each fix below is paired with a test for the thing it must NOT silence, and a re-run of the corpus attributed all 319 removed findings to these fixes, with no removal left unexplained.

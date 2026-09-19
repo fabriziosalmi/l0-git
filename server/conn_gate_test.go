@@ -478,6 +478,45 @@ func credsSeverity(t *testing.T, url string) string {
 	return ""
 }
 
+// Development credentials whose only reachable target is the developer's own
+// stack. The first two are the shape the public-repo sweep reported at error.
+// Downgraded, not dropped: they must still be reported.
+func TestConnectionStrings_LocalOnlyCredsAreWarning(t *testing.T) {
+	for _, u := range []string{
+		"postgresql+asyncpg://nis2:nis2secret@localhost:5432/nis2",
+		"postgresql://proximity:proximity_dev_password@db:5432/proximity",
+		"postgres://app:Tr0ub4dor@127.0.0.1:5432/app",
+		"postgres://app:Tr0ub4dor@127.8.9.10/app",
+		"redis://:Tr0ub4dor@redis:6379/0",
+		"postgres://app:Tr0ub4dor@[::1]:5432/app",
+		"postgres://app:Tr0ub4dor@api.localhost/app",
+		"amqp://app:Tr0ub4dor@rabbit_mq:5672/",
+	} {
+		if got := credsSeverity(t, u); got != SeverityWarning {
+			t.Errorf("%s: severity %q, want warning", u, got)
+		}
+	}
+}
+
+// Anyone on these networks can use the password, so they stay at error. The
+// template host is the trap: no dot, but it can resolve to production.
+func TestConnectionStrings_ReachableOrUnknownHostCredsStayError(t *testing.T) {
+	for _, u := range []string{
+		"postgres://admin:Tr0ub4dor@db-prod.internal/app",
+		"postgres://admin:Tr0ub4dor@10.0.0.5:5432/app",
+		"postgres://admin:Tr0ub4dor@192.168.1.10/app",
+		"postgres://admin:Tr0ub4dor@db.acme-corp.io/app",
+		"postgres://admin:Tr0ub4dor@db.local/app",
+		"postgres://admin:Tr0ub4dor@${DB_HOST}:5432/app",
+		"postgres://admin:Tr0ub4dor@{host}/app",
+		"postgres://admin:Tr0ub4dor@[2001:db8::10]/app",
+	} {
+		if got := credsSeverity(t, u); got != SeverityError {
+			t.Errorf("%s: severity %q, want error", u, got)
+		}
+	}
+}
+
 // A password-only userinfo is still a credential. These were reported at info
 // as a generic db_uri, and rediss:// not at all.
 func TestConnectionStrings_EmptyUsernameCredsFire(t *testing.T) {

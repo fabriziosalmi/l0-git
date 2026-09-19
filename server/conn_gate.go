@@ -374,16 +374,86 @@ func scanConnectionLine(rel string, lineNum int, content []byte) []Finding {
 				continue
 			}
 			claimed = append(claimed, claimedSpan{start, end})
+			severity, advice := p.severity, p.advice
+			if p.id == "creds_in_url" && credsHostIsLocalOnly(text) {
+				severity = SeverityWarning
+				advice += " The host is reachable only from this machine or its container network, so this is reported as a warning rather than an error — but the password is still in the repository, and passwords get reused."
+			}
 			out = append(out, Finding{
-				Severity: p.severity,
+				Severity: severity,
 				Title:    p.title,
-				Message:  fmt.Sprintf("%s in %s:%d. %s", text, rel, lineNum, p.advice),
+				Message:  fmt.Sprintf("%s in %s:%d. %s", text, rel, lineNum, advice),
 				FilePath: fmt.Sprintf("%s:%d:%s", rel, lineNum, p.id),
 			})
 		}
 	}
 	return out
 }
+
+// credsHostIsLocalOnly reports whether a credential URL points at a host that
+// nobody outside this machine or its container network can reach: localhost,
+// a loopback address, or a single-label name such as a docker-compose service
+// (`db`, `postgres`, `redis`).
+//
+// Such a finding is DOWNGRADED from error to warning, never dropped. The
+// public-repo sweep had ~24 credential findings at error of the shape
+// `postgresql://nis2:nis2secret@localhost` and `proximity_dev_password@db` —
+// development defaults whose only reachable target is the developer's own
+// stack. Suppressing them was already ruled out: the password vocabulary rule
+// must keep `readonly_dev_pass` firing, because real passwords contain
+// password-ish words. Reachability is a different axis, and it changes how bad
+// the leak is, not whether it happened.
+//
+// Deliberately NOT treated as local: private addresses (10/8, 192.168/16,
+// 172.16/12), `.internal`, `.local`. urlHostExempt accepts those for cleartext
+// HTTP, where the question is whether traffic crosses the internet. For a
+// credential the question is who can use it, and anyone on that network can.
+func credsHostIsLocalOnly(rawURL string) bool {
+	schemeEnd := strings.Index(rawURL, "://")
+	if schemeEnd < 0 {
+		return false
+	}
+	rest := rawURL[schemeEnd+3:]
+	user, pass, ok := splitUserInfo(rest)
+	if !ok {
+		return false
+	}
+	hostPart := rest[len(user)+1+len(pass)+1:]
+	var host string
+	if strings.HasPrefix(hostPart, "[") {
+		end := strings.IndexByte(hostPart, ']')
+		if end < 0 {
+			return false
+		}
+		host = hostPart[1:end]
+	} else {
+		end := len(hostPart)
+		for i, c := range hostPart {
+			if c == '/' || c == ':' || c == '?' || c == '#' {
+				end = i
+				break
+			}
+		}
+		host = hostPart[:end]
+	}
+	host = strings.ToLower(host)
+	if host == "" {
+		return false
+	}
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback() || ip.IsUnspecified()
+	}
+	// A single label is resolved by a container network or a hosts file,
+	// never by public DNS. It has to be a real name, though: `${DB_HOST}` and
+	// `{host}` contain no dot either, and a template can resolve to anything,
+	// production included.
+	return singleLabelHostRe.MatchString(host)
+}
+
+var singleLabelHostRe = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?$`)
 
 // hasPlausibleAuthority reports whether a matched `scheme://…` has something
 // after the `://` that could be a host, a userinfo, or a template for one.
