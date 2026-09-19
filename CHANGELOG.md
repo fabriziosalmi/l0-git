@@ -16,6 +16,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- **Findings sharing a location overwrote each other in the store.** A finding is keyed on `file:line:rule`, so two broken links or three addresses on one line shared a key, and the store kept only the last one written — its message and its severity. On the author's 100 public repositories that was 243 of 3,149 findings (7.7%): present in `lgit check`'s JSON, absent from `lgit list`, the VS Code sidebar and MCP, and silenced by an `ignore` on the one that survived. They are now folded into a single finding that lists each of them, at the highest severity in the group. The key is unchanged, so nothing already ignored resurfaces and no migration is needed; `check`'s JSON and the store now agree on every repository of that corpus.
+
 Found by running every gate over all 100 of the author's public repositories (fresh clones, 3,460 findings) and reading the 38 errors one by one and the warnings by matched literal. Each fix below is paired with a test for the thing it must NOT silence, and a re-run of the corpus attributed all 319 removed findings to these fixes, with no removal left unexplained.
 
 - **`creds_in_url`: Python and Ruby interpolation are templates, not passwords.** `amqp://{user}:{passwd}@{host}` and `{settings.RABBITMQ_PASS}` were reported at ERROR as committed credentials; `${VAR}` and `{{ var }}` were already recognised. The field has to be the whole password — `pa{ss}word` still fires.
