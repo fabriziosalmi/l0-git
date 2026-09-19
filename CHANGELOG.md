@@ -8,6 +8,23 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+Found by running every gate over all 100 of the author's public repositories (fresh clones, 3,460 findings) and reading the 38 errors one by one and the warnings by matched literal. Each fix below is paired with a test for the thing it must NOT silence, and a re-run of the corpus attributed all 319 removed findings to these fixes, with no removal left unexplained.
+
+- **`creds_in_url`: Python and Ruby interpolation are templates, not passwords.** `amqp://{user}:{passwd}@{host}` and `{settings.RABBITMQ_PASS}` were reported at ERROR as committed credentials; `${VAR}` and `{{ var }}` were already recognised. The field has to be the whole password — `pa{ss}word` still fires.
+- **`secrets_scan`: tokens minted by the jwt.io debugger are recognised by their claims.** Only the two pre-filled tokens were known, as exact strings, and editing any claim in the debugger re-signs the token. A token carrying both jwt.io defaults — `"sub": "1234567890"` and `"iat": 1516239022` — is now treated as the example it is; either claim alone still fires.
+- **`dockerfile_lint`: `missing_user` follows `USER` through `FROM <stage>`.** A stage built on an earlier stage inherits its user, so `FROM base AS production` after `USER app` runs as `app` and was reported as running as root — the commonest multi-stage layout there is. Only a non-root inherited user counts.
+- **Content gates skip istanbul coverage report pages.** `htmlcov/` was already skipped; the JavaScript equivalent was not, and one committed vitest report produced 288 `html_lint` findings from a single file. Matched by the report's own naming (`<file>.ts.html` inside `coverage/`), because `coverage/` alone is an ordinary first-party name. `lcov-report/` is skipped by name.
+- **`network_scan`: IANA special-purpose ranges.** `192.0.0.0/24` (IETF protocol assignments), `192.88.99.0/24` and `0.0.0.0/8` were classified as public addresses at warning — in SSRF blocklists, which is exactly where these ranges appear in real code. They now report as `reserved` at info.
+- **`network_scan`: filtering resolvers.** Cloudflare for Families (`1.1.1.3`, `1.0.0.3`) and AdGuard's family and non-filtering resolvers were missing from the public-resolver list.
+- **`connection_strings`: a scheme named in prose is not a connection string.** `` `ftp://` `` in documentation and `(?:https?://|ftp://)` in a pattern have nothing to connect to. An empty authority, or one starting with a character no host, userinfo or template can start with, is no longer reported.
+- **`markdown_lint`: Jekyll and Hugo generated-page links.** `[CLI](cli-reference.html)` next to `cli-reference.md` is how those generators link; it is now resolved — but only when a site-generator config sits above the file, since on a forge such a link really is broken.
+
+### Documentation
+
+- **`docs/gates/connection-strings.md` stated the wrong severities.** It said every category other than `creds_in_url` reports at info; `ftp`, `telnet`, `smb`, `nfs` and `rsync` report at warning. The page now carries a per-category table taken from the code, and a test pins every per-rule documentation table — Dockerfile, Compose, HTML, CSS, Markdown and connection strings — to the code's severities in both directions, since the existing guard only checked each gate's default.
+
+### Fixed
+
 - **Mistyped gate options were ignored in silence.** Every gate parsed its own `gate_options` sub-tree with `_ = json.Unmarshal(opts, &o)`: a decode failure — a typo'd key, a string where a number belongs, a string where a list belongs — was discarded and the gate ran on its defaults. `"threshold_mb": "20"` left the threshold at 5. `"exclude_path"` excluded nothing. No error, no warning, exit 0, valid JSON. The config file did not do what it said and there was no way to notice. Roughly nineteen option keys across twenty gates were affected, `exclude_paths` among them.
 
   `gate_options` is now validated before any gate runs, strictly — unknown keys and wrong types both rejected — against the gate that owns it. An unknown gate id, or options on a gate that takes none, are reported too. In keeping with the existing decision for top-level config errors, problems are **surfaced, never fatal**: the run continues, the exit code stays `0`, and the text lands in `config_error` as before.
