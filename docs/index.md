@@ -4,7 +4,7 @@ layout: home
 hero:
   name: "l0-git"
   text: "Quality gates that mean the same thing everywhere"
-  tagline: "35 deterministic checks over your repository — one Go binary, shared by your shell, your editor and your coding agent."
+  tagline: "36 deterministic checks over your repository — one Go binary, shared by your shell, your editor and your coding agent."
   image:
     src: /logo.svg
     alt: l0-git
@@ -22,7 +22,7 @@ hero:
 features:
   - title: Deterministic by construction
     details: A gate fires only when the violation is a binary condition over the file system, the git index or a parse tree. Same tree, same findings, on any machine — no model, no network, no threshold to tune.
-  - title: 35 gates, tuned against real repositories
+  - title: 36 gates, tuned against real repositories
     details: Secrets, git hygiene, containers, accessibility, governance, docs. Current defaults come out of an adversarial sweep across 220 real repositories, so the noisy categories are already off.
   - title: One binary, one store
     details: Pure Go, no CGO. The CLI, the MCP server and the VS Code extension are three front ends over the same SQLite file — ignore a finding in the editor and CI agrees.
@@ -38,7 +38,7 @@ features:
 
 Three commands against a small broken project — real output, nothing staged:
 
-![Terminal session: lgit check reports 35 gates and 19 findings, lgit list filters to the two errors, and lgit fix prints a deterministic recipe with the exact git commands to run.](/demo-cli.svg)
+![Terminal session: lgit check reports 36 gates and 19 findings, lgit list filters to the two errors, and lgit fix prints a deterministic recipe with the exact git commands to run.](/demo-cli.svg)
 
 `lgit check` runs the gates and persists findings. `lgit list` filters them.
 `lgit fix` explains one — and for the eight gates with deterministic recipes,

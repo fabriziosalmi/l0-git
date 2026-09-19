@@ -1,11 +1,11 @@
 ---
 title: Gate reference
-description: All 35 built-in gates, grouped by theme.
+description: All 36 built-in gates, grouped by theme.
 ---
 
 # Gate reference
 
-l0-git ships **35 built-in gates**. Every one of them fires only when the
+l0-git ships **36 built-in gates**. Every one of them fires only when the
 violation can be stated as a binary condition over the file system, the git
 index, or a parse tree — so a finding is reproducible on any machine, and two
 runs over the same tree always agree.
@@ -46,6 +46,7 @@ lgit gates          # the same list, straight from the binary
 |---|---|---|
 | [.gitignore present](/gates/gitignore-present) | Warning | The first line of defence against committing build artefacts and secrets by accident. |
 | [.gitignore coverage](/gates/gitignore-coverage) | Warning | Having a `.gitignore` is not the same as having the right one. |
+| [Tracked file matches .gitignore](/gates/ignored-file-tracked) | Warning | Your `.gitignore` says a file should not be in the repository, and the index says it is. |
 | [Merge conflict markers](/gates/merge-conflict-markers) | Error | An unresolved conflict marker on a shipping branch is never intentional. |
 | [Large file tracked](/gates/large-file-tracked) | Warning | Large binaries in git are permanent: every clone pays for them forever, even after you delete them. |
 | [Vendored directory tracked](/gates/vendored-dir-tracked) | Warning | Dependency directories are meant to be rebuilt from a manifest. |

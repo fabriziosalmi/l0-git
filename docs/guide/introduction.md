@@ -48,7 +48,7 @@ weigh it — and where being wrong costs a suggestion rather than a red build.
 
 ![Architecture: the VS Code extension, MCP clients and the shell all drive one lgit binary, which reads the working tree and the git index and persists findings to a shared SQLite store.](/architecture.svg)
 
-- **The engine** — `lgit`, a single binary holding all 35 gates and the
+- **The engine** — `lgit`, a single binary holding all 36 gates and the
   findings store.
 - **The CLI** — `lgit check`, `list`, `fix`, … Everything prints JSON, so it
   pipes into `jq` and into CI.
@@ -71,5 +71,5 @@ something once and later runs will not resurface it.
 ## What next
 
 - [Getting started](./getting-started) — install and first scan.
-- [Gate reference](/gates/) — all 35 gates.
+- [Gate reference](/gates/) — all 36 gates.
 - [Configuration](./configuration) — `.l0git.json`, severities, scan options.

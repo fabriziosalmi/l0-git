@@ -6,13 +6,13 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **`ignored_file_tracked`** — reports files that are in the git index even though the repository's own `.gitignore` excludes them: committed before the rule existed, or force-added. The index and the ignore rules disagree, and the gate says so without guessing which side is right — the fix is either `git rm --cached` or a `!` negation that writes the exception down. Grouped by directory, and root-level files as one group. Only **committed** `.gitignore` files are consulted, never `.git/info/exclude` or the user's global excludes, so the result is the same on every machine. `.gitkeep` files, env templates and vendored trees are left to the gates that own them. On the author's 100 public repositories it found 417 such files in 26 repositories, among them private keys under an excluded `data/`, a committed `.env`, a coverage report and 259 generated reports.
+
 ### Changed
 
 - **Credentials to a host nobody else can reach are a warning, not an error.** `creds_in_url` drops to warning when the host is `localhost`, a loopback address, or a single-label name such as a docker-compose service. On the author's public repositories that was 23 of 26 errors: `postgresql://…:nis2secret@localhost`, `…:proximity_dev_password@db`. They are downgraded, not dropped — the password is still committed and passwords get reused. Private addresses, `.internal`, `.local` and templated hosts stay at error.
-
-### Fixed
-
-- **Password-only credential URLs were not treated as credentials.** The rule required a non-empty username, so `redis://:password@host` — how Redis spells a password-only credential — surfaced as an info-level `db_uri`, and over `rediss://` produced nothing at all.
 
 ### Fixed
 
@@ -27,11 +27,7 @@ Found by running every gate over all 100 of the author's public repositories (fr
 - **`connection_strings`: a scheme named in prose is not a connection string.** `` `ftp://` `` in documentation and `(?:https?://|ftp://)` in a pattern have nothing to connect to. An empty authority, or one starting with a character no host, userinfo or template can start with, is no longer reported.
 - **`markdown_lint`: Jekyll and Hugo generated-page links.** `[CLI](cli-reference.html)` next to `cli-reference.md` is how those generators link; it is now resolved — but only when a site-generator config sits above the file, since on a forge such a link really is broken.
 
-### Documentation
-
-- **`docs/gates/connection-strings.md` stated the wrong severities.** It said every category other than `creds_in_url` reports at info; `ftp`, `telnet`, `smb`, `nfs` and `rsync` report at warning. The page now carries a per-category table taken from the code, and a test pins every per-rule documentation table — Dockerfile, Compose, HTML, CSS, Markdown and connection strings — to the code's severities in both directions, since the existing guard only checked each gate's default.
-
-### Fixed
+- **Password-only credential URLs were not treated as credentials.** The rule required a non-empty username, so `redis://:password@host` — how Redis spells a password-only credential — surfaced as an info-level `db_uri`, and over `rediss://` produced nothing at all.
 
 - **Mistyped gate options were ignored in silence.** Every gate parsed its own `gate_options` sub-tree with `_ = json.Unmarshal(opts, &o)`: a decode failure — a typo'd key, a string where a number belongs, a string where a list belongs — was discarded and the gate ran on its defaults. `"threshold_mb": "20"` left the threshold at 5. `"exclude_path"` excluded nothing. No error, no warning, exit 0, valid JSON. The config file did not do what it said and there was no way to notice. Roughly nineteen option keys across twenty gates were affected, `exclude_paths` among them.
 
@@ -40,6 +36,10 @@ Found by running every gate over all 100 of the author's public repositories (fr
 - **A rejected `gate_options` sub-tree no longer applies in part.** Reporting the problem was not enough on its own: the gate still received the raw sub-tree, and its lenient parser applied whatever happened to decode — so `{"threshold_mb": 20, "treshold_mb": 1}` warned about the typo and then used 20 anyway. A config half-obeyed is the same class of problem as one silently ignored. A gate whose options are rejected now runs on its defaults; the project-level `exclude_paths` still apply, since those parsed fine and have nothing to do with the gate's mistake.
 - **A `gate_options` sub-tree of `null` is reported.** JSON `null` decodes into any pointer without error, so it slipped past the strict check and left the gate on defaults with nothing said.
 - **`lgit check` prints config problems to stderr.** `config_error` had existed for some time but only ever appeared in the JSON, which hides it from the most common use of the command — `lgit check . | jq '.findings | length'` in CI. stdout stays a clean JSON document.
+
+### Documentation
+
+- **`docs/gates/connection-strings.md` stated the wrong severities.** It said every category other than `creds_in_url` reports at info; `ftp`, `telnet`, `smb`, `nfs` and `rsync` report at warning. The page now carries a per-category table taken from the code, and a test pins every per-rule documentation table — Dockerfile, Compose, HTML, CSS, Markdown and connection strings — to the code's severities in both directions, since the existing guard only checked each gate's default.
 
 ## [0.1.29] - 2026-08-21
 

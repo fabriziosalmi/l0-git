@@ -35,5 +35,5 @@
 
   <text x="600" y="326" text-anchor="middle"
         font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
-        font-size="13.5" letter-spacing="0.4" fill="#6A7080">35 gates · one Go binary · MCP server · VS Code extension</text>
+        font-size="13.5" letter-spacing="0.4" fill="#6A7080">36 gates · one Go binary · MCP server · VS Code extension</text>
 </svg>

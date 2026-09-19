@@ -91,6 +91,7 @@ export default defineConfig({
           items: [
             { text: '.gitignore present', link: '/gates/gitignore-present' },
             { text: '.gitignore coverage', link: '/gates/gitignore-coverage' },
+            { text: 'Tracked file matches .gitignore', link: '/gates/ignored-file-tracked' },
             { text: 'Merge conflict markers', link: '/gates/merge-conflict-markers' },
             { text: 'Large file tracked', link: '/gates/large-file-tracked' },
             { text: 'Vendored directory tracked', link: '/gates/vendored-dir-tracked' },
