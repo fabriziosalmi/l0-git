@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"strings"
 	"testing"
 )
@@ -359,5 +360,50 @@ func TestNetworkScan_NotGitRepo(t *testing.T) {
 	}
 	if len(fs) != 1 || fs[0].Severity != SeverityInfo {
 		t.Errorf("expected one info skip, got: %+v", fs)
+	}
+}
+
+// IANA special-purpose ranges that are not globally reachable. 192.0.0.0/24 is
+// the one the public-repo sweep reported as a PUBLIC address at warning, from
+// an SSRF blocklist.
+func TestClassifyIPv4_SpecialPurposeRanges(t *testing.T) {
+	reserved := []string{
+		"192.0.0.0", "192.0.0.8", "192.0.0.170", "192.0.0.255", // IETF protocol assignments
+		"192.88.99.1",          // deprecated 6to4 relay anycast
+		"0.1.2.3", "0.255.0.1", // this-network
+	}
+	for _, a := range reserved {
+		sev, cat := classifyIPv4(net.ParseIP(a))
+		if sev != SeverityInfo || cat != "reserved" {
+			t.Errorf("%s = (%s, %s), want (info, reserved)", a, sev, cat)
+		}
+	}
+	// The ranges' immediate neighbours are ordinary allocated space and must
+	// keep reporting as public — a boundary one address too wide would hide a
+	// hardcoded production endpoint.
+	public := []string{"192.0.1.1", "191.255.255.254", "192.88.98.1", "192.88.100.1", "1.0.0.9"}
+	for _, a := range public {
+		sev, cat := classifyIPv4(net.ParseIP(a))
+		if sev != SeverityWarning || cat != "public" {
+			t.Errorf("%s = (%s, %s), want (warning, public)", a, sev, cat)
+		}
+	}
+	// 0.0.0.0 keeps its own category; the /8 must not swallow it.
+	if _, cat := classifyIPv4(net.ParseIP("0.0.0.0")); cat != "unspecified" {
+		t.Errorf("0.0.0.0 = %s, want unspecified", cat)
+	}
+}
+
+func TestClassifyIPv4_FilteringResolvers(t *testing.T) {
+	for _, a := range []string{"1.1.1.3", "1.0.0.3", "94.140.14.15", "94.140.15.16", "94.140.14.140", "94.140.14.141"} {
+		if _, cat := classifyIPv4(net.ParseIP(a)); cat != "public-resolver" {
+			t.Errorf("%s = %s, want public-resolver", a, cat)
+		}
+	}
+	// A neighbour of a resolver is not a resolver.
+	for _, a := range []string{"1.1.1.4", "1.0.0.4", "94.140.14.16"} {
+		if _, cat := classifyIPv4(net.ParseIP(a)); cat != "public" {
+			t.Errorf("%s = %s, want public", a, cat)
+		}
 	}
 }
