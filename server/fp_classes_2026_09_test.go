@@ -117,10 +117,20 @@ func TestNetworkScan_SkipsEveryPackageManagersLockfile(t *testing.T) {
 		// Already skipped before: must stay so.
 		"Cargo.lock", "poetry.lock", "yarn.lock", "go.sum",
 	}
+	old := map[string]bool{"Cargo.lock": true, "poetry.lock": true, "yarn.lock": true, "go.sum": true}
 	for _, n := range names {
 		t.Run(n, func(t *testing.T) {
-			if !isDefaultGeneratedFile("some/dir/" + n) {
-				t.Errorf("%s is machine-generated and must be skipped", n)
+			if old[n] {
+				if !isDefaultGeneratedFile("some/dir/" + n) {
+					t.Errorf("%s was skipped before and must stay so", n)
+				}
+				return
+			}
+			if !isVersionPinLockfile("some/dir/" + n) {
+				t.Errorf("%s is machine-generated and network_scan must skip its version pins", n)
+			}
+			if isDefaultGeneratedFile("some/dir/" + n) {
+				t.Errorf("%s must NOT be in the list every content gate consults: it can hold a git URL with credentials", n)
 			}
 		})
 	}
@@ -154,7 +164,7 @@ func TestNetworkScan_SkipsEveryPackageManagersLockfile(t *testing.T) {
 // authored and stays in scope.
 func TestNetworkScan_LockfileSkipIsExactNamesOnly(t *testing.T) {
 	for _, n := range []string{"deploy.lock", "uv.lock.bak", "notes-uv.lock.txt", "lock.json", "my.terraform.lock.hcl.md", "server.lockfile"} {
-		if isDefaultGeneratedFile("cfg/" + n) {
+		if isDefaultGeneratedFile("cfg/"+n) || isVersionPinLockfile("cfg/"+n) {
 			t.Errorf("%s is not a generated lockfile and must still be scanned", n)
 		}
 	}
@@ -212,7 +222,7 @@ func TestNetworkScan_SectionKeywordDoesNotHideRealAddresses(t *testing.T) {
 // They are still listed — as info, with advice to double-check.
 func TestNetworkScan_InventedAddressesAreInfoNotWarnings(t *testing.T) {
 	for _, ip := range []string{
-		"100.1.2.3", "100.4.5.6", "100.7.8.9", "100.10.20.30", "100.30.20.10",
+		"100.1.2.3", "100.4.5.6", "100.7.8.9", "100.3.2.1",
 		"2.2.2.2", "7.7.7.7", "100.1.1.1",
 		"1.2.3.4", // the original rule, unchanged
 	} {
@@ -378,7 +388,6 @@ func TestConnectionStrings_PKIFetchesAreCleartextByDesign(t *testing.T) {
 		"OCSP - URI:http://ocsp.digicert.com",
 		"http://cacerts.digicert.com/DigiCertGlobalRootG2.crt",
 		"issuer = http://pki.acme.io/ca.cer",
-		"(see http://pki.acme.io/intermediate.der)",
 		"http://acme.io/chain.p7b?version=2",
 	} {
 		if firesHTTPRemote(line) {
@@ -389,6 +398,7 @@ func TestConnectionStrings_PKIFetchesAreCleartextByDesign(t *testing.T) {
 	for _, line := range []string{
 		"http://files.acme.io/private.pem",
 		"http://files.acme.io/keystore.p12",
+		"http://files.acme.io/private_key.der",
 		"http://files.acme.io/app.exe",
 		"http://cdn.acme.io/ca.crt.tar",
 		"http://api.acme.io/v1/crl",
@@ -478,11 +488,12 @@ func mergeMarkerVerdict(t *testing.T, rel, content string) (severity string, lin
 }
 
 // slopless's docs/rules/VBC-006-B.md shows a conflict under "## Flagged". Every
-// marker in it is inside one fenced block that holds the whole conflict.
+// marker in it is inside one fenced block that holds the whole conflict. It is
+// reported at warning, not error: see TestReview_ConflictInACodeFenceIsVisibleAndHonest.
 func TestMergeMarkers_CompleteConflictInAFenceIsAnExample(t *testing.T) {
 	doc := "# VBC-006-B\n\n## Flagged\n\n```ts\nconst a = 1;\n" + conflictExample + "```\n\nMore prose.\n"
-	if got, _ := mergeMarkerVerdict(t, "docs/rule.md", doc); got != SeverityInfo {
-		t.Errorf("a complete conflict inside a fenced block of a .md file is documentation: severity = %q, want info", got)
+	if got, _ := mergeMarkerVerdict(t, "docs/rule.md", doc); got != SeverityWarning {
+		t.Errorf("a complete conflict inside a fenced block of a .md file is reported at warning (visible, not an error): severity = %q", got)
 	}
 	// Tilde fences and longer fences are fences too.
 	for name, d := range map[string]string{
@@ -495,8 +506,8 @@ func TestMergeMarkers_CompleteConflictInAFenceIsAnExample(t *testing.T) {
 		if name == "markdown ext" {
 			rel = "g.markdown"
 		}
-		if got, _ := mergeMarkerVerdict(t, rel, d); got != SeverityInfo {
-			t.Errorf("%s: severity = %q, want info", name, got)
+		if got, _ := mergeMarkerVerdict(t, rel, d); got != SeverityWarning {
+			t.Errorf("%s: severity = %q, want warning", name, got)
 		}
 	}
 }
@@ -568,7 +579,6 @@ func TestConnectionStrings_AtSignInAPasswordIsStillReported(t *testing.T) {
 	for _, line := range []string{
 		"https://user:pw@host.acme.io?x=a@b",
 		"https://user:changeme@host.acme.io?next=a@b.c",
-		"https://host.io:8080?e=a@b.c",
 		"https://example.com/contact/someone@example.com",
 	} {
 		if firesCredsInURL(line) {

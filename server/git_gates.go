@@ -67,15 +67,17 @@ func checkMergeConflictMarkers(ctx context.Context, root string, opts json.RawMe
 		}
 		if line, example, ok := findMergeMarker(rel, data); ok {
 			if example {
-				// A complete conflict shown inside a fenced code block of a
-				// Markdown file: almost always documentation of the syntax
-				// (a rule page, a git tutorial). Reported, at info, rather
-				// than silenced — the same text is also what a real conflict
-				// that landed inside a code block looks like.
+				// One complete conflict inside a fenced code block of a
+				// Markdown file. It is what a rule page or a git tutorial shows —
+				// and it is also exactly what a real conflict in a README code
+				// sample looks like, when two branches edit the same example.
+				// So it is reported at WARNING, which the editor shows by
+				// default (info is hidden), and the text does not claim to know
+				// which it is.
 				out = append(out, Finding{
-					Severity: SeverityInfo,
-					Title:    "Merge conflict markers shown in a code example",
-					Message:  fmt.Sprintf("%s:%d holds a complete merge conflict (<<<<<<<, =======, >>>>>>>) inside a fenced code block — documentation of the syntax, not an unresolved conflict. If it IS a conflict, resolve it.", rel, line),
+					Severity: SeverityWarning,
+					Title:    "Merge conflict markers inside a code block",
+					Message:  fmt.Sprintf("%s:%d holds a complete merge conflict (<<<<<<<, =======, >>>>>>>) inside a fenced code block. That is what documentation of the syntax looks like, and also what a real conflict in a code sample looks like: check which it is, and resolve it if it is a conflict.", rel, line),
 					FilePath: rel,
 				})
 				continue
@@ -117,12 +119,17 @@ func findFirstMergeMarker(data []byte) (int, bool) {
 // A rule page or a git tutorial shows a conflict inside a fenced code block, and
 // the directional markers at the start of its lines are exactly what the gate
 // looks for (slopless's docs/rules/VBC-006-B.md). In a Markdown file each fenced
-// block is judged on its own: a block that holds a COMPLETE conflict — `<<<<<<<`,
-// then `=======`, then `>>>>>>>`, in that order — is an example; a marker outside
-// every block, or in a block that does not hold the whole conflict, is real.
-// example is true only when EVERY marker in the file is of the first kind, so a
-// real conflict anywhere else in the file still wins, and its line is the one
-// reported.
+// block is judged on its own: a block whose markers are exactly ONE conflict —
+// `<<<<<<<`, then `=======`, then `>>>>>>>` (optionally with a `|||||||` base in
+// between), and nothing else — is an example. A marker outside every block, in a
+// block that does not hold exactly that, or in a block that is never closed, is
+// real. example is true only when EVERY marker in the file is of the first kind,
+// so a real conflict anywhere else in the file still wins, and its line is the
+// one reported.
+//
+// An example is still a finding (see checkMergeConflictMarkers): the same text is
+// what a real conflict in a README code sample looks like — two branches editing
+// the same example — and nothing here can tell the two apart.
 func findMergeMarker(rel string, data []byte) (line int, example, ok bool) {
 	low := strings.ToLower(rel)
 	if !strings.HasSuffix(low, ".md") && !strings.HasSuffix(low, ".markdown") && !strings.HasSuffix(low, ".mdx") {
@@ -134,13 +141,12 @@ func findMergeMarker(rel string, data []byte) (line int, example, ok bool) {
 		realLine, exampleLine int
 		fence                 byte // the fence character while inside a block, else 0
 		fenceLen              int
-		blockFirst            int  // first marker line in the current block
-		sawOpen, sawSep       bool // ordered: < then = then >
-		sawClose              bool
+		blockFirst            int    // first marker line in the current block
+		seq                   []byte // the markers of the current block, in order: < | = >
 	)
 	endBlock := func() {
 		if blockFirst != 0 {
-			if sawOpen && sawSep && sawClose {
+			if s := string(seq); s == "<=>" || s == "<|=>" {
 				if exampleLine == 0 {
 					exampleLine = blockFirst
 				}
@@ -148,7 +154,7 @@ func findMergeMarker(rel string, data []byte) (line int, example, ok bool) {
 				realLine = blockFirst
 			}
 		}
-		fence, fenceLen, blockFirst, sawOpen, sawSep, sawClose = 0, 0, 0, false, false, false
+		fence, fenceLen, blockFirst, seq = 0, 0, 0, nil
 	}
 
 	for n, start := 1, 0; start <= len(data); n++ {
@@ -173,14 +179,18 @@ func findMergeMarker(rel string, data []byte) (line int, example, ok bool) {
 				if blockFirst == 0 {
 					blockFirst = n
 				}
-				switch {
-				case content[0] == '<':
-					sawOpen = true
-				case content[0] == '>' && sawOpen && sawSep:
-					sawClose = true
+				switch content[0] {
+				case '<':
+					seq = append(seq, '<')
+				case '|':
+					seq = append(seq, '|')
+				case '>':
+					seq = append(seq, '>')
 				}
-			} else if trimmed == "=======" && sawOpen {
-				sawSep = true
+			} else if trimmed == "=======" && blockFirst != 0 {
+				// A `=======` before any directional marker is a setext heading
+				// underline, which a code block is entitled to hold.
+				seq = append(seq, '=')
 			}
 		}
 		if end >= len(data) {

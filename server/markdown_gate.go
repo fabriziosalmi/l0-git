@@ -724,6 +724,13 @@ func isJSONStream(body string) bool {
 // `"tenants": <integer>`, `"id": <random uuid>`.
 var angleTokenRe = regexp.MustCompile(`^<[A-Za-z_][^<>\n"]{0,40}>`)
 
+// isValuePosition reports whether what has been written so far ends where a JSON
+// value may begin: after `:`, `,` or `[`, ignoring whitespace.
+func isValuePosition(written string) bool {
+	t := strings.TrimRight(written, " \t\r\n")
+	return t != "" && strings.ContainsRune(":,[", rune(t[len(t)-1]))
+}
+
 // neutralizeJSONIllustrations removes `//` and `/* */` comments and replaces
 // `<placeholder>` tokens with null, both OUTSIDE string literals — `//` inside
 // "http://x" and `<` inside "<uuid>" are data, and are left alone. The bool
@@ -768,7 +775,10 @@ func neutralizeJSONIllustrations(body string) (string, bool) {
 			out.WriteByte(' ')
 			changed = true
 		case c == '<':
-			if tok := angleTokenRe.FindString(body[i:]); tok != "" {
+			// Only where a JSON VALUE belongs: after `:`, `,` or `[`. A tag on
+			// its own (`<html>`, `<response>`) is markup, not a placeholder, and
+			// replacing it would turn it into `null`, which is valid JSON.
+			if tok := angleTokenRe.FindString(body[i:]); tok != "" && isValuePosition(out.String()) {
 				out.WriteString("null")
 				i += len(tok)
 				changed = true
@@ -791,10 +801,24 @@ var counterExampleLabelRe = regexp.MustCompile(
 	`^(?:an? |the )?(?:bad|wrong|incorrect|invalid|broken|anti-?pattern|don'?t|do not|avoid)` +
 		`(?: (?:example|examples|config|configuration|yaml|json|snippet|usage|way|syntax|format|indentation|practice))*:?$`)
 
-// counterExampleCommentRe matches a comment INSIDE the block that labels it (or
-// the part after it) as wrong: `# Bad: Missing space after colon`.
+// counterExampleCommentRe matches a comment that labels the block as wrong:
+// `# Bad: Missing space after colon`. It is applied to the FIRST line of the
+// block only — that is where a label goes — because a comment in the middle of a
+// YAML block that happens to say `# Don't: expose 5432 publicly` or
+// `# Invalid: use 'image' not 'img'` is advice about the configuration, and
+// letting it excuse the whole block would hide a snippet that really is broken.
 var counterExampleCommentRe = regexp.MustCompile(
-	`(?im)^\s*(?:#|//|--|;)\s*(?:❌|✗|✘)?\s*(?:bad|wrong|incorrect|invalid|don'?t|do not|avoid)\b\s*[:\-–—]`)
+	`(?i)^\s*(?:#|//|--|;)\s*(?:❌|✗|✘)?\s*(?:bad|wrong|incorrect|invalid)\b\s*[:\-–—]`)
+
+// firstNonBlankLine returns the first line of s that is not blank.
+func firstNonBlankLine(s string) string {
+	for _, l := range strings.Split(s, "\n") {
+		if strings.TrimSpace(l) != "" {
+			return l
+		}
+	}
+	return ""
+}
 
 var labelNoise = strings.NewReplacer("*", "", "_", "", "#", "", "`", "", ">", "",
 	"❌", "", "✗", "", "✘", "", "✖", "", "🚫", "", "⛔", "", "’", "'")
@@ -809,13 +833,14 @@ func isCounterExampleLabel(line string) bool {
 // it, or by a comment inside it. A block the author calls broken is meant to
 // be, and "does not parse" is then the point of the example, not a defect.
 func isLabelledCounterExample(body, previousLine string) bool {
-	return isCounterExampleLabel(previousLine) || counterExampleCommentRe.MatchString(body)
+	return isCounterExampleLabel(previousLine) || counterExampleCommentRe.MatchString(firstNonBlankLine(body))
 }
 
 // previousNonBlankLine returns the closest non-blank line above 1-based line k,
-// looking at most three lines back ("" when there is none).
+// looking at most two lines back — so a label is "directly above" a block even
+// with one blank line between them, and no further ("" when there is none).
 func previousNonBlankLine(source []byte, lineStarts []int, k int) string {
-	for back := 1; back <= 3; back++ {
+	for back := 1; back <= 2; back++ {
 		n := k - back // 1-based line number
 		if n < 1 || n > len(lineStarts) {
 			return ""

@@ -124,7 +124,7 @@ func checkNetworkScan(ctx context.Context, root string, opts json.RawMessage) ([
 	reportUnspecified := scan.ReportUnspecified != nil && *scan.ReportUnspecified
 	out := []Finding{}
 	for _, rel := range files {
-		if scan.shouldSkipContent(rel) {
+		if scan.shouldSkipContent(rel) || isVersionPinLockfile(rel) {
 			continue
 		}
 		// Changelog / release-note files routinely describe IP-related behaviour
@@ -558,6 +558,12 @@ var publicResolvers = map[string]bool{
 	"64.6.64.6": true, "64.6.65.6": true, // Verisign
 	"4.2.2.1": true, "4.2.2.2": true, // Level3
 	"77.88.8.8": true, "77.88.8.1": true, // Yandex
+	// Chinese public resolvers. Repeated-octet addresses, so without an entry
+	// here the synthetic-octet rule would call them placeholders.
+	"114.114.114.114": true, "114.114.115.115": true, // 114DNS
+	"223.5.5.5": true, "223.6.6.6": true, // AliDNS
+	"119.29.29.29": true, // DNSPod
+	"180.76.76.76": true, // Baidu
 }
 
 // isSequentialOctets reports whether the four octets form a strictly
@@ -587,8 +593,12 @@ func isSequentialOctets(ip net.IP) bool {
 //
 //   - every octet equal: 2.2.2.2, 7.7.7.7;
 //   - the last three equal: 100.1.1.1;
-//   - the last three in an arithmetic run with a step of 1 or 10, either way,
-//     none of them zero: 100.1.2.3, 100.4.5.6, 100.7.8.9, 100.10.20.30.
+//   - the last three in a run with a step of 1, either way, none of them
+//     zero: 100.1.2.3, 100.4.5.6, 100.7.8.9.
+//
+// A step of 10 (100.10.20.30) was part of this rule and was removed after
+// review: it also describes real allocations (52.20.30.40 is an AWS address),
+// and three findings were not worth hiding those.
 //
 // It is weaker than isSequentialOctets, which demands all FOUR octets in a run,
 // so it only ever moves a finding from warning to info — the finding stays
@@ -611,7 +621,7 @@ func isSyntheticOctets(ip net.IP) bool {
 		return true
 	}
 	step := c - b
-	if d-c == step && (step == 1 || step == -1 || step == 10 || step == -10) {
+	if d-c == step && (step == 1 || step == -1) {
 		return true
 	}
 	return false

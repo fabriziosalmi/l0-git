@@ -32,12 +32,16 @@ has four honest reasons for a snippet that does not. None is reported:
 - **A stream** of JSON values one after another (`{"detail": "a"}` then
   `{"detail": "b"}`): how a troubleshooting page lists alternative responses.
 - **Comments and type placeholders** in JSON: `"features": {…}   // optional` and
-  `"tenants": <integer>`. They are removed *outside string literals only*, and the
-  block is accepted only if what is left parses strictly — one with a real syntax
-  error as well is still reported.
-- **A block labelled as the wrong way to do it**: a `# Bad: …` comment inside it,
-  or a line directly above it that is only a label (`**Bad**:`, `### Wrong`,
-  `❌ Bad example`, `Don't:`).
+  `"tenants": <integer>`. They are removed *outside string literals only*, a
+  placeholder only where a JSON **value** belongs (after `:`, `,` or `[` — an
+  `<html>` tag on its own is not one), and the block is accepted only if what is
+  left parses strictly — one with a real syntax error as well is still reported.
+- **A block labelled as the wrong way to do it**: its **first line** is a
+  `# Bad: …` / `# Wrong: …` / `# Incorrect: …` / `# Invalid: …` comment, or the line
+  directly above it (one blank line allowed) is only a label — `**Bad**:`,
+  `### Wrong`, `❌ Bad example`, `Don't:`. A comment in the *middle* of a block, such as
+  `# Don't: expose 5432 publicly`, is advice about the configuration and does not
+  excuse the block.
 
 ### Why codeblock_no_language is opt-in
 

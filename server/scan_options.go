@@ -257,12 +257,17 @@ var generatedFileBasenames = map[string]bool{
 	"cargo.lock":          true,
 	"go.sum":              true,
 	"flake.lock":          true,
+}
 
-	// Added after a sweep of the author's own repositories found
-	// `version = "1.2.0.2"` in a uv.lock reported as a public address, eleven
-	// times: the list had Poetry and Pipenv but not their successor. Exact
-	// names only — a generic `*.lock` suffix would also swallow hand-written
-	// files that merely end that way.
+// versionPinLockfiles are lockfiles of package managers that were missing from
+// generatedFileBasenames. They are NOT added to it, because that list makes
+// EVERY content gate skip the file, and these files routinely record a git URL
+// verbatim — `Podfile.lock`, `Package.resolved`, `mix.lock` and `pubspec.lock`
+// keep the credentials of a private dependency — so secrets_scan and
+// connection_strings must keep reading them. What misled network_scan was the
+// version pins (`version = "1.2.0.2"` in a uv.lock, eleven times as a public
+// address), and that is the only gate that skips them. Exact names, lower case.
+var versionPinLockfiles = map[string]bool{
 	"uv.lock":              true,
 	"pdm.lock":             true,
 	"pixi.lock":            true,
@@ -282,6 +287,11 @@ var generatedFileBasenames = map[string]bool{
 	"cabal.project.freeze": true,
 	"gopkg.lock":           true,
 	"glide.lock":           true,
+}
+
+// isVersionPinLockfile reports whether rel names one of versionPinLockfiles.
+func isVersionPinLockfile(rel string) bool {
+	return versionPinLockfiles[strings.ToLower(filepath.Base(rel))]
 }
 
 // isDefaultGeneratedFile reports whether rel is a machine-generated artefact

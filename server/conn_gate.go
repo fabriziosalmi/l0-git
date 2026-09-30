@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -144,18 +145,23 @@ func splitHostPath(rest string) (host, path string) {
 	return host, strings.TrimRight(path, ")]}>.,;:`")
 }
 
-// pkiFetchSuffixes are the file types a certificate chain is fetched as.
-// Deliberately NOT `.pem`, `.p12` or `.pfx`: those can carry a private key, and
-// fetching one in the clear is exactly what this rule exists to report.
-var pkiFetchSuffixes = []string{".crt", ".cer", ".crl", ".der", ".p7b", ".p7c"}
+// pkiFetchSuffixes are the file types a certificate chain or a revocation list
+// is fetched as. Deliberately NOT `.pem`, `.p12`, `.pfx` or `.der`: those can
+// carry a private key (DER is the usual encoding of one), and fetching a key in
+// the clear is exactly what this rule exists to report.
+var pkiFetchSuffixes = []string{".crt", ".cer", ".crl", ".p7b", ".p7c"}
 
-// isPKIFetchURL reports whether a cleartext URL is a certificate-chain or
-// revocation fetch. RFC 5280 makes these http:// by design — Authority
+// isPKIFetchURL reports whether a cleartext URL is a certificate-chain,
+// revocation or OCSP fetch. RFC 5280 makes these http:// by design — Authority
 // Information Access, CRL distribution points and OCSP responders cannot depend
 // on the TLS they are being used to bootstrap, and what is fetched is verified
 // by signature, not by the channel. certmate's chain fixtures alone held 88.
+//
+// An `ocsp.` host is exempt only at its root path: an OCSP responder IS the
+// root (`http://ocsp.digicert.com`), whereas `http://ocsp.acme-cdn.io/install.sh`
+// is a download that borrowed the label.
 func isPKIFetchURL(host, path string) bool {
-	if first, _, _ := strings.Cut(host, "."); first == "ocsp" || first == "crl" {
+	if first, _, _ := strings.Cut(host, "."); first == "ocsp" && (path == "" || path == "/") {
 		return true
 	}
 	for _, suf := range pkiFetchSuffixes {
@@ -166,29 +172,41 @@ func isPKIFetchURL(host, path string) bool {
 	return false
 }
 
-// licenseURLs are host + path-prefix pairs for license and standard identifiers
-// quoted in source headers and schema declarations. `http://` is the canonical
-// spelling of every one of them — `Licensed under the Apache License …
-// http://www.apache.org/licenses/LICENSE-2.0` heads millions of files — and
-// nothing is ever fetched over the wire. The PATH is part of the match: the
-// same hosts serve downloads, and `http://www.apache.org/dist/…zip` is a
-// genuine cleartext fetch.
-var licenseURLs = []struct{ host, pathPrefix string }{
-	{"www.apache.org", "/licenses/"}, {"apache.org", "/licenses/"},
-	{"www.gnu.org", "/licenses/"}, {"gnu.org", "/licenses/"},
-	{"www.fsf.org", "/licensing/"}, {"fsf.org", "/licensing/"},
-	{"opensource.org", "/licenses/"}, {"www.opensource.org", "/licenses/"},
-	{"scripts.sil.org", "/ofl"},
-	{"www.mozilla.org", "/mpl"}, {"mozilla.org", "/mpl"},
-	{"creativecommons.org", "/licenses/"}, {"creativecommons.org", "/publicdomain/"},
-	{"spdx.org", "/licenses/"},
-	{"www.eclipse.org", "/legal/"},
-	{"json-schema.org", "/draft"},
+// licenseURLs name, per host, the FIRST PATH SEGMENT of a license or standard
+// identifier quoted in a source header or a schema declaration. `http://` is the
+// canonical spelling of every one of them — `Licensed under the Apache License
+// … http://www.apache.org/licenses/LICENSE-2.0` heads millions of files — and
+// nothing is ever fetched over the wire. The segment is matched WHOLE, not as a
+// string prefix, and only after the path has been cleaned: the same hosts serve
+// downloads, `http://www.apache.org/dist/…zip` is a genuine cleartext fetch, and
+// `/mplayer-setup.exe` is not `/mpl`.
+var licenseURLs = []struct {
+	host    string
+	segment *regexp.Regexp
+}{
+	{"www.apache.org", regexp.MustCompile(`^licenses$`)}, {"apache.org", regexp.MustCompile(`^licenses$`)},
+	{"www.gnu.org", regexp.MustCompile(`^licenses$`)}, {"gnu.org", regexp.MustCompile(`^licenses$`)},
+	{"www.fsf.org", regexp.MustCompile(`^licensing$`)}, {"fsf.org", regexp.MustCompile(`^licensing$`)},
+	{"opensource.org", regexp.MustCompile(`^licenses$`)}, {"www.opensource.org", regexp.MustCompile(`^licenses$`)},
+	{"scripts.sil.org", regexp.MustCompile(`^ofl(?:_web|-faq(?:_web)?)?$`)},
+	{"www.mozilla.org", regexp.MustCompile(`^mpl$`)}, {"mozilla.org", regexp.MustCompile(`^mpl$`)},
+	{"creativecommons.org", regexp.MustCompile(`^(?:licenses|publicdomain)$`)},
+	{"spdx.org", regexp.MustCompile(`^licenses$`)},
+	{"www.eclipse.org", regexp.MustCompile(`^legal$`)},
+	{"json-schema.org", regexp.MustCompile(`^draft(?:-?[0-9]+(?:-[0-9]+)?)?$`)},
 }
 
 func isLicenseOrStandardURL(host, path string) bool {
+	// A dot-segment can walk out of the directory the prefix names.
+	if strings.Contains(path, "..") {
+		return false
+	}
+	first, _, _ := strings.Cut(strings.TrimPrefix(pathpkg.Clean("/"+path), "/"), "/")
+	if first == "" {
+		return false
+	}
 	for _, u := range licenseURLs {
-		if host == u.host && strings.HasPrefix(path, u.pathPrefix) {
+		if host == u.host && u.segment.MatchString(first) {
 			return true
 		}
 	}
@@ -206,11 +224,12 @@ var inventedPlaceholderHosts = map[string]bool{
 	"yourserver.com": true, "yourdomain.com": true, "yoursite.com": true, "yourhost.com": true,
 }
 
-// ipLikePrefixRe matches a host that STARTS like an IP address — `192.168.evil.net`,
-// `169.254.attacker.io`. That is the classic way to smuggle a public name past a
-// check that looks for a private range, and the one thing that must never be
-// read as an example, whatever the name after it says.
-var ipLikePrefixRe = regexp.MustCompile(`^\d{1,3}\.\d{1,3}\.`)
+// ipLikePrefixRe matches a host whose FIRST LABEL is a number — `192.168.evil.net`,
+// `10.evil.com`, `0177.0.0.1.evil.com`, `0x7f.evil.com`. That is the classic way
+// to smuggle a public name past a check that looks for a private range, and the
+// one thing that must never be read as an example, whatever the name after it
+// says.
+var ipLikePrefixRe = regexp.MustCompile(`^(?:0x[0-9a-f]+|[0-9]+)(?:\.|$)`)
 
 func isInventedAttackerHost(host string) bool {
 	if ipLikePrefixRe.MatchString(host) {
@@ -693,12 +712,6 @@ func credsAreNonSecret(rawURL string) bool {
 		return false
 	}
 	rest := rawURL[schemeEnd+3:]
-	// The creds_in_url regex also matches `https://host.io:8080?e=a@b.c`, reading
-	// `host.io` as a user and `8080?e=a` as a password. There is no userinfo in
-	// it — the `@` belongs to the query — so there is no credential either.
-	if userinfoEnd(rest) < 0 {
-		return true
-	}
 	rawUser, rawPass, ok := splitUserInfo(rest)
 	if !ok {
 		return false
@@ -725,16 +738,15 @@ func credsAreNonSecret(rawURL string) bool {
 	}
 	// Structural markers disqualify the whole URL: a regex metacharacter
 	// means this is a detection rule, not a URL — on either side.
+	//
+	// That is also what recognises a hook that greps for credentials,
+	// `postgresql://[^:]+:[^@]+@|sk_(test|live)_`. It had been silenced only
+	// because its user, `[^`, was two characters long; the password, read up to
+	// the LAST `@` (see userinfoEnd), holds the whole `[^@]` class. A separate
+	// "host made of regex syntax" rule was added and removed again: it tested
+	// everything after the `@`, so `(see postgres://u:pw@db/app)` was silenced
+	// by the `)` of the prose around it, and nothing needed it.
 	if hasRegexSyntax(rawUser) || hasRegexSyntax(rawPass) {
-		return true
-	}
-	// …and so does a HOST made of regex syntax. A hook that greps for
-	// credentials contains `postgresql://[^:]+:[^@]+@|sk_(test|live)_`: there is
-	// no complete `[…]` in either userinfo segment, and it used to be silenced
-	// only because its user, `[^`, was two characters long — a coincidence the
-	// short-username fix removed. Alternation, grouping and escapes never occur
-	// in a hostname (an IPv6 literal's brackets are not among them).
-	if strings.ContainsAny(rest, "|()\\") {
 		return true
 	}
 	// A one- or two-CHARACTER password is prose shorthand in a doc comment
@@ -745,7 +757,10 @@ func credsAreNonSecret(rawURL string) bool {
 	// login) and `x` (`https://x:<token>@github.com`) are both real logins in
 	// front of real passwords. The username is not the secret; only the
 	// password's shape says whether there is one.
-	if isProseShorthand(rawPass) {
+	//
+	// Not when the user IS the credential: `https://<token>:x@github.com` puts
+	// the secret in the user slot and a one-character password after it.
+	if isProseShorthand(rawPass) && !looksLikeBareToken(rawUser) {
 		return true
 	}
 	// Vocabulary rules apply to the PASSWORD only. The username is not the

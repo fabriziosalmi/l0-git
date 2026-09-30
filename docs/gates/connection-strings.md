@@ -64,23 +64,36 @@ to production.
   to local or container-internal hosts.
 - `http://` that is cleartext **by design**:
   - certificate-chain and revocation fetches — a path ending `.crt`, `.cer`,
-    `.crl`, `.der`, `.p7b` or `.p7c`, or an `ocsp.` / `crl.` host (RFC 5280;
-    `.pem`, `.p12` and `.pfx` are *not* exempt, they can be private keys);
-  - license and schema identifiers quoted in source headers
-    (`http://www.apache.org/licenses/…`, `http://www.gnu.org/licenses/…`,
-    `http://scripts.sil.org/OFL`, `http://json-schema.org/draft-07/schema#`) —
-    the path is part of the rule, so `http://www.apache.org/dist/…zip` is still
-    a real cleartext download;
+    `.crl`, `.p7b` or `.p7c`, or an `ocsp.` host **at its root path** (RFC 5280).
+    `.pem`, `.p12`, `.pfx` and `.der` are *not* exempt, they can be private keys,
+    and `http://ocsp.acme-cdn.io/install.sh` is a download that borrowed the label;
+  - license and schema identifiers quoted in source headers — the host **and the
+    first path segment, matched whole, after the path is cleaned**:
+    `http://www.apache.org/licenses/…`, `http://www.gnu.org/licenses/…`,
+    `http://scripts.sil.org/OFL`, `http://json-schema.org/draft-07/schema#`. So
+    `http://www.apache.org/dist/…zip`, `…/licenses/../dist/…` and
+    `http://www.mozilla.org/mplayer-setup.exe` are still reported;
   - the stock fake adversary of a security test: `evil.com`, `sub.attacker.com`,
-    `malicious.io`, `yourserver.com`. A host that starts like an IP
-    (`192.168.evil.net`) is never an example.
-- A URL with no userinfo at all: `https://host.io:8080?e=a@b.c` (the `@` belongs
-  to the query).
-- Regex syntax standing where a URL should be, such as a pre-commit hook that
-  greps for `postgresql://[^:]+:[^@]+@|sk_(test|live)_`.
+    `malicious.io`, `yourserver.com`. A host whose first label is a number
+    (`192.168.evil.net`, `10.evil.com`, `0177.0.0.1.evil.com`, `0x7f.evil.com`) is
+    never an example.
+- A pattern that greps for credentials, such as a pre-commit hook containing
+  `postgresql://[^:]+:[^@]+@|sk_(test|live)_` — regex syntax where a URL should be.
 - A one- or two-**character** password — `scheme://u:p@host`, `user:…@…` in prose.
-  It is the password that counts, not the user: `sqlserver://sa:<password>@host`
-  and `https://x:<token>@github.com` are reported.
+  It is the password that counts, not the user: `sa` (SQL Server's default login)
+  or `x` in front of a real password or token is reported, and so is a token in the
+  **user** slot with a one-character password (`https://<token>:x@github.com`).
+  (A literal `<password>` or `<token>` is a placeholder and is not reported.)
+
+### Where the password stops
+
+The userinfo ends at the **last** `@` before the path, so `user:p@ss@host` has the
+password `p@ss` and `P@ssw0rd#2024` is read whole. A `?` or `#` makes that
+ambiguous — it may start a query, or be part of the password — and is settled by
+what lies between it and the last `@`: a `key=value` query ends the userinfo before
+it (`https://user:pw@host?x=a@b`), anything else does not. Where the evidence is
+silent the reading that keeps the password in view wins, because hiding a
+credential is the failure that matters.
 
 ## What a finding says
 
