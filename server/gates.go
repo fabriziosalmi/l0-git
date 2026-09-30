@@ -491,6 +491,10 @@ func RunChecks(ctx context.Context, store *Store, projectRoot, gateID string) (*
 			if fs[i].Title == "" {
 				fs[i].Title = g.Title
 			}
+			// The one funnel every finding passes through on its way to the
+			// store, the CLI and MCP: no gate's message may carry a secret,
+			// whether or not that gate remembered to mask it.
+			fs[i].Message = redactSecrets(fs[i].Message)
 			if fs[i].Tags == "" {
 				fs[i].Tags = g.Tags
 			}

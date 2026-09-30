@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Security
+
+- **Findings no longer carry credentials.** `connection_strings` put the matched URL, password included, into the finding message. That message is written to the SQLite store, printed by `lgit check` / `lgit list`, returned over MCP, and shown by the editor in the Problems pane, the hover and the "ask Claude" prompt, so every credential the scanner found became another copy of it — kept even after the original was removed from the repository (on the author's own store: 448 rows across 39 projects, 245 of them already marked resolved). The password is now `***` (`postgres://admin:***@db:5432/app`), as is the value of a `?password=` / `;pwd=` / `?api_key=` parameter and a token used as the whole user. The mask runs in the gate and again at the single funnel every finding passes through, so no gate can leak by forgetting. A password containing `@`, `#` or `?` is masked up to the last `@` of the authority rather than the first.
+- **Existing stores are scrubbed on first open.** A one-off migration (schema version 1) rewrites every stored message and then `VACUUM`s the database, because the old text also lives in pages freed by earlier deletes and upserts: on a real 39 MB store the row rewrite alone left 9 of 47 distinctive passwords readable in the file, and with the `VACUUM` none. `updated_at` is untouched. A newer store is never migrated backwards.
+- **The store is private to its owner.** The database and its WAL/shm files are now `0600` and directories lgit creates are `0700`; the default `~/.l0-git`, created `0755` by earlier versions, is tightened. A directory you point `LGIT_DB` into is left exactly as it was. `secure_delete` is on, so freed bytes are overwritten.
+- Credentials that appeared in findings were readable in `~/.l0-git/findings.db` until now: rotate any that were real.
+
+### Fixed
+
+- The test suite no longer depends on the developer's global git configuration. A `.DS_Store` in `~/.gitignore_global` made `git add -A` skip the fixture file, so `TestIdeArtifactTracked_FlagsArtefacts` failed on those machines and passed on CI.
+- Docs: the `connection_strings` example finding was not what the gate prints.
+
 ## [0.2.2] - 2026-09-19
 
 ### Added

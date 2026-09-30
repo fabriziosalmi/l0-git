@@ -145,6 +145,12 @@ $ lgit path
 /Users/you/.l0-git/findings.db
 ```
 
+The store holds every finding of every project you have scanned, so it is private
+to your user: the database and its WAL files are created `0600`, and the default
+`~/.l0-git` directory is `0700`. A directory you point `LGIT_DB` into is never
+touched if it already exists. Finding messages never contain a password — see
+[Connection strings](../gates/connection-strings#what-a-finding-says).
+
 ### `lgit version`
 
 ```sh
