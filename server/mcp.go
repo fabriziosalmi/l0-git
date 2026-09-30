@@ -180,7 +180,7 @@ func toolDefs() []map[string]any {
 		},
 		{
 			"name":        "findings_stats",
-			"description": "Aggregate counts for the Overview dashboard: by_severity, by_status, by_gate (top 50, open only), top_files (top 10, open only), by_tag (open only), and a 7-day trend over created_at.",
+			"description": "Aggregate counts for the Overview dashboard: by_severity, by_status, by_gate (top 50, open only), top_files (top 10, open only), by_tag (open only), and a 7-day trend over created_at. Also says how current they are: with a project, last_checked_at (ms; 0 = no check on record) and project_exists; without one, projects_tracked and projects_missing (directories that no longer exist — `lgit prune` removes their findings). Findings only change when a project is re-checked.",
 			"inputSchema": map[string]any{
 				"type": "object",
 				"properties": map[string]any{

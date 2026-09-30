@@ -53,7 +53,7 @@ make status
 | `gates_check` | `project`, `gate_id?` | Run all gates, or one, against a project root and persist the results |
 | `gates_list` | — | The registered gate set: id, title, description, severity, tags |
 | `findings_list` | `project?`, `status?`, `severity?`, `gate?`, `tag?`, `query?`, `sort?`, `limit?`, `offset?` | Filter, sort and paginate the findings store |
-| `findings_stats` | `project?` | `by_severity`, `by_status`, `by_gate`, `top_files`, `by_tag`, and a 7-day trend |
+| `findings_stats` | `project?` | `by_severity`, `by_status`, `by_gate`, `top_files`, `by_tag`, a 7-day trend, and how current they are: `last_checked_at` and `project_exists` (with a project), `projects_tracked` and `projects_missing` (without) — only a full check counts |
 | `findings_ignore` | `id` | Mark a finding ignored so later runs do not resurface it |
 | `findings_delete` | `id` | Drop a single finding |
 | `findings_clear` | `project` | Wipe every finding for a project |

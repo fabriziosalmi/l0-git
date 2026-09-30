@@ -436,6 +436,7 @@ func RunChecks(ctx context.Context, store *Store, projectRoot, gateID string) (*
 	}
 
 	out := &CheckResult{Project: abs, GatesRun: []string{}, Findings: []Finding{}}
+	var skippedNoGit []string
 	var configProblems []string
 	if cfgErr != nil {
 		// Surface but don't abort — bad config shouldn't take the whole
@@ -474,6 +475,15 @@ func RunChecks(ctx context.Context, store *Store, projectRoot, gateID string) (*
 		if err != nil {
 			return nil, fmt.Errorf("gate %s: %w", g.ID, err)
 		}
+		// On a full run, a directory that is not a git repository makes every
+		// gate that reads the git index say so, and sixteen identical notices is
+		// one fact stated sixteen times. Collect them and report it once below.
+		if gateID == "" {
+			var notGit bool
+			if fs, notGit = withoutNotGitNotice(fs); notGit {
+				skippedNoGit = append(skippedNoGit, g.ID)
+			}
+		}
 		// Severity precedence:
 		//   1. config severity override (forces all findings of this gate)
 		//   2. severity the gate set on the finding (tiered scanners)
@@ -492,6 +502,26 @@ func RunChecks(ctx context.Context, store *Store, projectRoot, gateID string) (*
 		}
 		if _, err := store.MarkResolved(ctx, abs, g.ID, keep); err != nil {
 			return nil, fmt.Errorf("retire stale findings for gate %s: %w", g.ID, err)
+		}
+	}
+	if gateID == "" {
+		if err := reportNotGitOnce(ctx, store, out, abs, skippedNoGit, cfg.ignored(notGitGateID)); err != nil {
+			return nil, err
+		}
+		// Recorded even when nothing was found: a clean project leaves no
+		// finding behind to say it was ever looked at, and "how old is this
+		// data" is a question the stats have to be able to answer. Only a FULL
+		// run is a check of the project: one gate run says nothing about the
+		// others, and recording it would make a stale project look fresh.
+		if err := store.RecordCheck(ctx, abs); err != nil {
+			return nil, fmt.Errorf("record check: %w", err)
+		}
+	} else if isGitRepo(abs) {
+		// A run narrowed to one gate cannot state that the directory is not a
+		// repository — but it can see that it now IS one, and then the notice is
+		// simply false.
+		if _, err := store.MarkResolved(ctx, abs, notGitGateID, nil); err != nil {
+			return nil, fmt.Errorf("retire the not-a-git-repository notice: %w", err)
 		}
 	}
 	return out, nil
@@ -780,4 +810,57 @@ func finalizeFindings(fs []Finding, projectRoot string, g Gate, override string,
 		}
 		fs[i].Message = redactSecrets(fs[i].Message)
 	}
+}
+
+// notGitGateID is the gate id the single "not a git repository" finding is filed
+// under. It is not a registered gate: it reports a property of the directory
+// that stops several gates from running, not a rule of its own.
+const notGitGateID = "git_repository"
+
+// withoutNotGitNotice removes the standard "skipped (not a git repository)"
+// finding (see requireGitRepo) from a gate's output and reports whether it was
+// there.
+func withoutNotGitNotice(fs []Finding) ([]Finding, bool) {
+	out := fs[:0:0]
+	found := false
+	for _, f := range fs {
+		if f.FilePath == ".git" && strings.HasSuffix(f.Title, "skipped (not a git repository)") {
+			found = true
+			continue
+		}
+		out = append(out, f)
+	}
+	return out, found
+}
+
+// reportNotGitOnce states, once, that the gates in skipped could not run
+// because the project root is not a git repository, or retires that statement
+// when it no longer holds (the directory has since been `git init`ed).
+func reportNotGitOnce(ctx context.Context, store *Store, out *CheckResult, abs string, skipped []string, ignored bool) error {
+	// `ignore_gates: ["git_repository"]` silences the notice, as ignoring each of
+	// the gates used to.
+	if len(skipped) == 0 || ignored {
+		if _, err := store.MarkResolved(ctx, abs, notGitGateID, nil); err != nil {
+			return fmt.Errorf("retire the not-a-git-repository notice: %w", err)
+		}
+		return nil
+	}
+	saved, err := store.Upsert(ctx, Finding{
+		Project:  abs,
+		GateID:   notGitGateID,
+		Severity: SeverityInfo,
+		Title:    fmt.Sprintf("Not a git repository — %d gates skipped", len(skipped)),
+		Message: fmt.Sprintf("Project root has no .git/, so the %d gates that read the git index were skipped: %s. "+
+			"Run `git init`, or run lgit from inside a clone.", len(skipped), strings.Join(skipped, ", ")),
+		FilePath: ".git",
+		Tags:     "project-hygiene",
+	})
+	if err != nil {
+		return fmt.Errorf("persist the not-a-git-repository notice: %w", err)
+	}
+	out.Findings = append(out.Findings, *saved)
+	if _, err := store.MarkResolved(ctx, abs, notGitGateID, []string{".git"}); err != nil {
+		return fmt.Errorf("retire stale not-a-git-repository notice: %w", err)
+	}
+	return nil
 }

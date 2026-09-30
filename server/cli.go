@@ -12,7 +12,7 @@ import (
 
 func runCLI(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: lgit <check|list|stats|gates|fix|ignore|delete|clear|path|version> [args...]")
+		return fmt.Errorf("usage: lgit <check|list|stats|gates|fix|ignore|delete|clear|prune|path|version> [args...]")
 	}
 
 	cmd, rest := args[0], args[1:]
@@ -121,6 +121,21 @@ func runCLI(args []string) error {
 			return err
 		}
 		return writeJSON(os.Stdout, s)
+	case "prune":
+		// lgit prune [-apply] [-keep-resolved-days=N]
+		opts, err := parsePruneFlags(rest)
+		if err != nil {
+			return err
+		}
+		path, err := defaultDBPath()
+		if err != nil {
+			return err
+		}
+		rep, err := store.Prune(ctx, path, opts)
+		if err != nil {
+			return err
+		}
+		return writeJSON(os.Stdout, rep)
 	case "fix":
 		// lgit fix <id> [--json]
 		// Prints a remediation recipe for the finding. Default output is
@@ -293,4 +308,42 @@ func splitFlag(token string) (string, string, bool) {
 		return stripped[:eq], stripped[eq+1:], true
 	}
 	return stripped, "", false
+}
+
+// defaultKeepResolvedDays is how long `lgit prune` keeps a resolved finding when
+// not told otherwise: long enough to see what a recent fix cleared.
+const defaultKeepResolvedDays = 30
+
+// parsePruneFlags reads the flags `lgit prune` takes. Nothing is deleted unless
+// -apply is given: the default is a report of what WOULD go.
+func parsePruneFlags(args []string) (PruneOptions, error) {
+	opts := PruneOptions{KeepResolvedDays: defaultKeepResolvedDays}
+	for i := 0; i < len(args); i++ {
+		key, val, hasInline := splitFlag(args[i])
+		switch key {
+		case "":
+			return opts, fmt.Errorf("unexpected positional argument: %q (lgit prune takes -apply and -keep-resolved-days=N)", args[i])
+		case "apply":
+			if hasInline {
+				return opts, fmt.Errorf("flag -apply takes no value")
+			}
+			opts.Apply = true
+		case "keep-resolved-days":
+			if !hasInline {
+				if i+1 >= len(args) {
+					return opts, fmt.Errorf("flag -keep-resolved-days requires a value")
+				}
+				i++
+				val = args[i]
+			}
+			n, err := strconv.Atoi(val)
+			if err != nil || n < 0 || n > maxKeepResolvedDays {
+				return opts, fmt.Errorf("invalid -keep-resolved-days %q: want a number of days from 0 to %d", val, maxKeepResolvedDays)
+			}
+			opts.KeepResolvedDays = n
+		default:
+			return opts, fmt.Errorf("unknown flag -%s (lgit prune accepts -apply and -keep-resolved-days=N)", key)
+		}
+	}
+	return opts, nil
 }
