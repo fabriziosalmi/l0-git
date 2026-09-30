@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -45,64 +44,56 @@ type Store struct {
 
 var ErrNotFound = errors.New("finding not found")
 
-// The store holds every finding of every project, and finding messages quote
-// repository content. It is for its owner only.
-const (
-	storeDirMode  os.FileMode = 0o700
-	storeFileMode os.FileMode = 0o600
-)
-
-func defaultDBPath() (string, error) {
+// resolveDBPath returns where the store lives and whether that is lgit's own
+// default location (as opposed to one the user chose with LGIT_DB).
+func resolveDBPath() (path string, isDefault bool, err error) {
 	if p := os.Getenv("LGIT_DB"); p != "" {
 		// A directory this creates is private. One that already exists is
 		// somebody else's — `LGIT_DB=/tmp/x.db` must never chmod /tmp — so it
 		// is left exactly as it was.
 		if dir := filepath.Dir(p); dir != "" && dir != "." {
 			if err := os.MkdirAll(dir, storeDirMode); err != nil {
-				return "", err
+				return "", false, err
 			}
 		}
-		return p, nil
+		return p, false, nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	dir := filepath.Join(home, ".l0-git")
 	if err := os.MkdirAll(dir, storeDirMode); err != nil {
-		return "", err
+		return "", false, err
 	}
-	// The default directory is ours by construction, and earlier versions
-	// created it world-readable (0755). Bring it in line.
-	tightenMode(dir, storeDirMode)
-	return filepath.Join(dir, "findings.db"), nil
+	// The default directory is lgit's own, and earlier versions created it
+	// world-readable (0755). Bring it in line.
+	tightenMode(dir)
+	return filepath.Join(dir, "findings.db"), true, nil
 }
 
-// tightenMode removes group/other access from path when it has any. It never
-// widens a mode and ignores failures: a store on a filesystem without POSIX
-// modes (or owned by someone else) is not made unusable by this.
-func tightenMode(path string, want os.FileMode) {
-	if fi, err := os.Stat(path); err == nil && fi.Mode().Perm()&0o077 != 0 {
-		_ = os.Chmod(path, want)
-	}
-}
-
-// tightenStoreFiles applies storeFileMode to the database and to the WAL /
-// shared-memory / journal files SQLite keeps beside it. SQLite gives those the
-// mode of the main file, so fixing the main file also fixes the ones created
-// from now on; the existing ones need it explicitly.
-func tightenStoreFiles(path string) {
-	for _, suffix := range []string{"", "-wal", "-shm", "-journal"} {
-		tightenMode(path+suffix, storeFileMode)
-	}
+func defaultDBPath() (string, error) {
+	p, _, err := resolveDBPath()
+	return p, err
 }
 
 func OpenStore() (*Store, error) {
-	path, err := defaultDBPath()
+	path, isDefault, err := resolveDBPath()
 	if err != nil {
 		return nil, err
 	}
-	return openStoreAt(path)
+	// A database lgit creates is private whatever the umask says. One that
+	// already exists is tightened only at the default location: a file the user
+	// pointed LGIT_DB at may be shared on purpose, and is theirs to manage.
+	ensureNewFilePrivate(path)
+	s, err := openStoreAt(path)
+	if err != nil {
+		return nil, err
+	}
+	if isDefault {
+		tightenStoreFiles(path)
+	}
+	return s, nil
 }
 
 func openStoreAt(path string) (*Store, error) {
@@ -150,101 +141,7 @@ func openStoreAt(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, err
 	}
-	tightenStoreFiles(path)
 	return &Store{db: db}, nil
-}
-
-// schemaVersion lives in PRAGMA user_version.
-//
-//	0  before versioning
-//	1  finding messages no longer carry credentials (see redactSecrets)
-const schemaVersion = 1
-
-func migrateStore(db *sql.DB) error {
-	var v int
-	if err := db.QueryRow(`PRAGMA user_version`).Scan(&v); err != nil {
-		return err
-	}
-	// A newer lgit wrote this store: leave it alone rather than "migrate" it
-	// backwards.
-	if v >= schemaVersion {
-		return nil
-	}
-	if v < 1 {
-		if err := scrubStoredCredentials(db); err != nil {
-			return fmt.Errorf("scrub stored credentials: %w", err)
-		}
-		// Rewriting the rows is not enough. The previous text of each one is
-		// still in the file — in pages freed when rows were deleted or
-		// replaced, and in the earlier versions an upsert leaves behind — and
-		// secure_delete only protects what is freed from now on. A measured
-		// run on a real 39 MB store left 9 of 47 distinctive passwords
-		// readable after the UPDATEs alone. VACUUM rebuilds the whole file, so
-		// nothing old survives it.
-		//
-		// A failure here is returned, not swallowed: the version is not bumped,
-		// so the next open tries again instead of reporting a scrub that left
-		// the secrets on disk.
-		if _, err := db.Exec(`VACUUM`); err != nil {
-			return fmt.Errorf("compact store after scrub: %w", err)
-		}
-		_, _ = db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
-	}
-	// PRAGMA takes no bound parameters; schemaVersion is a constant.
-	_, err := db.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, schemaVersion))
-	return err
-}
-
-// scrubStoredCredentials rewrites every stored message through redactSecrets.
-//
-// Until this version connection_strings stored the matched URL verbatim, so a
-// store that has been used for a while holds real passwords — including in
-// rows already marked resolved, long after the credential left the repository.
-// updated_at is deliberately left alone: this changes what a row SAYS, not when
-// it was last observed.
-func scrubStoredCredentials(db *sql.DB) error {
-	rows, err := db.Query(`SELECT id, message FROM findings WHERE message LIKE '%://%' OR message LIKE '%=%'`)
-	if err != nil {
-		return err
-	}
-	type change struct {
-		id  int64
-		msg string
-	}
-	var changes []change
-	for rows.Next() {
-		var id int64
-		var msg string
-		if err := rows.Scan(&id, &msg); err != nil {
-			_ = rows.Close()
-			return err
-		}
-		if clean := redactSecrets(msg); clean != msg {
-			changes = append(changes, change{id, clean})
-		}
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return err
-	}
-	_ = rows.Close()
-	if len(changes) == 0 {
-		return nil
-	}
-	tx, err := db.Begin()
-	if err != nil {
-		return err
-	}
-	for _, c := range changes {
-		if _, err := tx.Exec(`UPDATE findings SET message = ? WHERE id = ?`, c.msg, c.id); err != nil {
-			_ = tx.Rollback()
-			return err
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	return nil
 }
 
 func addColumnIfMissing(db *sql.DB, table, column, decl string) error {

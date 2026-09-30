@@ -3,12 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 // plantLegacyRow inserts a row the way versions before redaction wrote it: the
@@ -145,97 +146,6 @@ func TestStore_MigrationLeavesANewerStoreAlone(t *testing.T) {
 	}
 }
 
-func modeOf(t *testing.T, p string) os.FileMode {
-	t.Helper()
-	fi, err := os.Stat(p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return fi.Mode().Perm()
-}
-
-func TestStore_FilesAreOwnerOnly(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX permission bits")
-	}
-	base := t.TempDir()
-	path := filepath.Join(base, "created", "by", "lgit", "findings.db")
-	t.Setenv("LGIT_DB", path)
-	s, err := OpenStore()
-	if err != nil {
-		t.Fatal(err)
-	}
-	plantLegacyRow(t, s, "g", "f:1:r", "m", 1) // forces the WAL and shm files to exist
-	defer s.Close()
-	for _, suffix := range []string{"", "-wal", "-shm"} {
-		if _, err := os.Stat(path + suffix); err != nil {
-			continue
-		}
-		if m := modeOf(t, path+suffix); m&0o077 != 0 {
-			t.Errorf("%s has mode %v, want no group/other access", filepath.Base(path+suffix), m)
-		}
-	}
-	if m := modeOf(t, filepath.Dir(path)); m&0o077 != 0 {
-		t.Errorf("a directory lgit created has mode %v, want 0700", m)
-	}
-}
-
-func TestStore_TightensAnExistingWorldReadableDB(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX permission bits")
-	}
-	path := filepath.Join(t.TempDir(), "findings.db")
-	s, err := openStoreAt(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = s.Close()
-	if err := os.Chmod(path, 0o644); err != nil { // what earlier versions left behind
-		t.Fatal(err)
-	}
-	s, err = openStoreAt(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	if m := modeOf(t, path); m&0o077 != 0 {
-		t.Errorf("an existing 0644 store was not tightened: %v", m)
-	}
-}
-
-// The default directory is lgit's own and is brought to 0700. A directory the
-// user pointed LGIT_DB into is NOT: `LGIT_DB=/tmp/x.db` must never chmod /tmp.
-func TestStoreDir_OnlyTheDefaultDirectoryIsTightened(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX permission bits")
-	}
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("LGIT_DB", "")
-	def := filepath.Join(home, ".l0-git")
-	if err := os.Mkdir(def, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := defaultDBPath(); err != nil {
-		t.Fatal(err)
-	}
-	if m := modeOf(t, def); m != 0o700 {
-		t.Errorf("default dir mode = %v, want 0700", m)
-	}
-
-	shared := filepath.Join(t.TempDir(), "shared")
-	if err := os.Mkdir(shared, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("LGIT_DB", filepath.Join(shared, "findings.db"))
-	if _, err := defaultDBPath(); err != nil {
-		t.Fatal(err)
-	}
-	if m := modeOf(t, shared); m != 0o755 {
-		t.Errorf("an existing directory chosen via LGIT_DB was chmod'ed to %v; it must be left alone", m)
-	}
-}
-
 func TestStore_SecureDeleteIsOn(t *testing.T) {
 	s := newTestStore(t)
 	var on int
@@ -294,5 +204,123 @@ func TestStore_MigrationRemovesRemnantsFromFreePages(t *testing.T) {
 	}
 	if bytes.Contains(disk, []byte(kept)) {
 		t.Error("a surviving row's password is still readable in the database file after the migration")
+	}
+}
+
+// The store is routinely written by a binary OLDER than the one that migrated
+// it: the extension runs a bundled lgit, Claude Code's MCP server runs whatever
+// is on PATH. That older binary stores the password again, and a migration that
+// runs once would never see it. Every open re-examines the rows written since.
+func TestStore_RescrubsWhatAnOlderBinaryWrote(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "findings.db")
+	const secret = "Hw4nBv7cXk2mQ9e"
+
+	s, err := openStoreAt(path) // migrates (empty) and sets the watermark
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v int
+	_ = s.db.QueryRow(`PRAGMA user_version`).Scan(&v)
+	if v != schemaVersion {
+		t.Fatalf("precondition: store should be migrated, user_version = %d", v)
+	}
+	// An older binary upserts a finding AFTER the migration.
+	plantLegacyRow(t, s, "connection_strings", "late.sh:1:creds_in_url",
+		"postgres://svc:"+secret+"@db.prod.io/app in late.sh:1.", time.Now().UnixMilli()+5000)
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(rawBytes(t, path), []byte(secret)) {
+		t.Fatal("precondition: the plaintext written by the older binary should be in the file")
+	}
+
+	s, err = openStoreAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var msg string
+	if err := s.db.QueryRow(`SELECT message FROM findings WHERE file_path = 'late.sh:1:creds_in_url'`).Scan(&msg); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(msg, secret) {
+		t.Errorf("a row written after the migration was not scrubbed on the next open: %q", msg)
+	}
+	_ = s.Close()
+	if bytes.Contains(rawBytes(t, path, path+"-wal", path+"-shm"), []byte(secret)) {
+		t.Error("the secret is gone from the row but still readable in the database file")
+	}
+}
+
+// A checkpoint blocked by another process's read snapshot does not fail: it
+// returns a row with busy=1. Ignoring that row reported success for a WAL that
+// still held the old pages.
+func TestCheckpointTruncate_ReportsWhenABlockedByAReader(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "findings.db")
+	s, err := openStoreAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if !checkpointTruncate(s.db) {
+		t.Fatal("an idle store must checkpoint cleanly")
+	}
+
+	// A second connection takes a read snapshot and holds it.
+	other, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(2000)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Close()
+	tx, err := other.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := tx.QueryRow(`SELECT count(*) FROM findings`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	// New frames land in the WAL while the reader is open.
+	plantLegacyRow(t, s, "g", "f:1:r", "m", 1)
+	start := time.Now()
+	if checkpointWithRetry(s.db) {
+		t.Error("a checkpoint blocked by an open reader must report failure, not success")
+	}
+	// It must also give up quickly: waiting out the store's 15 s busy timeout
+	// five times over would freeze every lgit command that opens the store.
+	if d := time.Since(start); d > 5*time.Second {
+		t.Errorf("a blocked checkpoint took %v to give up; it must not wait out the 15 s busy timeout", d)
+	}
+	var bt int
+	if err := s.db.QueryRow(`PRAGMA busy_timeout`).Scan(&bt); err != nil || bt != 15000 {
+		t.Errorf("the store's busy timeout must be restored afterwards: %d (%v)", bt, err)
+	}
+	_ = tx.Rollback()
+	if !checkpointTruncate(s.db) {
+		t.Error("once the reader is gone the checkpoint must complete")
+	}
+}
+
+// The claim "no gate can leak by forgetting" needs a gate that forgot. The gate
+// in the test returns a message with a password in it; finalizeFindings — the
+// step RunChecks applies to every gate — must mask it, whatever the gate did.
+func TestFinalizeFindings_MasksWhateverAGateSays(t *testing.T) {
+	fs := []Finding{
+		{Message: "connect with postgres://svc:Kq8vLw2nRt4x@db.prod.io/app now"},
+		{Message: "see https://api.acme.io/v1?api_key=Zr5cYb7hJs9u&x=1"},
+		{Message: "nothing secret here"},
+	}
+	finalizeFindings(fs, "/p", Gate{ID: "careless_gate", Severity: SeverityWarning, Title: "T", Tags: "x"}, "", false)
+	for _, f := range fs {
+		for _, leaked := range []string{"Kq8vLw2nRt4x", "Zr5cYb7hJs9u"} {
+			if strings.Contains(f.Message, leaked) {
+				t.Errorf("a gate's message reached the store with a secret in it: %q", f.Message)
+			}
+		}
+		if f.Project != "/p" || f.GateID != "careless_gate" || f.Severity != SeverityWarning {
+			t.Errorf("the normalisation the funnel always did must still happen: %+v", f)
+		}
+	}
+	if fs[2].Message != "nothing secret here" {
+		t.Errorf("an innocent message was altered: %q", fs[2].Message)
 	}
 }

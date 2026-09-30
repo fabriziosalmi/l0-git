@@ -12,8 +12,9 @@ const redactedMark = "***"
 
 // redactSecrets masks the credential material inside a string that is about
 // to be shown, stored or sent: the password of a `scheme://user:password@host`
-// URL, a token used as the whole user (`https://<token>@host`), and the value
-// of a credential-looking query or JDBC parameter (`?password=…`, `;pwd=…`).
+// URL, a token used as the whole user (`https://<token>@host`), the password of
+// an Oracle thin-driver JDBC URL (`user/password@host` after the driver prefix), and the value of a
+// credential-looking parameter (`?password=…`, `;pwd=…`, `#access_token=…`).
 //
 // Findings are persisted in a SQLite file, printed by the CLI, returned
 // verbatim over MCP and quoted by the editor (Problems pane, hover, the
@@ -22,44 +23,115 @@ const redactedMark = "***"
 // second copy, kept even after the original was removed from the repository.
 //
 // The function is idempotent and leaves text without a credential unchanged.
+//
+// Two known limits, both deliberate: a password that contains a `/` is not
+// masked on the patterns that do not themselves reject it (a URL cannot carry
+// one, so no driver accepts it), and a bare user that is short or has no digit
+// (`ssh://git@host`) is treated as a username, not a token.
 func redactSecrets(s string) string {
-	if s == "" || (!strings.Contains(s, "://") && !strings.Contains(s, "=")) {
+	if s == "" {
 		return s
 	}
-	return redactSecretParams(redactURLUserinfo(s))
+	lower := strings.ToLower(s)
+	if !strings.Contains(s, "://") && !strings.Contains(s, "=") && !strings.Contains(lower, "jdbc:") {
+		return s
+	}
+	s = redactURLUserinfo(s)
+	s = redactOracleJDBC(s)
+	return redactSecretParams(s)
 }
 
-// urlAuthorityRe finds `scheme://authority`. The authority ends at the first
-// `/` or at whitespace / a quote / an angle bracket. It deliberately does NOT
-// end at `?` or `#`: RFC 3986 says those must be percent-encoded in a password,
-// but the creds_in_url rule accepts them (`user:p#ss@host`), so a redaction
-// that stopped there would leave the tail of exactly the passwords the gate
-// reported in the clear.
-var urlAuthorityRe = regexp.MustCompile(`\b([a-zA-Z][a-zA-Z0-9+\-.]*://)([^\s/"'<>]+)`)
+// schemeRe finds the `scheme://` that opens a URL.
+var schemeRe = regexp.MustCompile(`\b[a-zA-Z][a-zA-Z0-9+\-.]*://`)
 
+// redactURLUserinfo masks the password in every URL of s.
+//
+// Every `scheme://` is handled on its own, and its authority ends at the first
+// `/`, whitespace or quote. In a list with no path between its members
+// (`amqp://u:p@h1:5672,amqp://u2:p2@h2:5672`) the first authority therefore ends
+// at the `//` of the second URL, and the second is found by its own scheme — a
+// single pass that let one match swallow the next left every password after the
+// first in the clear. Angle brackets are NOT a boundary, because the
+// creds_in_url rule accepts them inside a password.
 func redactURLUserinfo(s string) string {
-	return urlAuthorityRe.ReplaceAllStringFunc(s, func(m string) string {
-		sub := urlAuthorityRe.FindStringSubmatch(m)
-		scheme, authority := sub[1], sub[2]
-		// The userinfo ends at the LAST `@`. The first one is wrong for a
-		// password that itself contains an `@` (`user:p@ss@host`): stopping
-		// there would leave the tail of the password in the clear and call it
-		// the host.
-		at := strings.LastIndexByte(authority, '@')
-		if at < 0 {
-			return m
+	locs := schemeRe.FindAllStringIndex(s, -1)
+	if len(locs) == 0 {
+		return s
+	}
+	var b strings.Builder
+	last := 0
+	for _, loc := range locs {
+		start := loc[1]
+		if start < last {
+			continue
 		}
-		userinfo, host := authority[:at], authority[at+1:]
-		if colon := strings.IndexByte(userinfo, ':'); colon >= 0 {
-			return scheme + userinfo[:colon] + ":" + redactedMark + "@" + host
+		end := start
+		for end < len(s) && !isAuthorityEnd(s[end]) {
+			end++
 		}
-		// A bare userinfo is normally just a username (`ssh://git@host`). It
-		// is the credential itself when it is a long token-shaped string.
-		if looksLikeBareToken(userinfo) {
-			return scheme + redactedMark + "@" + host
+		b.WriteString(s[last:start])
+		b.WriteString(redactAuthority(s[start:end]))
+		last = end
+	}
+	b.WriteString(s[last:])
+	return b.String()
+}
+
+func isAuthorityEnd(c byte) bool {
+	return c == '/' || c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '"' || c == '\''
+}
+
+// redactAuthority masks the secret in one authority (`user:pass@host:port`).
+//
+// The userinfo ends at the LAST `@`: the first one is wrong for a password that
+// itself contains an `@` (`user:p@ss@host`), and stopping there would leave the
+// tail of the password in the clear and call it the host.
+//
+// But a `?` or `#` may start a QUERY, and an `@` in a query
+// (`https://host.io?e=a@b.c`) is not the end of any userinfo. So the last `@`
+// BEFORE the first `?`/`#` wins when there is one. Only when there is none is
+// the whole authority read as userinfo — the creds_in_url rule does accept `?`
+// and `#` inside a password (`user:p?ss@host`) — and then only when the part
+// before the `?` has a colon that is not a port (`host.io:8080?e=a@b.c`).
+func redactAuthority(a string) string {
+	head := a
+	q := strings.IndexAny(a, "?#")
+	if q >= 0 {
+		head = a[:q]
+	}
+	at := strings.LastIndexByte(head, '@')
+	if at < 0 && q >= 0 {
+		colon := strings.LastIndexByte(head, ':')
+		if colon < 0 || isAllDigits(head[colon+1:]) {
+			return a
 		}
-		return m
-	})
+		at = strings.LastIndexByte(a, '@')
+	}
+	if at < 0 {
+		return a
+	}
+	userinfo, rest := a[:at], a[at+1:]
+	if colon := strings.IndexByte(userinfo, ':'); colon >= 0 {
+		return userinfo[:colon] + ":" + redactedMark + "@" + rest
+	}
+	// A bare userinfo is normally just a username (`ssh://git@host`). It is the
+	// credential itself when it is a long token-shaped string.
+	if looksLikeBareToken(userinfo) {
+		return redactedMark + "@" + rest
+	}
+	return a
+}
+
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 var (
@@ -74,16 +146,82 @@ func looksLikeBareToken(s string) bool {
 		hasLetterRe.MatchString(s) && hasDigitRe.MatchString(s)
 }
 
-// secretParamRe matches `name=value` where the name says it is a credential.
-// The value stops at whatever ends a URL parameter, or at a backtick / bracket
-// so that prose like "`SECRET_KEY=` has no comment" is left alone.
+// oracleJDBCRe matches the thin/OCI JDBC form that carries its credentials as
+// `user/password@host` — no `://` and no `=`, which is why nothing else sees it.
+var oracleJDBCRe = regexp.MustCompile(`(?i)(jdbc:[a-z0-9]+:(?:thin|oci8?):)([^/\s@:]+)/([^@\s]+)@`)
+
+func redactOracleJDBC(s string) string {
+	return oracleJDBCRe.ReplaceAllString(s, "${1}${2}/"+redactedMark+"@")
+}
+
+// secretParamRe matches the start of a `name=` parameter whose name says it is a
+// credential: the delimiter before it (a separator, a fragment mark, a path or
+// query delimiter, whitespace, or the start of the text) and the name itself.
 //
 // Over-matching is harmless here — this only ever rewrites message text, never
 // detection — and it is the safe direction: `primary_key=` being masked costs
-// nothing, `db_password=` being missed leaks.
+// nothing, `db_password=` being missed leaks. A prefix is allowed before the
+// keyword so that `bindpw=`, `authpass=` and `X-Amz-Signature=` are caught.
 var secretParamRe = regexp.MustCompile(
-	`(?i)([?&;]|\s)([A-Za-z0-9_.\-]*(?:password|passwd|pwd|passphrase|secret|token|apikey|api_key|api-key|signature|credential|credentials|authorization|auth|sig|sas|key)=)([^&\s"'<>;)\]` + "`" + `,]+)`)
+	`(?i)(^|[?&;#,:/(]|\s)` +
+		`([A-Za-z0-9_.\-]*` +
+		`(?:password|passwd|pwd|passphrase|pass|pswd|psw|pw|secret|token|apikey|api_key|api-key|` +
+		`signature|credentials?|authorization|auth|sig|sas|key)=)`)
 
+// anotherParamRe recognises `,name=` — a comma that ends a value because a NEW
+// parameter follows it, as opposed to a comma inside the value itself.
+var anotherParamRe = regexp.MustCompile(`^,[A-Za-z0-9_.\-]+=`)
+
+// redactSecretParams masks the VALUE of every credential-looking parameter. The
+// value runs to whatever ends a URL parameter — `&`, `;`, whitespace, a quote, a
+// bracket or backtick — but a comma only ends it when another parameter
+// follows, and a `{…}` value (JDBC's way of writing a value that contains `;`)
+// is taken whole.
 func redactSecretParams(s string) string {
-	return secretParamRe.ReplaceAllString(s, "${1}${2}"+redactedMark)
+	locs := secretParamRe.FindAllStringSubmatchIndex(s, -1)
+	if len(locs) == 0 {
+		return s
+	}
+	var b strings.Builder
+	last := 0
+	for _, loc := range locs {
+		valueStart := loc[1] // just after the `=`
+		if valueStart < last {
+			continue
+		}
+		valueEnd := paramValueEnd(s, valueStart)
+		if valueEnd == valueStart {
+			continue
+		}
+		b.WriteString(s[last:valueStart])
+		b.WriteString(redactedMark)
+		last = valueEnd
+	}
+	b.WriteString(s[last:])
+	return b.String()
+}
+
+func paramValueEnd(s string, i int) int {
+	if i < len(s) && s[i] == '{' {
+		if end := strings.IndexByte(s[i:], '}'); end >= 0 {
+			return i + end + 1
+		}
+	}
+	j := i
+	for j < len(s) {
+		c := s[j]
+		if c == ',' {
+			if anotherParamRe.MatchString(s[j:]) {
+				break
+			}
+			j++
+			continue
+		}
+		switch c {
+		case '&', ';', ' ', '\t', '\n', '\r', '"', '\'', '<', '>', ')', ']', '`':
+			return j
+		}
+		j++
+	}
+	return j
 }

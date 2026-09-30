@@ -479,26 +479,7 @@ func RunChecks(ctx context.Context, store *Store, projectRoot, gateID string) (*
 		//   2. severity the gate set on the finding (tiered scanners)
 		//   3. gate's default severity
 		override, hasOverride := cfg.severityOverride(g.ID)
-		for i := range fs {
-			fs[i].Project = abs
-			fs[i].GateID = g.ID
-			switch {
-			case hasOverride:
-				fs[i].Severity = override
-			case fs[i].Severity == "":
-				fs[i].Severity = g.Severity
-			}
-			if fs[i].Title == "" {
-				fs[i].Title = g.Title
-			}
-			// The one funnel every finding passes through on its way to the
-			// store, the CLI and MCP: no gate's message may carry a secret,
-			// whether or not that gate remembered to mask it.
-			fs[i].Message = redactSecrets(fs[i].Message)
-			if fs[i].Tags == "" {
-				fs[i].Tags = g.Tags
-			}
-		}
+		finalizeFindings(fs, abs, g, override, hasOverride)
 		fs = mergeSameLocation(fs)
 		keep := make([]string, 0, len(fs))
 		for _, f := range fs {
@@ -770,4 +751,33 @@ func checkIssueTemplates(_ context.Context, root string, _ json.RawMessage) ([]F
 		Message:  "No .github/ISSUE_TEMPLATE/. Add at least one bug_report.md / feature_request.md template.",
 		FilePath: ".github/ISSUE_TEMPLATE",
 	}}, nil
+}
+
+// finalizeFindings stamps a gate's raw findings with the project, the gate and
+// the defaults the gate itself left blank, applies a configured severity
+// override, and masks secrets in every message.
+//
+// The masking is the point of this being a function of its own. It is the one
+// funnel every finding passes through on its way to the store, the CLI and MCP,
+// so no gate's message may carry a secret whether or not that gate remembered
+// to mask it — which is only worth claiming if a test can hand it a gate that
+// did NOT.
+func finalizeFindings(fs []Finding, projectRoot string, g Gate, override string, hasOverride bool) {
+	for i := range fs {
+		fs[i].Project = projectRoot
+		fs[i].GateID = g.ID
+		switch {
+		case hasOverride:
+			fs[i].Severity = override
+		case fs[i].Severity == "":
+			fs[i].Severity = g.Severity
+		}
+		if fs[i].Title == "" {
+			fs[i].Title = g.Title
+		}
+		if fs[i].Tags == "" {
+			fs[i].Tags = g.Tags
+		}
+		fs[i].Message = redactSecrets(fs[i].Message)
+	}
 }

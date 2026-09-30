@@ -146,9 +146,14 @@ $ lgit path
 ```
 
 The store holds every finding of every project you have scanned, so it is private
-to your user: the database and its WAL files are created `0600`, and the default
-`~/.l0-git` directory is `0700`. A directory you point `LGIT_DB` into is never
-touched if it already exists. Finding messages never contain a password — see
+to your user: a database lgit creates, and its WAL files, are `0600`, and the
+default `~/.l0-git` directory is `0700`. At the default location an older,
+world-readable store is tightened the first time a newer lgit opens it (bits are
+only ever removed). A database you choose with `LGIT_DB` that already exists, and
+the directory around it, are never touched — it may be shared on purpose. On
+Windows the store inherits the permissions of its directory.
+
+Finding messages never contain a password — see
 [Connection strings](../gates/connection-strings#what-a-finding-says).
 
 ### `lgit version`
