@@ -382,7 +382,10 @@ func scanConnectionLine(rel string, lineNum int, content []byte) []Finding {
 			out = append(out, Finding{
 				Severity: severity,
 				Title:    p.title,
-				Message:  fmt.Sprintf("%s in %s:%d. %s", text, rel, lineNum, advice),
+				// The message says WHERE the URL is, never what the password
+				// is: it is stored, printed, returned over MCP and quoted by
+				// the editor, and each of those would become another copy.
+				Message:  fmt.Sprintf("%s in %s:%d. %s", redactSecrets(text), rel, lineNum, advice),
 				FilePath: fmt.Sprintf("%s:%d:%s", rel, lineNum, p.id),
 			})
 		}

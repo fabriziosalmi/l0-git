@@ -44,32 +44,56 @@ type Store struct {
 
 var ErrNotFound = errors.New("finding not found")
 
-func defaultDBPath() (string, error) {
+// resolveDBPath returns where the store lives and whether that is lgit's own
+// default location (as opposed to one the user chose with LGIT_DB).
+func resolveDBPath() (path string, isDefault bool, err error) {
 	if p := os.Getenv("LGIT_DB"); p != "" {
+		// A directory this creates is private. One that already exists is
+		// somebody else's — `LGIT_DB=/tmp/x.db` must never chmod /tmp — so it
+		// is left exactly as it was.
 		if dir := filepath.Dir(p); dir != "" && dir != "." {
-			if err := os.MkdirAll(dir, 0o755); err != nil {
-				return "", err
+			if err := os.MkdirAll(dir, storeDirMode); err != nil {
+				return "", false, err
 			}
 		}
-		return p, nil
+		return p, false, nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	dir := filepath.Join(home, ".l0-git")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
+	if err := os.MkdirAll(dir, storeDirMode); err != nil {
+		return "", false, err
 	}
-	return filepath.Join(dir, "findings.db"), nil
+	// The default directory is lgit's own, and earlier versions created it
+	// world-readable (0755). Bring it in line.
+	tightenMode(dir)
+	return filepath.Join(dir, "findings.db"), true, nil
+}
+
+func defaultDBPath() (string, error) {
+	p, _, err := resolveDBPath()
+	return p, err
 }
 
 func OpenStore() (*Store, error) {
-	path, err := defaultDBPath()
+	path, isDefault, err := resolveDBPath()
 	if err != nil {
 		return nil, err
 	}
-	return openStoreAt(path)
+	// A database lgit creates is private whatever the umask says. One that
+	// already exists is tightened only at the default location: a file the user
+	// pointed LGIT_DB at may be shared on purpose, and is theirs to manage.
+	ensureNewFilePrivate(path)
+	s, err := openStoreAt(path)
+	if err != nil {
+		return nil, err
+	}
+	if isDefault {
+		tightenStoreFiles(path)
+	}
+	return s, nil
 }
 
 func openStoreAt(path string) (*Store, error) {
@@ -77,7 +101,9 @@ func openStoreAt(path string) (*Store, error) {
 	// with `lgit list` (tree refresh), and Claude Code can hold an MCP-mode
 	// process at the same time. 15 s is enough for cross-process WAL recovery
 	// without making genuinely-stuck calls block the UI for too long.
-	db, err := sql.Open("sqlite", path+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(15000)&_pragma=foreign_keys(1)")
+	// secure_delete(1): SQLite overwrites the bytes of anything it frees, so a
+	// message that was deleted or rewritten does not linger in a free page.
+	db, err := sql.Open("sqlite", path+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(15000)&_pragma=foreign_keys(1)&_pragma=secure_delete(1)")
 	if err != nil {
 		return nil, err
 	}
@@ -108,6 +134,10 @@ func openStoreAt(path string) (*Store, error) {
 	// "ADD COLUMN IF NOT EXISTS"; the cheapest reliable check is to try
 	// the ALTER and tolerate the "duplicate column" failure.
 	if err := addColumnIfMissing(db, "findings", "tags", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if err := migrateStore(db); err != nil {
 		_ = db.Close()
 		return nil, err
 	}

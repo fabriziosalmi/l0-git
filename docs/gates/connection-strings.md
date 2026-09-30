@@ -66,8 +66,23 @@ to production.
 ## What a finding says
 
 ```text
-Credentials in URL in src/db.py:9. A URI carrying user:password leaks the credential to anyone who reads the file.
+postgres://admin:***@db.prod.acme.io:5432/app in src/db.py:9. Remove the inline user:password from the URL — read it from a vault, env var, or secret manager instead. Also rotate, since the URL has been committed.
 ```
+
+The finding says **where** the credential is, never **what** it is. The password
+is always shown as `***` — in the CLI output, over MCP, in the editor's Problems
+pane and hover, and in the store. So is the password of every URL in a list, an
+Oracle JDBC `user/password@host`, a token used as the whole user
+(`https://<token>@host`), and the value of a credential-looking parameter
+(`?password=`, `;pwd=`, `#access_token=`, `bindpw=`, …). `secrets_scan` works the
+same way.
+
+Two things are deliberately left alone: a password that contains a `/` (a URL
+cannot carry one), and a short or letters-only user (`ssh://git@host`).
+
+This matters because a finding outlives the thing it reports: a copy of the
+password in the findings store would still be there after you removed it from
+the repository. Rotate the credential; the finding tells you where to look.
 
 ## Turning it off
 
