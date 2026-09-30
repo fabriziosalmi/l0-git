@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-09-30
+
 ### Security
 
 - **Findings no longer carry credentials.** `connection_strings` put the matched URL, password included, into the finding message. That message is written to the SQLite store, printed by `lgit check` / `lgit list`, returned over MCP, and shown by the editor in the Problems pane, the hover and the "ask Claude" prompt, so every credential the scanner found became another copy of it — kept even after the original was removed from the repository (on the author's own store: 448 rows across 39 projects, 245 of them already marked resolved). The password is now `***` (`postgres://admin:***@db:5432/app`), and so is: the password of every URL in a list (`amqp://u:p@h1,amqp://u2:p2@h2`), one containing `@`, `#`, `?`, `<` or `>`, an Oracle JDBC `user/password@host`, a token used as the whole user, and the value of a credential-looking parameter (`password`, `pass`, `pw`, `pwd`, `pswd`, `psw`, `secret`, `token`, `api_key`, `bindpw`, … after `?`, `&`, `;`, `#`, `,` or a space, including a `{…}` value and one containing a comma). An `@` in a URL's query no longer takes the host for a password. The mask runs in the gate and again in `RunChecks`, the one funnel every finding passes through, so no gate can leak by forgetting. Not masked, deliberately: a password containing `/` (a URL cannot carry one) and a short or letters-only bare user (`ssh://git@host`).
