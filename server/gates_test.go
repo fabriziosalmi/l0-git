@@ -125,35 +125,22 @@ func TestRunChecks_EmptyDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The gates that read the git index say nothing individually on a directory
+	// that is not a repository: ONE finding, filed under git_repository, names
+	// them all (see TestRunChecks_NotAGitRepoIsReportedOnce).
 	want := []string{
 		"changelog_present",
 		"ci_workflow_present",
 		"code_of_conduct_present",
-		"compose_lint",       // skipped (not git)
-		"config_parse_error", // skipped (not git)
-		"connection_strings", // skipped (not git)
 		"contributing_present",
-		"css_lint",          // skipped (not git)
-		"dead_placeholders", // skipped (not git)
-		"dockerfile_lint",   // skipped (not git)
-		"filename_quality",  // skipped (not git)
+		"git_repository",
 		"gitignore_present",
-		"html_lint",            // skipped (not git)
-		"ide_artifact_tracked", // skipped (not git)
-		"ignored_file_tracked", // skipped (not git)
 		"issue_template_present",
-		"large_file_tracked", // skipped (not git)
 		"license_present",
-		"markdown_lint",          // skipped (not git)
-		"merge_conflict_markers", // skipped (not git)
-		"network_scan",           // skipped (not git)
 		"pr_template_present",
 		"readme_present",
-		"secrets_scan", // skipped (not git)
 		"security_present",
 		"tests_present",
-		"unexpected_executable_bit", // skipped (not git)
-		"vendored_dir_tracked",      // skipped (not git)
 		// gitignore_coverage / codeowners_present / env_example_uncommented
 		// stay silent on stack-less empty dirs.
 	}

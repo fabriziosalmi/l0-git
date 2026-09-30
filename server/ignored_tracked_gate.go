@@ -133,17 +133,21 @@ func commonDirPrefix(files []string) string {
 
 func ignoredTrackedMessage(key string, files []string) string {
 	const show = 3
+	const advice = "The index and the ignore rules disagree. If the files should not be in the " +
+		"repository, untrack them with `git rm -r --cached %s`. If they belong there, add " +
+		"a `!` negation to .gitignore so the exception is written down instead of implied."
+	// One file is one file: "1 tracked file under Cargo.lock match" read as if a
+	// directory were involved, and the verb did not agree with the count.
+	if len(files) == 1 {
+		return fmt.Sprintf("%s is tracked but matches the repository's .gitignore. "+advice, files[0], files[0])
+	}
 	examples := files
-	if len(examples) > show {
+	if len(files) > show {
 		examples = examples[:show]
 	}
 	list := strings.Join(examples, ", ")
 	if len(files) > show {
 		list += fmt.Sprintf(", … (%d more)", len(files)-show)
-	}
-	noun := "file"
-	if len(files) != 1 {
-		noun = "files"
 	}
 	where := "under " + key
 	target := key
@@ -154,9 +158,6 @@ func ignoredTrackedMessage(key string, files []string) string {
 			target += " …"
 		}
 	}
-	return fmt.Sprintf("%d tracked %s %s match the repository's .gitignore: %s. "+
-		"The index and the ignore rules disagree. If the files should not be in the "+
-		"repository, untrack them with `git rm -r --cached %s`. If they belong there, add "+
-		"a `!` negation to .gitignore so the exception is written down instead of implied.",
-		len(files), noun, where, list, target)
+	return fmt.Sprintf("%d tracked files %s match the repository's .gitignore: %s. "+advice,
+		len(files), where, list, target)
 }

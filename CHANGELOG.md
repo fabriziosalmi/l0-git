@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **`lgit prune`** removes the findings nothing can act on any more: every finding of a project whose directory is gone, and resolved findings older than `-keep-resolved-days` (default 30, at most 36500). A report by default; `-apply` does it and rebuilds the database so the space comes back. It never removes an open or ignored finding of a project that still exists. It tells **gone from offline** — deleting findings because a drive was unplugged would be data loss — and leaves a project alone, listing it under `unreachable_projects`, whenever it cannot be sure: a symlink to a drive that is away, a stat that fails or does not answer, a missing mount point or a directory directly under one (`/Volumes`, `/media/USER/LABEL`, `~/Library/CloudStorage`), an empty or root ancestor, a missing Windows drive. On the author's own store 102 of 244 projects no longer existed, holding 47% of the open findings and 58% of the errors, and 80% of the rows were resolved ones.
+- **`lgit stats` / `findings_stats` say how current they are.** Findings only change when a project is re-checked, so a total is as old as its project's last check. With a project: `last_checked_at` (`0` when none is on record) and `project_exists`; without one: `projects_tracked` and `projects_missing`. A check is recorded even when it found nothing, and only a full run counts: one gate says nothing about the others.
+
+### Changed
+
+- **A directory that is not a git repository is reported once.** The gates that read the git index each filed the same "skipped (not a git repository)" finding — 238 rows in one real store. A full run now files one, under `git_repository`, naming the gates it stopped; it retires itself after a `git init` (a run narrowed to one gate notices that too), `"ignore": ["git_repository"]` in `.l0git.json` silences it, and the old per-gate rows are retired by the first run. A run narrowed to one gate on a directory that still is not a repository answers with that gate's own notice.
+- `lgit clear <project>` also removes the project's check record, so a project cleared by hand no longer stays in every count.
+
 ### Fixed
 
 False positives — and two false negatives — found by re-running every gate over every repository the findings store knew about (142 of them). The old and the new binary were run back to back over the same working trees and the findings diffed in both directions: 196 removed, 45 of the network warnings re-reported as info, one error downgraded to a warning, and nothing added at error or warning. The branch was then attacked by an independent reviewer, who found seven classes of false negatives in the first version (two of them regressions against the previous release); all are fixed here, and each has a test that fails without the fix.
@@ -19,6 +29,8 @@ False positives — and two false negatives — found by re-running every gate o
 - `network_scan`: invented test addresses (`100.1.2.3`, `100.4.5.6`, `2.2.2.2`, `100.1.1.1`) are reported as `doc-placeholder` at info instead of as public-address warnings. They are still listed. The well-known resolvers keep their own category, including the Chinese public resolvers (`114.114.114.114`, `223.5.5.5`, `119.29.29.29`, …). A run of step 10 (`100.10.20.30`) was dropped from the rule: `52.20.30.40` is a real AWS address.
 - `markdown_lint` `codeblock_invalid_payload`: a block is no longer reported when it is a stream of JSON values, has trailing `//` comments or `<integer>` placeholders (in value position only; `<html>` alone is not one) that are the only thing wrong with it, or is labelled as the wrong way to do something — a `# Bad: …` comment on its **first line**, or a `**Bad**:` label directly above it. A comment in the middle of a block, such as `# Don't: expose 5432 publicly`, does not excuse it.
 - `merge_conflict_markers`: a block in a Markdown file whose markers are exactly one complete conflict is reported at **warning** instead of error. It is a warning and not info because the same text is what a real conflict in a README code sample looks like (two branches editing the same example), and info is hidden by default in the editor. Two conflicts, an unfinished one, markers in the wrong order, an unclosed block, and every other file type are unchanged.
+
+- `ignored_file_tracked`: a single file read "1 tracked file under Cargo.lock match the repository's .gitignore". It now says "Cargo.lock is tracked but matches the repository's .gitignore"; several files keep "N tracked files under X match…".
 
 ## [0.2.3] - 2026-09-30
 

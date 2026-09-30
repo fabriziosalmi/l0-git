@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -125,6 +127,12 @@ func openStoreAt(path string) (*Store, error) {
 	);
 	CREATE INDEX IF NOT EXISTS idx_findings_project ON findings(project, status);
 	CREATE INDEX IF NOT EXISTS idx_findings_updated ON findings(updated_at DESC);
+	-- When each project was last checked, recorded even when the check found
+	-- nothing (a clean project leaves no row in findings to say so).
+	CREATE TABLE IF NOT EXISTS project_checks (
+		project     TEXT PRIMARY KEY,
+		checked_at  INTEGER NOT NULL
+	);
 	`
 	if _, err := db.Exec(schema); err != nil {
 		_ = db.Close()
@@ -378,6 +386,12 @@ func (s *Store) ClearProject(ctx context.Context, project string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	// The check record goes with the findings: left behind, a project that was
+	// cleared by hand (how an unreachable one is removed) stayed in every count
+	// and in every prune report for ever.
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM project_checks WHERE project = ?`, project); err != nil {
+		return 0, err
+	}
 	n, _ := res.RowsAffected()
 	return int(n), nil
 }
@@ -395,6 +409,21 @@ type FindingsStats struct {
 	ByTag      []KeyCount     `json:"by_tag"`
 	TopFiles   []KeyCount     `json:"top_files"`
 	Last7Days  []DayCount     `json:"last_7_days"`
+
+	// How old this data is. Findings only change when a project is re-checked,
+	// so every number above is as current as its project's last check: an agent
+	// or a dashboard reading them needs to know how long ago that was.
+	//
+	// With a project filter: when it was last checked (milliseconds since the
+	// epoch; 0 = no check on record — present, and 0, rather than absent) and
+	// whether its directory is there (absent when the stat did not answer).
+	LastCheckedAt *int64 `json:"last_checked_at,omitempty"`
+	ProjectExists *bool  `json:"project_exists,omitempty"`
+	// Without a filter: how many projects the store knows, and how many of them
+	// have no directory there right now. `lgit prune` removes those it can tell
+	// are gone, and lists the ones it kept because they may only be offline.
+	ProjectsTracked *int `json:"projects_tracked,omitempty"`
+	ProjectsMissing *int `json:"projects_missing,omitempty"`
 }
 
 // KeyCount is a generic "label → count" row used for ranked breakdowns.
@@ -500,7 +529,86 @@ func (s *Store) Stats(ctx context.Context, project string) (*FindingsStats, erro
 	}
 	out.Last7Days = build7DayTrend(dayRows, time.Now())
 
+	s.fillFreshness(ctx, out, project)
 	return out, nil
+}
+
+// fillFreshness adds how current the stats are. A failure here is not allowed to
+// take the stats down: they are the thing being asked for, and this only annotates them.
+func (s *Store) fillFreshness(ctx context.Context, out *FindingsStats, project string) {
+	if project != "" {
+		var at sql.NullInt64
+		_ = s.db.QueryRowContext(ctx, `SELECT checked_at FROM project_checks WHERE project = ?`, project).Scan(&at)
+		v := at.Int64
+		out.LastCheckedAt = &v
+		if fi, err := statWithin(project, false); err == nil {
+			exists := fi.IsDir()
+			out.ProjectExists = &exists
+		} else if errors.Is(err, fs.ErrNotExist) {
+			exists := false
+			out.ProjectExists = &exists
+		} // anything else: the answer is unknown, and is left out
+		return
+	}
+	projects, err := s.knownProjects(ctx)
+	if err != nil {
+		return
+	}
+	tracked, missing := len(projects), countMissing(projects)
+	out.ProjectsTracked, out.ProjectsMissing = &tracked, &missing
+}
+
+// countMissing counts the projects whose directory is definitely not there. The
+// stats run in parallel and each is bounded by statTimeout, so one dead mount
+// costs seconds, not the command; a project whose stat does not answer is not
+// counted as missing.
+func countMissing(projects []string) int {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	sem := make(chan struct{}, 16)
+	missing := 0
+	for _, p := range projects {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(p string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			_, err := statWithin(p, false)
+			if errors.Is(err, fs.ErrNotExist) {
+				mu.Lock()
+				missing++
+				mu.Unlock()
+			}
+		}(p)
+	}
+	wg.Wait()
+	return missing
+}
+
+// RecordCheck notes that project was checked just now.
+func (s *Store) RecordCheck(ctx context.Context, project string) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO project_checks (project, checked_at) VALUES (?, ?)
+		ON CONFLICT(project) DO UPDATE SET checked_at = excluded.checked_at`,
+		normalizeProject(project), time.Now().UnixMilli())
+	return err
+}
+
+// knownProjects lists every project the store has a finding or a check for.
+func (s *Store) knownProjects(ctx context.Context) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT project FROM findings UNION SELECT project FROM project_checks ORDER BY 1`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }
 
 // normalizeProject is the one spelling the store keys projects by:

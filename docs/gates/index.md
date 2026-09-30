@@ -19,6 +19,16 @@ Three gates are **opt-in** and do nothing until you enable them in
 lgit gates          # the same list, straight from the binary
 ```
 
+### A directory that is not a git repository
+
+Many of the gates read the git index. On a directory with no `.git/`, `lgit check`
+does not repeat that once per gate: it files **one** info finding under the id
+`git_repository` — *"Not a git repository — 17 gates skipped"* — that names the gates
+it stopped. `git_repository` is not a gate of its own and is not in `lgit gates`; it
+retires itself the next time the directory is a repository, and `"ignore": ["git_repository"]`
+in `.l0git.json` silences it. Asking for a single gate
+(`lgit check . secrets_scan`) still answers with that gate's own notice.
+
 ## Project hygiene
 
 | Gate | Severity | What it catches |
