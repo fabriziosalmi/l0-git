@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-30
+
 ### Added
 
 - **`lgit prune`** removes the findings nothing can act on any more: every finding of a project whose directory is gone, and resolved findings older than `-keep-resolved-days` (default 30, at most 36500). A report by default; `-apply` does it and rebuilds the database so the space comes back. It never removes an open or ignored finding of a project that still exists. It tells **gone from offline** — deleting findings because a drive was unplugged would be data loss — and leaves a project alone, listing it under `unreachable_projects`, whenever it cannot be sure: a symlink to a drive that is away, a stat that fails or does not answer, a missing mount point or a directory directly under one (`/Volumes`, `/media/USER/LABEL`, `~/Library/CloudStorage`), an empty or root ancestor, a missing Windows drive. On the author's own store 102 of 244 projects no longer existed, holding 47% of the open findings and 58% of the errors, and 80% of the rows were resolved ones.
