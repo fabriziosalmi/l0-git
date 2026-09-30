@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+False positives — and one false negative — found by re-running every gate over every repository the findings store knew about (142 of them), and verified by running the old and the new binary over the same working trees and diffing the findings in both directions. Net effect on that corpus: 200 findings removed, 49 of them re-reported as info instead of warning, and one error downgraded. Each suppression has a test for the case it must not silence.
+
+- **`connection_strings`: a short username hid a real password.** The "one or two characters is prose shorthand" rule was applied to the user as well as the password, so `sqlserver://sa:<password>@host` (`sa` is SQL Server's default login) and `https://x:<token>@github.com` were never reported. It now looks at the password only, and counts characters, not bytes: `mysql+pymysql://user:…@…/db` (`…` is three bytes) had been reported as a credential.
+- **`connection_strings`: a password containing `@` was never reported.** The scanner read the password up to the first `@` (`user:p@ss@host` → `p`, dropped as shorthand); the redactor already used the last. Both now use one definition of where the userinfo ends, which also stops `https://host.io:8080?e=a@b.c` being read as `host.io` / `8080?e=a`.
+- `connection_strings`: a regex that greps for credentials (`postgresql://[^:]+:[^@]+@|sk_(test|live)_`, in a pre-commit hook) is not a credential. It was silenced only by a coincidence of the rule above; the host is now recognised as regex syntax.
+- `connection_strings` `http_remote`: no longer reports cleartext that is cleartext by design — certificate-chain and revocation fetches (`.crt`/`.cer`/`.crl`/`.der`/`.p7b`/`.p7c`, `ocsp.`/`crl.` hosts; `.pem` and `.p12` stay reported), license and schema identifiers (`http://www.apache.org/licenses/…`, `http://json-schema.org/draft-07/schema#`; a download from the same host stays reported), and the stock fake adversaries of security tests (`evil.com`, `attacker.com`, `malicious.io`; never a host that starts like an IP). One repository's chain fixtures alone held 88.
+- `network_scan`: `uv.lock` and the other lockfiles of the current package managers (`pdm`, `pixi`, `bun`, `deno`, `mix`, `pubspec`, `Podfile`, `Package.resolved`, `.terraform.lock.hcl`, …) are skipped like `Cargo.lock` is; `version = "1.2.0.2"` in a `uv.lock` was reported eleven times as a public address. Exact names only.
+- `network_scan`: a section number quoted from a standard (`RFC 6749 §4.1.2.1`, `Req 4.2.1.1`) is not an address. The keyword directly before it and components of at most 30 are both required, so `req 45.33.32.156` is still reported.
+- `network_scan`: invented test addresses (`100.1.2.3`, `100.4.5.6`, `100.10.20.30`, `2.2.2.2`, `100.1.1.1`) are reported as `doc-placeholder` at info instead of as public-address warnings. They are still listed, and the well-known resolvers keep their own category.
+- `markdown_lint` `codeblock_invalid_payload`: a block is no longer reported when it is a stream of JSON values, has trailing `//` comments or `<integer>` type placeholders that are the only thing wrong with it (removed outside strings, then parsed strictly), or is labelled as the wrong way to do something (`# Bad: …`, a `**Bad**:` line above).
+- `merge_conflict_markers`: a complete conflict inside a fenced code block of a Markdown file is reported at info as an example instead of at error; every other marker, and every other file type, is unchanged.
+
 ## [0.2.3] - 2026-09-30
 
 ### Security

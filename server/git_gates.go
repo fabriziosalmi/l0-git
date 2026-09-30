@@ -65,7 +65,21 @@ func checkMergeConflictMarkers(ctx context.Context, root string, opts json.RawMe
 		if isBinary(data) {
 			continue
 		}
-		if line, ok := findFirstMergeMarker(data); ok {
+		if line, example, ok := findMergeMarker(rel, data); ok {
+			if example {
+				// A complete conflict shown inside a fenced code block of a
+				// Markdown file: almost always documentation of the syntax
+				// (a rule page, a git tutorial). Reported, at info, rather
+				// than silenced — the same text is also what a real conflict
+				// that landed inside a code block looks like.
+				out = append(out, Finding{
+					Severity: SeverityInfo,
+					Title:    "Merge conflict markers shown in a code example",
+					Message:  fmt.Sprintf("%s:%d holds a complete merge conflict (<<<<<<<, =======, >>>>>>>) inside a fenced code block — documentation of the syntax, not an unresolved conflict. If it IS a conflict, resolve it.", rel, line),
+					FilePath: rel,
+				})
+				continue
+			}
 			out = append(out, Finding{
 				Severity: SeverityError,
 				Title:    "Merge conflict markers in tracked file",
@@ -96,6 +110,134 @@ func findFirstMergeMarker(data []byte) (int, bool) {
 		}
 	}
 	return 0, false
+}
+
+// findMergeMarker is findFirstMergeMarker plus one refinement for Markdown.
+//
+// A rule page or a git tutorial shows a conflict inside a fenced code block, and
+// the directional markers at the start of its lines are exactly what the gate
+// looks for (slopless's docs/rules/VBC-006-B.md). In a Markdown file each fenced
+// block is judged on its own: a block that holds a COMPLETE conflict — `<<<<<<<`,
+// then `=======`, then `>>>>>>>`, in that order — is an example; a marker outside
+// every block, or in a block that does not hold the whole conflict, is real.
+// example is true only when EVERY marker in the file is of the first kind, so a
+// real conflict anywhere else in the file still wins, and its line is the one
+// reported.
+func findMergeMarker(rel string, data []byte) (line int, example, ok bool) {
+	low := strings.ToLower(rel)
+	if !strings.HasSuffix(low, ".md") && !strings.HasSuffix(low, ".markdown") && !strings.HasSuffix(low, ".mdx") {
+		l, found := findFirstMergeMarker(data)
+		return l, false, found
+	}
+
+	var (
+		realLine, exampleLine int
+		fence                 byte // the fence character while inside a block, else 0
+		fenceLen              int
+		blockFirst            int  // first marker line in the current block
+		sawOpen, sawSep       bool // ordered: < then = then >
+		sawClose              bool
+	)
+	endBlock := func() {
+		if blockFirst != 0 {
+			if sawOpen && sawSep && sawClose {
+				if exampleLine == 0 {
+					exampleLine = blockFirst
+				}
+			} else if realLine == 0 {
+				realLine = blockFirst
+			}
+		}
+		fence, fenceLen, blockFirst, sawOpen, sawSep, sawClose = 0, 0, 0, false, false, false
+	}
+
+	for n, start := 1, 0; start <= len(data); n++ {
+		end := start
+		for end < len(data) && data[end] != '\n' {
+			end++
+		}
+		content := data[start:end]
+		trimmed := strings.TrimRight(strings.TrimLeft(string(content), " \t"), " \t\r")
+
+		switch {
+		case fence == 0:
+			if c, l := fenceOpener(trimmed); c != 0 {
+				fence, fenceLen = c, l
+			} else if isMergeMarkerLine(content) && realLine == 0 {
+				realLine = n
+			}
+		case isFenceCloser(trimmed, fence, fenceLen):
+			endBlock()
+		default:
+			if isMergeMarkerLine(content) {
+				if blockFirst == 0 {
+					blockFirst = n
+				}
+				switch {
+				case content[0] == '<':
+					sawOpen = true
+				case content[0] == '>' && sawOpen && sawSep:
+					sawClose = true
+				}
+			} else if trimmed == "=======" && sawOpen {
+				sawSep = true
+			}
+		}
+		if end >= len(data) {
+			break
+		}
+		start = end + 1
+	}
+	if fence != 0 {
+		// A block that is never closed is how a real conflict usually breaks a
+		// document; it cannot be vouched for as an example.
+		if blockFirst != 0 && realLine == 0 {
+			realLine = blockFirst
+		}
+	}
+	switch {
+	case realLine != 0:
+		return realLine, false, true
+	case exampleLine != 0:
+		return exampleLine, true, true
+	}
+	return 0, false, false
+}
+
+// fenceOpener reports the fence character and length when line opens a fenced
+// code block (``` or ~~~, three or more), else (0, 0).
+func fenceOpener(line string) (byte, int) {
+	if len(line) < 3 || (line[0] != '`' && line[0] != '~') {
+		return 0, 0
+	}
+	c := line[0]
+	n := 0
+	for n < len(line) && line[n] == c {
+		n++
+	}
+	if n < 3 {
+		return 0, 0
+	}
+	// A backtick fence's info string may not contain a backtick (that would be
+	// inline code, not a fence).
+	if c == '`' && strings.Contains(line[n:], "`") {
+		return 0, 0
+	}
+	return c, n
+}
+
+// isFenceCloser reports whether line closes a block opened with fence/n: the
+// same character, at least as long, and nothing else on the line.
+func isFenceCloser(line string, fence byte, n int) bool {
+	if len(line) < n {
+		return false
+	}
+	for i := 0; i < len(line); i++ {
+		if line[i] != fence {
+			return false
+		}
+	}
+	return true
 }
 
 func isMergeMarkerLine(line []byte) bool {

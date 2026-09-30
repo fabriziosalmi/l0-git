@@ -16,6 +16,21 @@ Detects unresolved git merge conflict markers (<<<<<<<, =======, >>>>>>>) in tra
 Scans tracked files for `<<<<<<<`, `=======` and `>>>>>>>` at the start
 of a line. Reports the file and the first offending line number.
 
+### A conflict shown in a Markdown code block
+
+A rule page or a git tutorial shows a conflict inside a fenced code block, and
+its lines start with exactly the text the gate looks for. In a `.md`, `.markdown`
+or `.mdx` file each fenced block is judged on its own: a block that holds a
+**complete** conflict — `<<<<<<<`, then `=======`, then `>>>>>>>`, in that order —
+is reported at **info** as an example, not at error. A marker outside every
+block, in a block that does not hold the whole conflict, or in a block that is
+never closed, is still an error, and a real conflict anywhere in the file wins
+over an example. Files of any other type are unchanged.
+
+The one ambiguity is a *real* conflict that happens to sit entirely inside a code
+block: it looks the same as an example, which is why it is downgraded and not
+hidden.
+
 ## What a finding says
 
 ```text

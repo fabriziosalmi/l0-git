@@ -25,9 +25,29 @@ Every parsed address is classified, and the category decides the severity:
 | `unspecified` | *(not reported by default)* | `0.0.0.0`, `::` |
 | `link-local` | info | `169.254.0.0/16` |
 | `doc-range` | *(dropped)* | `192.0.2.0/24` and the other RFC 5737 ranges |
-| `doc-placeholder` | info | `1.2.3.4`, `4.3.2.1` — sequential octets |
+| `doc-placeholder` | info | `1.2.3.4`, `4.3.2.1` — sequential octets; and invented test addresses: `100.1.2.3`, `100.10.20.30`, `2.2.2.2`, `100.1.1.1` |
 | `public-resolver` | info | `8.8.8.8`, `1.1.1.1`, `9.9.9.9` |
 | `broadcast` / `multicast` / `reserved` | info | |
+
+### What is not an address
+
+A dotted quad is byte-for-byte the same as a version number or a section number,
+so only the text around it can tell them apart. These are not reported:
+
+- **Versions**: `Chrome/120.0.0.0`, `brotlicffi==1.2.0.1`, `version="0.0.1.0"`.
+- **Section numbers** quoted from a standard: `RFC 6749 §4.1.2.1`,
+  `Req 4.2.1.1`, `section 4.2.1.1`, `clause 3.1.2.1`. Both conditions are
+  required — the keyword directly before it, **and** every component at most 30 —
+  so `req 45.33.32.156 GET /` and `section 51.222.140.163` are still reported.
+- **Package-manager lockfiles**: `package-lock.json`, `yarn.lock`, `Cargo.lock`,
+  `go.sum`, `poetry.lock`, `uv.lock`, `pdm.lock`, `pixi.lock`, `bun.lock`,
+  `deno.lock`, `Podfile.lock`, `Package.resolved`, `.terraform.lock.hcl` and the
+  like. Exact names only: a file that merely ends in `.lock` is still scanned.
+
+Invented test addresses — every octet equal, the last three equal, or the last
+three in a run of step 1 or 10 (`100.1.2.3`, `100.4.5.6`, `100.10.20.30`) — are
+reported as `doc-placeholder` at info rather than as a warning. They are still
+listed: the range may really be allocated.
 
 ### Why loopback and 0.0.0.0 are off by default
 

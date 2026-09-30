@@ -257,6 +257,31 @@ var generatedFileBasenames = map[string]bool{
 	"cargo.lock":          true,
 	"go.sum":              true,
 	"flake.lock":          true,
+
+	// Added after a sweep of the author's own repositories found
+	// `version = "1.2.0.2"` in a uv.lock reported as a public address, eleven
+	// times: the list had Poetry and Pipenv but not their successor. Exact
+	// names only — a generic `*.lock` suffix would also swallow hand-written
+	// files that merely end that way.
+	"uv.lock":              true,
+	"pdm.lock":             true,
+	"pixi.lock":            true,
+	"bun.lock":             true,
+	"deno.lock":            true,
+	"mix.lock":             true,
+	"pubspec.lock":         true,
+	"podfile.lock":         true,
+	"package.resolved":     true,
+	"packages.lock.json":   true,
+	".terraform.lock.hcl":  true,
+	"gradle.lockfile":      true,
+	"conan.lock":           true,
+	"rebar.lock":           true,
+	"renv.lock":            true,
+	"stack.yaml.lock":      true,
+	"cabal.project.freeze": true,
+	"gopkg.lock":           true,
+	"glide.lock":           true,
 }
 
 // isDefaultGeneratedFile reports whether rel is a machine-generated artefact

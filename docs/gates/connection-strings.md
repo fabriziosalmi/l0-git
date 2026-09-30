@@ -62,6 +62,25 @@ to production.
   default set (`postgres:postgres`, `guest:guest`).
 - `http://` to spec and namespace identifiers (`http://www.w3.org/2000/svg`) and
   to local or container-internal hosts.
+- `http://` that is cleartext **by design**:
+  - certificate-chain and revocation fetches — a path ending `.crt`, `.cer`,
+    `.crl`, `.der`, `.p7b` or `.p7c`, or an `ocsp.` / `crl.` host (RFC 5280;
+    `.pem`, `.p12` and `.pfx` are *not* exempt, they can be private keys);
+  - license and schema identifiers quoted in source headers
+    (`http://www.apache.org/licenses/…`, `http://www.gnu.org/licenses/…`,
+    `http://scripts.sil.org/OFL`, `http://json-schema.org/draft-07/schema#`) —
+    the path is part of the rule, so `http://www.apache.org/dist/…zip` is still
+    a real cleartext download;
+  - the stock fake adversary of a security test: `evil.com`, `sub.attacker.com`,
+    `malicious.io`, `yourserver.com`. A host that starts like an IP
+    (`192.168.evil.net`) is never an example.
+- A URL with no userinfo at all: `https://host.io:8080?e=a@b.c` (the `@` belongs
+  to the query).
+- Regex syntax standing where a URL should be, such as a pre-commit hook that
+  greps for `postgresql://[^:]+:[^@]+@|sk_(test|live)_`.
+- A one- or two-**character** password — `scheme://u:p@host`, `user:…@…` in prose.
+  It is the password that counts, not the user: `sqlserver://sa:<password>@host`
+  and `https://x:<token>@github.com` are reported.
 
 ## What a finding says
 

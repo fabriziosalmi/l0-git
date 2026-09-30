@@ -82,31 +82,8 @@ func isAuthorityEnd(c byte) bool {
 }
 
 // redactAuthority masks the secret in one authority (`user:pass@host:port`).
-//
-// The userinfo ends at the LAST `@`: the first one is wrong for a password that
-// itself contains an `@` (`user:p@ss@host`), and stopping there would leave the
-// tail of the password in the clear and call it the host.
-//
-// But a `?` or `#` may start a QUERY, and an `@` in a query
-// (`https://host.io?e=a@b.c`) is not the end of any userinfo. So the last `@`
-// BEFORE the first `?`/`#` wins when there is one. Only when there is none is
-// the whole authority read as userinfo — the creds_in_url rule does accept `?`
-// and `#` inside a password (`user:p?ss@host`) — and then only when the part
-// before the `?` has a colon that is not a port (`host.io:8080?e=a@b.c`).
 func redactAuthority(a string) string {
-	head := a
-	q := strings.IndexAny(a, "?#")
-	if q >= 0 {
-		head = a[:q]
-	}
-	at := strings.LastIndexByte(head, '@')
-	if at < 0 && q >= 0 {
-		colon := strings.LastIndexByte(head, ':')
-		if colon < 0 || isAllDigits(head[colon+1:]) {
-			return a
-		}
-		at = strings.LastIndexByte(a, '@')
-	}
+	at := userinfoEnd(a)
 	if at < 0 {
 		return a
 	}
@@ -120,6 +97,44 @@ func redactAuthority(a string) string {
 		return redactedMark + "@" + rest
 	}
 	return a
+}
+
+// userinfoEnd returns the index of the `@` that ends the userinfo of the
+// authority that starts rest — the text after `scheme://` — or -1 when there is
+// none. It is the one place that decides where a password stops, used by the
+// scanner (to read the password) and by the redactor (to mask it), because two
+// definitions disagree exactly on the URLs that matter.
+//
+// The userinfo ends at the LAST `@`: the first one is wrong for a password that
+// itself contains an `@` (`user:p@ss@host`), and stopping there both leaves the
+// tail of the password in the clear after masking and, in the scanner, reads the
+// password as `p` and drops the URL as two-character prose shorthand.
+//
+// But a `?` or `#` may start a QUERY, and an `@` in a query
+// (`https://host.io?e=a@b.c`) is not the end of any userinfo. So the last `@`
+// BEFORE the first `?`/`#` wins when there is one. Only when there is none is
+// the whole authority read as userinfo — the creds_in_url rule does accept `?`
+// and `#` inside a password (`user:p?ss@host`) — and then only when the part
+// before the `?` has a colon that is not a port (`host.io:8080?e=a@b.c`).
+func userinfoEnd(rest string) int {
+	a := rest
+	if i := strings.IndexByte(a, '/'); i >= 0 {
+		a = a[:i]
+	}
+	head := a
+	q := strings.IndexAny(a, "?#")
+	if q >= 0 {
+		head = a[:q]
+	}
+	at := strings.LastIndexByte(head, '@')
+	if at < 0 && q >= 0 {
+		colon := strings.LastIndexByte(head, ':')
+		if colon < 0 || isAllDigits(head[colon+1:]) {
+			return -1
+		}
+		at = strings.LastIndexByte(a, '@')
+	}
+	return at
 }
 
 func isAllDigits(s string) bool {

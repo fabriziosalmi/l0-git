@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -163,7 +164,8 @@ func evaluateMarkdownFile(rel, root string, source []byte, disabled map[string]b
 				}
 			} else if !disabled["codeblock_invalid_payload"] {
 				body := fencedBlockBody(typed, source)
-				if msg := validatePayload(lang, body); msg != "" {
+				if msg := validatePayload(lang, body); msg != "" &&
+					!isLabelledCounterExample(body, previousNonBlankLine(source, lineStarts, line-1)) {
 					out = append(out, mdFindingAt(rel, line,
 						mdRules["codeblock_invalid_payload"],
 						fmt.Sprintf("```%s block does not parse: %s", lang, msg),
@@ -584,6 +586,21 @@ func validatePayload(lang, body string) string {
 			if isJSONFragment(body) {
 				return ""
 			}
+			// A run of JSON values one after another — `{"detail": "a"}` then
+			// `{"detail": "b"}`, how a troubleshooting page lists the
+			// alternative responses — is a stream, not one document.
+			if isJSONStream(body) {
+				return ""
+			}
+			// Trailing `// comments` and `<integer>` type placeholders are the
+			// other documentation habits strict JSON forbids. They are removed
+			// OUTSIDE string literals only, and the block is accepted only if
+			// what is left parses: a block that also has a real syntax error
+			// is still reported.
+			if alt, changed := neutralizeJSONIllustrations(body); changed &&
+				(json.Valid([]byte(alt)) || isJSONFragment(alt) || isJSONStream(alt)) {
+				return ""
+			}
 			return err.Error()
 		}
 	// JSON supersets: pass through — stdlib json.Unmarshal rejects
@@ -682,6 +699,137 @@ func isJSONFragment(body string) bool {
 		return true
 	}
 	return json.Unmarshal([]byte("["+trimmed+"]"), &v) == nil
+}
+
+// isJSONStream reports whether body is two or more JSON values in a row.
+// Exact: every value must decode, so one broken value fails the whole block.
+// A single value is excluded — it would already have parsed on its own.
+func isJSONStream(body string) bool {
+	dec := json.NewDecoder(strings.NewReader(body))
+	n := 0
+	for {
+		var v any
+		err := dec.Decode(&v)
+		if err == io.EOF {
+			return n >= 2
+		}
+		if err != nil {
+			return false
+		}
+		n++
+	}
+}
+
+// angleTokenRe matches a `<placeholder>` standing where a JSON value belongs:
+// `"tenants": <integer>`, `"id": <random uuid>`.
+var angleTokenRe = regexp.MustCompile(`^<[A-Za-z_][^<>\n"]{0,40}>`)
+
+// neutralizeJSONIllustrations removes `//` and `/* */` comments and replaces
+// `<placeholder>` tokens with null, both OUTSIDE string literals — `//` inside
+// "http://x" and `<` inside "<uuid>" are data, and are left alone. The bool
+// reports whether anything changed, so the caller can tell "illustrative" from
+// "just broken".
+func neutralizeJSONIllustrations(body string) (string, bool) {
+	var out strings.Builder
+	changed, inString := false, false
+	for i := 0; i < len(body); {
+		c := body[i]
+		if inString {
+			out.WriteByte(c)
+			if c == '\\' && i+1 < len(body) {
+				out.WriteByte(body[i+1])
+				i += 2
+				continue
+			}
+			if c == '"' {
+				inString = false
+			}
+			i++
+			continue
+		}
+		switch {
+		case c == '"':
+			inString = true
+			out.WriteByte(c)
+			i++
+		case c == '/' && i+1 < len(body) && body[i+1] == '/':
+			for i < len(body) && body[i] != '\n' {
+				i++
+			}
+			changed = true
+		case c == '/' && i+1 < len(body) && body[i+1] == '*':
+			end := strings.Index(body[i+2:], "*/")
+			if end < 0 { // unterminated: not a comment, leave the text for the parser to reject
+				out.WriteString(body[i:])
+				i = len(body)
+				break
+			}
+			i += 2 + end + 2
+			out.WriteByte(' ')
+			changed = true
+		case c == '<':
+			if tok := angleTokenRe.FindString(body[i:]); tok != "" {
+				out.WriteString("null")
+				i += len(tok)
+				changed = true
+			} else {
+				out.WriteByte(c)
+				i++
+			}
+		default:
+			out.WriteByte(c)
+			i++
+		}
+	}
+	return out.String(), changed
+}
+
+// counterExampleLabelRe matches the whole text of a line that only labels the
+// block after it as the WRONG way to do something, once emphasis, heading marks
+// and emoji have been stripped: `**Bad**:`, `### Wrong`, `❌ Bad example`.
+var counterExampleLabelRe = regexp.MustCompile(
+	`^(?:an? |the )?(?:bad|wrong|incorrect|invalid|broken|anti-?pattern|don'?t|do not|avoid)` +
+		`(?: (?:example|examples|config|configuration|yaml|json|snippet|usage|way|syntax|format|indentation|practice))*:?$`)
+
+// counterExampleCommentRe matches a comment INSIDE the block that labels it (or
+// the part after it) as wrong: `# Bad: Missing space after colon`.
+var counterExampleCommentRe = regexp.MustCompile(
+	`(?im)^\s*(?:#|//|--|;)\s*(?:❌|✗|✘)?\s*(?:bad|wrong|incorrect|invalid|don'?t|do not|avoid)\b\s*[:\-–—]`)
+
+var labelNoise = strings.NewReplacer("*", "", "_", "", "#", "", "`", "", ">", "",
+	"❌", "", "✗", "", "✘", "", "✖", "", "🚫", "", "⛔", "", "’", "'")
+
+func isCounterExampleLabel(line string) bool {
+	t := strings.Join(strings.Fields(strings.ToLower(labelNoise.Replace(line))), " ")
+	return t != "" && len(t) <= 40 && counterExampleLabelRe.MatchString(t)
+}
+
+// isLabelledCounterExample reports whether a block that does not parse is being
+// shown as the wrong way to write something: labelled so by the line just above
+// it, or by a comment inside it. A block the author calls broken is meant to
+// be, and "does not parse" is then the point of the example, not a defect.
+func isLabelledCounterExample(body, previousLine string) bool {
+	return isCounterExampleLabel(previousLine) || counterExampleCommentRe.MatchString(body)
+}
+
+// previousNonBlankLine returns the closest non-blank line above 1-based line k,
+// looking at most three lines back ("" when there is none).
+func previousNonBlankLine(source []byte, lineStarts []int, k int) string {
+	for back := 1; back <= 3; back++ {
+		n := k - back // 1-based line number
+		if n < 1 || n > len(lineStarts) {
+			return ""
+		}
+		start := lineStarts[n-1]
+		end := len(source)
+		if n < len(lineStarts) {
+			end = lineStarts[n]
+		}
+		if t := strings.TrimSpace(string(source[start:end])); t != "" {
+			return t
+		}
+	}
+	return ""
 }
 
 // yamlDuplicateKeyRe matches gopkg.in/yaml.v3's duplicate-mapping-key error,
