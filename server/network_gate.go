@@ -124,7 +124,7 @@ func checkNetworkScan(ctx context.Context, root string, opts json.RawMessage) ([
 	reportUnspecified := scan.ReportUnspecified != nil && *scan.ReportUnspecified
 	out := []Finding{}
 	for _, rel := range files {
-		if scan.shouldSkipContent(rel) {
+		if scan.shouldSkipContent(rel) || isVersionPinLockfile(rel) {
 			continue
 		}
 		// Changelog / release-note files routinely describe IP-related behaviour
@@ -251,6 +251,10 @@ func scanNetworkLine(rel string, lineNum int, content []byte, reportLoopback, re
 		if looksLikeVersionLiteral(content, idx[0], idx[1]) {
 			continue
 		}
+		// …and the same goes for a section number: `RFC 6749 §4.1.2.1`.
+		if looksLikeSectionNumber(content, idx[0], idx[1]) {
+			continue
+		}
 		ip := net.ParseIP(text)
 		if ip == nil || ip.To4() == nil {
 			continue
@@ -369,6 +373,12 @@ func classifyIPv4(ip net.IP) (string, string) {
 	if publicResolvers[ip.String()] {
 		return SeverityInfo, "public-resolver"
 	}
+	// Checked AFTER the resolvers on purpose: 1.1.1.1, 8.8.8.8, 9.9.9.9 and
+	// 4.2.2.2 are repeated-octet addresses too, and they are real resolvers,
+	// not stand-ins.
+	if isSyntheticOctets(ip) {
+		return SeverityInfo, "doc-placeholder"
+	}
 	if ip.Equal(net.IPv4bcast) {
 		return SeverityInfo, "broadcast"
 	}
@@ -432,7 +442,7 @@ func networkAdvice(category string) string {
 	case "public-resolver":
 		return "Well-known public DNS resolver — an intentional constant, not accidental infrastructure coupling."
 	case "doc-placeholder":
-		return "Consecutive octets (1.2.3.4 / 4.3.2.1) are the conventional stand-in address — but the range is really allocated, so double-check it is an example."
+		return "Octets in a run or all alike (1.2.3.4, 100.1.2.3, 2.2.2.2) are the conventional stand-in — but the range may really be allocated, so double-check it is an example."
 	case "broadcast":
 		return "Limited-broadcast address — a protocol constant, not a host."
 	case "multicast":
@@ -548,6 +558,12 @@ var publicResolvers = map[string]bool{
 	"64.6.64.6": true, "64.6.65.6": true, // Verisign
 	"4.2.2.1": true, "4.2.2.2": true, // Level3
 	"77.88.8.8": true, "77.88.8.1": true, // Yandex
+	// Chinese public resolvers. Repeated-octet addresses, so without an entry
+	// here the synthetic-octet rule would call them placeholders.
+	"114.114.114.114": true, "114.114.115.115": true, // 114DNS
+	"223.5.5.5": true, "223.6.6.6": true, // AliDNS
+	"119.29.29.29": true, // DNSPod
+	"180.76.76.76": true, // Baidu
 }
 
 // isSequentialOctets reports whether the four octets form a strictly
@@ -570,6 +586,84 @@ func isSequentialOctets(ip net.IP) bool {
 		}
 	}
 	return asc || desc
+}
+
+// isSyntheticOctets reports whether an address is laid out the way a person
+// invents one for a test or an example rather than the way an allocation looks:
+//
+//   - every octet equal: 2.2.2.2, 7.7.7.7;
+//   - the last three equal: 100.1.1.1;
+//   - the last three in a run with a step of 1, either way, none of them
+//     zero: 100.1.2.3, 100.4.5.6, 100.7.8.9.
+//
+// A step of 10 (100.10.20.30) was part of this rule and was removed after
+// review: it also describes real allocations (52.20.30.40 is an AWS address),
+// and three findings were not worth hiding those.
+//
+// It is weaker than isSequentialOctets, which demands all FOUR octets in a run,
+// so it only ever moves a finding from warning to info — the finding stays
+// visible, with advice to double-check. Found in Rust test modules that wire
+// `"fra:100.1.2.3,syd:100.4.5.6:9999,100.7.8.9"` (traefik-simple-cdn, zion):
+// about one warning in ten of a sweep over the author's own repositories.
+func isSyntheticOctets(ip net.IP) bool {
+	v4 := ip.To4()
+	if v4 == nil {
+		return false
+	}
+	a, b, c, d := int(v4[0]), int(v4[1]), int(v4[2]), int(v4[3])
+	if a != 0 && a != 255 && a == b && b == c && c == d {
+		return true
+	}
+	if b == 0 || b == 255 || c == 0 || d == 0 {
+		return false
+	}
+	if b == c && c == d {
+		return true
+	}
+	step := c - b
+	if d-c == step && (step == 1 || step == -1) {
+		return true
+	}
+	return false
+}
+
+// sectionRefRe matches the word or sign that introduces a numbered section of a
+// document, immediately before a dotted number: `RFC 6749 §4.1.2.1`,
+// `Req 4.2.1.1:`, `section 4.2.1.1`, `clause 3.1.2.1`. Checked against the
+// lower-cased text before a match.
+var sectionRefRe = regexp.MustCompile(`(?:§|\bsections?|\bsec\.|\bclauses?|\brequirements?|\breq\.?|\bannex|\bappendix|\barticles?|\bchapters?|\bsubsections?|\bparagraphs?|\bpara\.)\s*[#:.]?\s*$`)
+
+// sectionNumberMaxOctet bounds how large a section number's components are. A
+// standard's numbering is small (PCI DSS 12.10.7.3, CIS 5.2.17.9, RFC 6749
+// 4.1.2.1); a real address has all four octets that low about once in five
+// thousand, which is the price of reading the keyword as evidence.
+const sectionNumberMaxOctet = 30
+
+// looksLikeSectionNumber reports whether the dotted quad at [start,end) is a
+// section number quoted from a standard — `RFC 6749 §4.1.2.1` — rather than an
+// address. Like a version literal it is byte-identical to a dotted quad and
+// only its surroundings tell them apart, so BOTH conditions are required: the
+// keyword directly before it, and small components. Either alone would hide
+// `req 45.33.32.156 GET /` or `section 51.222.140.163`.
+func looksLikeSectionNumber(content []byte, start, end int) bool {
+	from := start - versionLookback
+	if from < 0 {
+		from = 0
+	}
+	if !sectionRefRe.MatchString(strings.ToLower(string(content[from:start]))) {
+		return false
+	}
+	ip := net.ParseIP(string(content[start:end]))
+	v4 := ip.To4()
+	if v4 == nil {
+		return false
+	}
+	for _, o := range v4 {
+		if int(o) > sectionNumberMaxOctet {
+			return false
+		}
+	}
+	return true
 }
 
 // proseExtensions are the documentation formats where an address or an ASN is

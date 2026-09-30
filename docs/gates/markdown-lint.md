@@ -23,6 +23,26 @@ Deterministic AST lint of tracked .md/.markdown files via goldmark. Fires for: i
 | `codeblock_invalid_payload` | warning | A block tagged `json`/`yaml` whose contents do not parse |
 | `codeblock_no_language` | info, **off by default** | A fenced block with no language tag |
 
+### When a block is not a defect
+
+`codeblock_invalid_payload` answers "does the snippet parse?", and documentation
+has four honest reasons for a snippet that does not. None is reported:
+
+- **An excerpt** — the members of an object without its braces.
+- **A stream** of JSON values one after another (`{"detail": "a"}` then
+  `{"detail": "b"}`): how a troubleshooting page lists alternative responses.
+- **Comments and type placeholders** in JSON: `"features": {…}   // optional` and
+  `"tenants": <integer>`. They are removed *outside string literals only*, a
+  placeholder only where a JSON **value** belongs (after `:`, `,` or `[` — an
+  `<html>` tag on its own is not one), and the block is accepted only if what is
+  left parses strictly — one with a real syntax error as well is still reported.
+- **A block labelled as the wrong way to do it**: its **first line** is a
+  `# Bad: …` / `# Wrong: …` / `# Incorrect: …` / `# Invalid: …` comment, or the line
+  directly above it (one blank line allowed) is only a label — `**Bad**:`,
+  `### Wrong`, `❌ Bad example`, `Don't:`. A comment in the *middle* of a block, such as
+  `# Don't: expose 5432 publicly`, is advice about the configuration and does not
+  excuse the block.
+
 ### Why codeblock_no_language is opt-in
 
 An untagged fence is a style preference, not a verifiable defect — an
