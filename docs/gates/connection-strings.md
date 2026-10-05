@@ -58,6 +58,13 @@ to production.
   `#{pass}`. The field has to be the whole password — `pa{ss}word` still fires.
 - A scheme named in prose or inside a pattern, with nothing after `://` to
   connect to: `` `ftp://` ``, `(?:https?://|ftp://)`.
+  Also a mention with nothing connectable after it: `ftp://,` in a list of
+  schemes, or a regular expression (`ftp://127\.0\.0\.1!`).
+- A legacy scheme (`ftp`, `telnet`, `smb`, `nfs`, `rsync`, `ldap`) that names **this
+  machine**: `localhost`, `*.localhost`, `0.0.0.0` or a loopback address. Nothing
+  leaves the host. A private address, `.lan`, a bare service name and
+  `127.0.0.1.evil.com` are other machines and are still reported; so is a
+  credential in the URL, whatever the host.
 - Well-known quickstart defaults where **both** user and password come from the
   default set (`postgres:postgres`, `guest:guest`).
 - `http://` to spec and namespace identifiers (`http://www.w3.org/2000/svg`) and

@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+False positives found by re-running 0.3.0 over the author's 89 public, non-archived repositories. The old and the new binary were run back to back over the same working trees and diffed in both directions: 34 findings gone, 23 network warnings re-reported as info (21 + two on lines with two networks), and nothing added at warning or above; every disappeared finding was read and is a false positive. Each class below has a test that fails without the fix, plus the case that must keep firing.
+
+- `network_scan`: a `/24` or narrower network is classified like the addresses it is made of. `1.2.3.0/24`, `2.2.2.0/24`, `3.3.3.0/24` (invented networks in Rust tests; 21 of the 64 network warnings) are `doc-placeholder`, and a resolver provider's own prefix (`1.1.1.0/24`, `9.9.9.0/24`) is `public-resolver`, both at info. A wide prefix (`1.0.0.0/8`, `8.8.0.0/16`), a host-sized slice and any other public network keep their warning.
+- `markdown_lint` `link_local_broken`: `[x](../../security/advisories)` and the like are GitHub-relative links to the repository's own pages. They are accepted when the number of `..` is exactly the file's depth plus two and the next segment is one of a closed list of repository pages; any other target or depth is still broken. A dotted version number is no longer read as a file extension (`./remediation-v11.2`), under a site generator only.
+- `markdown_lint` `link_anchor_broken`: a repeated heading is numbered the way GitHub numbers it (`#overview`, `#overview-1`), `#` alone is the top of the page, and a percent-encoded anchor is decoded.
+- `connection_strings`: `ftp://`, `telnet://`, `smb://`, `nfs://`, `rsync://` and `ldap://` naming this machine (`localhost`, `0.0.0.0`, a loopback address) are no longer reported, as `http://localhost` already was. Private addresses, `.lan` names, bare service names and look-alikes such as `127.0.0.1.evil.com` still are, and so is a credential in any such URL. A scheme followed by `,` or `;` or by a regular-expression host (`ftp://127\.0\.0\.1!`) is a mention, not a connection.
+
 ## [0.3.0] - 2026-09-30
 
 ### Added

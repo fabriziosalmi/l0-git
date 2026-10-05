@@ -23,6 +23,28 @@ Deterministic AST lint of tracked .md/.markdown files via goldmark. Fires for: i
 | `codeblock_invalid_payload` | warning | A block tagged `json`/`yaml` whose contents do not parse |
 | `codeblock_no_language` | info, **off by default** | A fenced block with no language tag |
 
+### Which links count as broken
+
+A relative link is checked against the working tree, with the allowances a
+renderer makes:
+
+- **Extensionless pages**: `./configuration` finds `configuration.md` or
+  `configuration/index.md`. A dotted version number is not an extension
+  (`./remediation-v11.2`, `./release-1.0`), but that reading is only taken under a
+  site generator (VitePress, MkDocs, Docusaurus, Jekyll, Hugo, …); on GitHub such
+  a link is broken. A real file type (`./diagram.png`) never falls back to a page.
+- **GitHub's own pages**: a README is rendered at `/owner/repo/blob/<branch>/`, so
+  `../../issues` from the repository root is `github.com/owner/repo/issues`. The
+  number of `..` must be the file's directory depth **plus two** (four from
+  `docs/guide/`) and the next segment one of `issues`, `pulls`, `actions`, `wiki`,
+  `releases`, `security`, `discussions`, `projects`, `tags`, `labels`,
+  `milestones`, `pulse`, `graphs`, `stargazers`, `watchers`, `forks`, `compare`,
+  `commits`, `branches`. `../../docs/guide.md` and a wrong depth stay broken.
+
+An anchor matches a heading the way GitHub numbers them: the second `## Usage` is
+`#usage-1`, the third `#usage-2`. `#` alone is the top of the page, and a
+percent-encoded anchor (`#caf%C3%A9`) is decoded before it is compared.
+
 ### When a block is not a defect
 
 `codeblock_invalid_payload` answers "does the snippet parse?", and documentation

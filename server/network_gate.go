@@ -231,7 +231,8 @@ func scanNetworkLine(rel string, lineNum int, content []byte, reportLoopback, re
 		if ip == nil || ip.To4() == nil {
 			continue
 		}
-		sev, cat := classifyIPv4(ip)
+		bits, _ := strconv.Atoi(text[strings.Index(text, "/")+1:])
+		sev, cat := classifyCIDR(ip, bits)
 		if suppressed(cat) {
 			continue
 		}
@@ -390,6 +391,50 @@ func classifyIPv4(ip net.IP) (string, string) {
 		return SeverityInfo, "reserved"
 	}
 	return SeverityWarning, "public"
+}
+
+// classifyCIDR classifies `ip/bits`. A network is classified by its address like
+// a host, with two refinements that only apply to a /24 or narrower — a prefix
+// that wide names ONE network, not a region of the internet:
+//
+//   - a resolver provider's own prefix (1.1.1.0/24 holds 1.1.1.1; 8.8.8.0/24
+//     holds 8.8.8.8) is the same deliberate choice as the resolver itself;
+//   - a network address laid out the way people invent one (1.2.3.0/24,
+//     3.3.3.0/24, 3.2.1.0/24) is a stand-in. isSyntheticOctets cannot say so
+//     because it needs a non-zero last octet, which a network address never has.
+//
+// Wide prefixes (1.0.0.0/8, 8.8.0.0/16) and anything else stay as classifyIPv4
+// says: warning for a public range.
+func classifyCIDR(ip net.IP, bits int) (string, string) {
+	sev, cat := classifyIPv4(ip)
+	if cat != "public" || bits < 24 || bits > 32 {
+		return sev, cat
+	}
+	_, n, err := net.ParseCIDR(ip.String() + "/" + strconv.Itoa(bits))
+	if err != nil {
+		return sev, cat
+	}
+	for r := range publicResolvers {
+		if n.Contains(net.ParseIP(r)) {
+			return SeverityInfo, "public-resolver"
+		}
+	}
+	if v4 := ip.To4(); v4 != nil && v4[3] == 0 && isSyntheticNetwork(v4) {
+		return SeverityInfo, "doc-placeholder"
+	}
+	return sev, cat
+}
+
+// isSyntheticNetwork reports whether the first three octets of a /24 network
+// address are all equal (2.2.2.0, 3.3.3.0) or a run with a step of 1, either way
+// (1.2.3.0, 3.2.1.0) — the network-address counterpart of isSyntheticOctets, and
+// as strict as isSequentialOctets about the run.
+func isSyntheticNetwork(v4 net.IP) bool {
+	a, b, c := int(v4[0]), int(v4[1]), int(v4[2])
+	if a == b && b == c {
+		return true
+	}
+	return (b == a+1 && c == b+1) || (b == a-1 && c == b-1)
 }
 
 func networkFinding(rel string, lineNum int, kind, text, severity, category string) Finding {

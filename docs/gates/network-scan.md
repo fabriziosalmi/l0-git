@@ -53,6 +53,13 @@ three in a run of step 1 (`100.1.2.3`, `100.4.5.6`, `2.2.2.2`) — are reported 
 range may really be allocated. (A run of step 10, `100.10.20.30`, was a placeholder
 rule for a while and was removed: `52.20.30.40` is a real AWS address.)
 
+The same rules apply to a network written as `a.b.c.0/24` or narrower, which
+`isSyntheticOctets` cannot see (it needs a non-zero last octet): `1.2.3.0/24`,
+`3.3.3.0/24` and `3.2.1.0/24` are `doc-placeholder`, and a resolver provider's own
+prefix (`1.1.1.0/24`, `8.8.8.0/24`, `9.9.9.0/24`) is `public-resolver`, both at
+info. A wide prefix is never softened (`1.0.0.0/8` contains `1.1.1.1` and is still a
+public range), and neither is any other public network.
+
 ### Why loopback and 0.0.0.0 are off by default
 
 Both were measured as the two largest sources of non-actionable findings on a
