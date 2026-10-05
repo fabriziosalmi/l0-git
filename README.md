@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/public/hero.svg" alt="l0-git — deterministic quality gates for the open workspace" width="820">
+  <img src="docs/public/hero.svg" alt="l0-git: deterministic quality gates for the open workspace" width="820">
 </p>
 
 <p align="center">
@@ -11,8 +11,8 @@
 </p>
 
 l0-git checks a repository for the things that are simply true or false about
-it — a missing license, a tracked `.env`, a `FROM node:latest`, an unresolved
-merge marker — and keeps the answers in one store that your shell, your editor
+it (a missing license, a tracked `.env`, a `FROM node:latest`, an unresolved
+merge marker) and keeps the answers in one store that your shell, your editor
 and your coding agent all read from.
 
 One Go binary. No CGO, no Python, no rule engine, no YAML DSL.
@@ -28,8 +28,8 @@ One Go binary. No CGO, no Python, no rule engine, no YAML DSL.
 <img src="docs/public/demo-cli.svg" alt="Terminal session: lgit check reports 36 gates and 19 findings, lgit list filters to the two errors, and lgit fix prints a deterministic recipe with the exact git commands to run." width="700">
 
 `lgit check` runs the gates and persists what it found. `lgit list` queries it.
-`lgit fix` explains one finding — and for the eight gates with deterministic
-recipes, hands you the exact commands instead of a paragraph of advice.
+`lgit fix` explains one finding, and for the eight gates with deterministic
+recipes it hands you the exact commands instead of a paragraph of advice.
 
 ## Install
 
@@ -85,7 +85,7 @@ That constraint buys reproducibility: the same tree gives the same findings on
 any machine, with no model, no network and no threshold to tune.
 
 It does **not** buy being right about intent. A gate can be perfectly
-deterministic about the bytes and still wrong about what they mean — a mock AWS
+deterministic about the bytes and still wrong about what they mean: a mock AWS
 key in a fixture, a `0.0.0.0` bind that is the only correct choice inside a
 container, a `docker.sock` mount in the service whose whole job is talking to
 Docker. The current defaults come out of an adversarial sweep against 220 real
@@ -103,13 +103,19 @@ than a red build.
 Three front ends, one binary, one SQLite file. That is why a finding you ignore
 in the editor stays ignored when CI runs.
 
+The store is private to your user (`0600` files in a `0700` directory) and a
+finding never carries a password: where a credential is the problem, the message
+says where it is and not what it is. Findings only change when a project is
+re-checked, so `lgit stats` also says how current its numbers are, and `lgit prune`
+removes the findings of projects that no longer exist.
+
 ## Use with Claude Code
 
 ```sh
 make install-mcp     # claude mcp add -s user l0-git $(pwd)/server/lgit mcp
 ```
 
-`lgit mcp` speaks MCP over stdio and exposes eight tools — `gates_check`,
+`lgit mcp` speaks MCP over stdio and exposes eight tools: `gates_check`,
 `gates_list`, `findings_list`, `findings_stats`, `findings_ignore`,
 `findings_delete`, `findings_clear`, `findings_remediate`.
 
@@ -122,7 +128,7 @@ executes anything.
 ## VS Code extension
 
 Findings land in a sidebar tree, the Problems pane, a status-bar item and an
-Overview dashboard. Presence-style gates ship quick fixes that write the
+Overview dashboard, which also says how old the numbers are ("checked 3 days ago"). Presence-style gates ship quick fixes that write the
 missing file and clear the finding.
 
 The sidebar shows errors and warnings by default; info findings are the audit
@@ -171,7 +177,7 @@ make vsix         # extension build incl. cross-compiled binaries
 make status       # binary version + MCP registration state
 ```
 
-361 tests, 736 including subtests. CI runs the suite on Linux, macOS and
+More than 500 tests (about 1,000 with subtests). CI runs the suite on Linux, macOS and
 Windows × Go 1.25 and 1.26.
 
 l0-git scans clean against itself with the bundled
@@ -185,4 +191,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
