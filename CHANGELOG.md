@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- `secrets_scan`: a classic GitHub token whose built-in checksum does not verify (the last six characters are the CRC-32 of the thirty before them, in base 62) cannot have been issued by GitHub, and is reported at **info** instead of error — downgraded, not dropped. On the author's 89 public repositories that moves exactly the two README/documentation examples that were being reported as errors, and nothing else. The algorithm was checked against a live token on the author's machine (only a boolean was printed); it matched under this alphabet and none of five alternatives. Every match on a line is now judged, in both the working-tree and the history gate, and the worst wins: a suppressed example in front of a real token used to hide it. At most the first 64 matches of a pattern on one line are judged, so a single-line file of repeated look-alikes (a 2 MiB line of private-key headers was quadratic) stays fast; a token followed by more alphanumerics is not the 36-character format and stays an error. Both found by an independent review.
+
 ## [0.3.1] - 2026-10-05
 
 ### Fixed

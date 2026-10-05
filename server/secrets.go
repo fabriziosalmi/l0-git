@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	"math"
 	"os"
 	"os/exec"
@@ -214,10 +215,21 @@ const (
 // puts the whole key there, `"-----BEGIN PRIVATE KEY-----\nMIIEow…"` — then
 // walks the following lines, stepping over blank lines and RFC 1421 metadata
 // headers so an ENCRYPTED key is not mistaken for prose.
+// pemSameLineWindow is how much of the header's own line is read for key material.
+const pemSameLineWindow = 16 << 10
+
 func pemBodyFollows(content []byte, afterMatch int, following []byte) bool {
 	lines := make([][]byte, 0, pemBodyMaxLines+1)
 	if afterMatch < len(content) {
-		lines = append(lines, content[afterMatch:])
+		// Bounded: a header repeated along a very long line would otherwise
+		// re-read the whole rest of the line once per header. A key that sits on
+		// the header's own line starts within the first few KiB (a 4096-bit key
+		// is about 1.6 KiB of base64).
+		rest := content[afterMatch:]
+		if len(rest) > pemSameLineWindow {
+			rest = rest[:pemSameLineWindow]
+		}
+		lines = append(lines, rest)
 	}
 	for _, l := range bytes.SplitN(following, []byte("\n"), pemBodyMaxLines+1) {
 		lines = append(lines, l)
@@ -317,18 +329,22 @@ func checkSecretsScan(ctx context.Context, root string, opts json.RawMessage) ([
 		start := 0
 		emit := func(content []byte, lineNum int, following []byte) {
 			for _, p := range secretPatterns {
-				idx := p.re.FindIndex(content)
-				if idx == nil {
+				verdict := judgeSecretLine(p, content, relForLookup, following)
+				if verdict == verdictNone {
 					continue
 				}
-				match := content[idx[0]:idx[1]]
-				if secretMatchSuppressed(p, match, relForLookup, content, idx[0], following) {
-					continue
+				severity := SeverityError
+				if verdict == verdictExample {
+					severity = SeverityInfo
+				}
+				msg := fmt.Sprintf("Possible %s in %s:%d. Verify, rotate if real, then purge it from git history (e.g. with git-filter-repo).", p.title, rel, lineNum)
+				if verdict == verdictExample {
+					msg = fmt.Sprintf("A string shaped like a %s in %s:%d fails GitHub's own checksum, so GitHub cannot have issued it — almost certainly a typed example. It is still listed in case the checksum rule ever changes.", p.title, rel, lineNum)
 				}
 				out = append(out, Finding{
-					Severity: SeverityError,
+					Severity: severity,
 					Title:    p.title + " in tracked file",
-					Message:  fmt.Sprintf("Possible %s in %s:%d. Verify, rotate if real, then purge it from git history (e.g. with git-filter-repo).", p.title, rel, lineNum),
+					Message:  msg,
 					FilePath: fmt.Sprintf("%s:%d:%s", rel, lineNum, p.id),
 				})
 			}
@@ -554,4 +570,80 @@ func hasSequentialRun(s string) bool {
 		}
 	}
 	return false
+}
+
+// githubTokenChecksumValid reports whether a classic GitHub token
+// (`gh[pousr]_` + 36 characters) carries the checksum GitHub puts in it: the
+// last six characters are the CRC-32 (IEEE) of the preceding thirty, written in
+// base 62 with the alphabet 0-9A-Za-z and left-padded with zeros.
+//
+// A token that fails it cannot have been issued, so it is not a credential. The
+// check only ever LOWERS a finding to info, never drops it: where the algorithm
+// is wrong the cost is a hidden-by-default entry, not a missed leak. Anything
+// that is not exactly the classic shape reports true (treated as possibly real).
+//
+// Verified against a live OAuth token (`gho_`) on the author's machine, with only
+// a boolean printed: it matched under this alphabet and under none of the five
+// other combinations of alphabet and covered text tried. The other four prefixes
+// are documented by GitHub as sharing the format and are not independently checked.
+func githubTokenChecksumValid(tok string) bool {
+	if len(tok) != 3+1+36 || tok[:2] != "gh" || !strings.ContainsRune("pousr", rune(tok[2])) || tok[3] != '_' {
+		return true
+	}
+	body := tok[4:]
+	sum := crc32.ChecksumIEEE([]byte(body[:30]))
+	const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+	var enc [6]byte
+	for k := 5; k >= 0; k-- {
+		enc[k] = alphabet[sum%62]
+		sum /= 62
+	}
+	return string(enc[:]) == body[30:]
+}
+
+type secretVerdict int
+
+const (
+	verdictNone    secretVerdict = iota // nothing worth reporting on the line
+	verdictExample                      // shaped like a credential that cannot be one
+	verdictReal                         // report at full severity
+)
+
+// maxSecretMatchesPerLine bounds the work on one line. Each judged match costs an
+// entropy pass and, for a private-key header, a scan of the rest of the line, so a
+// 2 MiB line of repeated headers was quadratic. Past the cap the rest of the line
+// is not looked at: a real credential after sixty-four suppressed look-alikes on
+// one line is a hostile or generated file, and the first sixty-four are still
+// judged — more than the single match the gate judged before.
+const maxSecretMatchesPerLine = 64
+
+// judgeSecretLine judges every match of p on a line and returns the worst verdict,
+// so a suppressed example in front of a real credential cannot hide it. It stops at
+// the first real one. Shared by the working-tree and the history gate.
+//
+// A classic GitHub token whose checksum fails is an example — but only when the
+// match is the whole token: the pattern takes 36 characters and stops, so a
+// longer alphanumeric run is not the format being checked and stays real.
+func judgeSecretLine(p secretPattern, content []byte, path string, following []byte) secretVerdict {
+	verdict := verdictNone
+	for _, idx := range p.re.FindAllIndex(content, maxSecretMatchesPerLine) {
+		match := content[idx[0]:idx[1]]
+		if secretMatchSuppressed(p, match, path, content, idx[0], following) {
+			continue
+		}
+		if p.id == "github_pat_classic" && !githubTokenChecksumValid(string(match)) && !continuesAlnum(content, idx[1]) {
+			verdict = verdictExample
+			continue
+		}
+		return verdictReal
+	}
+	return verdict
+}
+
+func continuesAlnum(content []byte, end int) bool {
+	if end >= len(content) {
+		return false
+	}
+	c := content[end]
+	return c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
 }
