@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **The extension shows how old its numbers are** (#43). The Overview header reads "checked 3 days ago", "never checked" or "directory not found" under the project name, as a warning once the last full check is older than the new setting `l0-git.staleAfterDays` (default 7, minimum 1); a second line points at `lgit prune` when the shared store holds projects whose directory is gone. The status-bar tooltip carries the same age, so `l0-git: clean` cannot be read as "clean right now". A binary that does not report the age (older than 0.3.0) shows nothing: absent means unknown, not "never". For several workspace folders the worst one speaks. The logic is a set of pure functions with node tests, the extension's first (`npm test`, now in CI), mutation-tested.
+
 ### Changed
 
 - `secrets_scan`: a classic GitHub token whose built-in checksum does not verify (the last six characters are the CRC-32 of the thirty before them, in base 62) cannot have been issued by GitHub, and is reported at **info** instead of error — downgraded, not dropped. On the author's 89 public repositories that moves exactly the two README/documentation examples that were being reported as errors, and nothing else. The algorithm was checked against a live token on the author's machine (only a boolean was printed); it matched under this alphabet and none of five alternatives. Every match on a line is now judged, in both the working-tree and the history gate, and the worst wins: a suppressed example in front of a real token used to hide it. At most the first 64 matches of a pattern on one line are judged, so a single-line file of repeated look-alikes (a 2 MiB line of private-key headers was quadratic) stays fast; a token followed by more alphanumerics is not the 36-character format and stays an error. Both found by an independent review.

@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { randomBytes } from "crypto";
+import { describeFreshness, pruneHint } from "./freshness";
 
 // Stats matches server/store.go FindingsStats. Kept loose-typed where the
 // shape isn't load-bearing in the renderer.
@@ -13,6 +14,9 @@ interface Stats {
   by_tag: KeyCount[];
   top_files: KeyCount[];
   last_7_days: DayCount[];
+  // Freshness (lgit >= 0.3.0). Absent on an older binary: unknown, not zero.
+  last_checked_at?: number;
+  project_exists?: boolean;
 }
 interface KeyCount { key: string; count: number; }
 interface DayCount { date: string; count: number; }
@@ -108,22 +112,35 @@ async function handleMessage(msg: { cmd: string; payload?: unknown }) {
 async function refreshOverview(): Promise<void> {
   if (!panel || !lastDeps || !lastProject) return;
   let stats: Stats;
+  let hint: string | undefined;
   try {
     const out = await lastDeps.runLGIT(["stats", `-project=${lastProject}`]);
     stats = JSON.parse(out || "{}") as Stats;
+    hint = await storeHint(lastDeps);
   } catch (e) {
     lastDeps.log(`overview refresh failed: ${(e as Error).message}`);
     panel.webview.html = renderError(panel.webview, (e as Error).message);
     return;
   }
-  panel.webview.html = renderOverview(panel.webview, stats);
+  panel.webview.html = renderOverview(panel.webview, stats, hint);
+}
+
+// storeHint reads the store-wide counts. It only annotates the dashboard, so a
+// failure (or an older binary without the field) is silence, never an error.
+async function storeHint(deps: OverviewDeps): Promise<string | undefined> {
+  try {
+    const out = await deps.runLGIT(["stats"]);
+    return pruneHint((JSON.parse(out || "{}") as { projects_missing?: unknown }).projects_missing);
+  } catch {
+    return undefined;
+  }
 }
 
 // =============================================================================
 // HTML rendering
 // =============================================================================
 
-function renderOverview(webview: vscode.Webview, s: Stats): string {
+function renderOverview(webview: vscode.Webview, s: Stats, hint?: string): string {
   const nonce = makeNonce();
   const csp = [
     "default-src 'none'",
@@ -140,6 +157,13 @@ function renderOverview(webview: vscode.Webview, s: Stats): string {
   const sparkline = renderSparkline(s.last_7_days);
 
   const projectLabel = s.project ? path.basename(s.project) : "(all projects)";
+  const fresh = s.project
+    ? describeFreshness(s, Date.now(), vscode.workspace.getConfiguration("l0-git").get("staleAfterDays"))
+    : undefined;
+  const freshHtml = fresh
+    ? `<div class="freshness freshness-${fresh.level}">${fresh.level === "fresh" ? "" : "⚠ "}${escapeHtml(fresh.text)}</div>`
+    : "";
+  const hintHtml = hint ? `<div class="freshness freshness-stale">${escapeHtml(hint)}</div>` : "";
 
   return `<!DOCTYPE html>
 <html>
@@ -169,6 +193,8 @@ body {
 .header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
 .header h1 { font-size: 1.3em; margin: 0; font-weight: 600; }
 .header .project { color: var(--muted); font-size: 0.9em; }
+.freshness { font-size: 0.85em; color: var(--muted); margin-top: 2px; }
+.freshness-stale, .freshness-never, .freshness-missing { color: var(--warning); }
 .actions { display: flex; gap: 8px; }
 button {
   font: inherit;
@@ -238,6 +264,8 @@ button.secondary:hover { background: var(--vscode-button-secondaryHoverBackgroun
   <div>
     <h1>l0-git Overview</h1>
     <div class="project">${escapeHtml(projectLabel)}</div>
+    ${freshHtml}
+    ${hintHtml}
   </div>
   <div class="actions">
     <button id="run">▶ Run all checks</button>

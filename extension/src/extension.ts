@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { describeFreshness, oldestFreshness, Freshness } from "./freshness";
 import { execFile, spawn, ChildProcess } from "child_process";
 import * as path from "path";
 import * as fs from "fs";
@@ -436,7 +437,9 @@ async function syncDiagnostics(context: vscode.ExtensionContext, roots: string[]
   diagnostics.clear();
   const byUri = new Map<string, vscode.Diagnostic[]>();
   const counts = { error: 0, warning: 0, info: 0 };
+  const ages: Array<Freshness | undefined> = [];
   for (const root of roots) {
+    ages.push(await projectFreshness(context, root));
     let findings: Finding[];
     try {
       // Diagnostics always reflect the full set of open findings,
@@ -472,16 +475,39 @@ async function syncDiagnostics(context: vscode.ExtensionContext, roots: string[]
   for (const [uri, diags] of byUri) {
     diagnostics.set(vscode.Uri.parse(uri), diags);
   }
-  updateStatusBar(counts);
+  updateStatusBar(counts, oldestFreshness(ages));
+}
+
+// projectFreshness asks the binary how current a project's findings are. A
+// failure, or an older binary that does not say, is "unknown" — shown as
+// nothing, never as "never checked".
+async function projectFreshness(context: vscode.ExtensionContext, root: string): Promise<Freshness | undefined> {
+  try {
+    const out = await runLGIT(context, ["stats", `-project=${root}`]);
+    const days = vscode.workspace.getConfiguration("l0-git").get<number>("staleAfterDays");
+    return describeFreshness(JSON.parse(out || "{}"), Date.now(), days);
+  } catch (e: unknown) {
+    outputChannel.appendLine(`freshness lookup failed for ${root}: ${(e as Error).message}`);
+    return undefined;
+  }
+}
+
+// freshnessNote is the sentence appended to the status-bar tooltip, so that
+// "clean" cannot be read as "clean right now".
+function freshnessNote(f: Freshness | undefined): string {
+  if (!f) return "";
+  return f.level === "fresh" ? `\n${f.text}` : `\n$(warning) ${f.text}`;
 }
 
 // updateStatusBar reflects the open finding totals in the bottom-left bar.
-// The icon changes by worst severity; the tooltip lists the breakdown.
-function updateStatusBar(counts: { error: number; warning: number; info: number }) {
+// The icon changes by worst severity; the tooltip lists the breakdown and how
+// old the last check is.
+function updateStatusBar(counts: { error: number; warning: number; info: number }, fresh?: Freshness) {
   const total = counts.error + counts.warning + counts.info;
+  const note = freshnessNote(fresh);
   if (total === 0) {
     statusBar.text = "$(check) l0-git: clean";
-    statusBar.tooltip = "l0-git — no open findings";
+    statusBar.tooltip = new vscode.MarkdownString(`l0-git — no open findings${note}`.replace(/\n/g, "  \n"), true);
     statusBar.backgroundColor = undefined;
     return;
   }
@@ -492,7 +518,7 @@ function updateStatusBar(counts: { error: number; warning: number; info: number 
     counts.warning > 0 ? `warnings: ${counts.warning}` : "",
     counts.info > 0    ? `info: ${counts.info}`        : "",
   ].filter(Boolean);
-  statusBar.tooltip = `l0-git — ${lines.join(", ")} (click to open)`;
+  statusBar.tooltip = new vscode.MarkdownString(`l0-git — ${lines.join(", ")} (click to open)${note}`.replace(/\n/g, "  \n"), true);
   // Don't paint the bar red — that's reserved by VSCode for blocking issues
   // and causes visual fatigue when warnings dominate. Tooltip + icon is
   // enough signal.
