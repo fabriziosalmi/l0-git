@@ -32,3 +32,4 @@ extension/bin/
 # Documentation
 docs/node_modules
 docs/.vitepress/dist
+extension/out-test/

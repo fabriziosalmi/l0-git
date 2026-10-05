@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "rootDir": ".", "outDir": "out-test", "sourceMap": false },
+  "include": ["src/freshness.ts", "test/**/*.ts"]
+}

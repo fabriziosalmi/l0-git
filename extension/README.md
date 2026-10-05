@@ -22,6 +22,13 @@ is sent over the network. Two runs over the same tree always agree.
 Open it with **l0-git: Open Overview dashboard**. Click a gate or tag to
 filter the sidebar to it, or click a file to open it.
 
+Under the project name it says how old the numbers are — "checked 3 days ago",
+"never checked", or "directory not found" — because findings only change when a
+project is re-checked. It turns into a warning past `l0-git.staleAfterDays`
+(default 7). When the shared store holds projects whose directory is gone, a
+second line points at `lgit prune`. An older `lgit` that does not report the age
+shows nothing rather than guessing.
+
 ## What it checks
 
 The extension runs 36 gates:
@@ -47,7 +54,8 @@ per gate, covering what fires it, the severity and how to silence it on purpose.
   search, and filter by status. Filters persist across sessions.
 - **Problems pane.** Each open finding is a diagnostic on its file and line,
   with the gate id as the code.
-- **Status bar.** Shows `l0-git: clean`, or a count per severity.
+- **Status bar.** Shows `l0-git: clean`, or a count per severity. The tooltip
+  also says how old the last check is, so "clean" cannot be read as "clean right now".
 - **Toasts.** Only for new **errors**, at most three plus a summary. Warnings
   and info never interrupt you.
 

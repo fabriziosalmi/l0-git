@@ -255,6 +255,12 @@
           "default": true,
           "description": "Show a toast when a new ERROR-severity finding appears (cap 3 + summary). Warnings and info never toast — they're visible in the sidebar tree and Problems pane."
         },
+        "l0-git.staleAfterDays": {
+          "type": "number",
+          "default": 7,
+          "minimum": 1,
+          "description": "Findings only change when a project is re-checked. When the last full check is older than this many days, the Overview and the status-bar tooltip flag the numbers as stale."
+        },
         "l0-git.runOnStartup": {
           "type": "boolean",
           "default": true,
@@ -276,7 +282,8 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "test": "tsc -p tsconfig.test.json && node --test out-test/test/"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
