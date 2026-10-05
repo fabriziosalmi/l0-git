@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-05
+
 ### Added
 
 - **The extension shows how old its numbers are** (#43). The Overview header reads "checked 3 days ago", "never checked" or "directory not found" under the project name, as a warning once the last full check is older than the new setting `l0-git.staleAfterDays` (default 7, minimum 1); a second line points at `lgit prune` when the shared store holds projects whose directory is gone. The status-bar tooltip carries the same age, so `l0-git: clean` cannot be read as "clean right now". A binary that does not report the age (older than 0.3.0) shows nothing: absent means unknown, not "never". For several workspace folders the worst one speaks. The logic is a set of pure functions with node tests, the extension's first (`npm test`, now in CI), mutation-tested.
