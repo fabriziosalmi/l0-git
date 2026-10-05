@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="700" height="782" viewBox="0 0 700 782" role="img" aria-label="Terminal session: lgit check, lgit list and lgit fix on a sample project">
-<title>lgit check / list / fix — real output on a sample project</title>
+<title>lgit check / list / fix: real output on a sample project</title>
 <rect x="0.5" y="0.5" width="699" height="781" rx="11" fill="#0C0D10" stroke="#262932"/>
 <path d="M0.5 11.5a11 11 0 0 1 11-11h677a11 11 0 0 1 11 11V40H0.5Z" fill="#15171C"/>
 <path d="M0 40h700" stroke="#262932"/>
 <circle cx="22" cy="20" r="5.5" fill="#FF5F57" opacity="0.85"/>
 <circle cx="40" cy="20" r="5.5" fill="#FEBC2E" opacity="0.85"/>
 <circle cx="58" cy="20" r="5.5" fill="#28C840" opacity="0.85"/>
-<text x="350" y="24.5" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#6A7080">payments-api — lgit</text>
+<text x="350" y="24.5" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#6A7080">payments-api - lgit</text>
 <text x="26" y="64.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#5FD08A">$ </tspan><tspan fill="#EAECF2">lgit check . | jq &#x27;{gates: (.gates_run|length), findings: (.findings|length)}&#x27;</tspan></text>
 <text x="26" y="85.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan>{</tspan></text>
 <text x="26" y="106.0" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13.5" fill="#C6CBD5"><tspan fill="#8FB8FF">  &quot;gates&quot;: </tspan><tspan fill="#E3B341">36,</tspan></text>

@@ -49,5 +49,5 @@
 <text x="745" y="482" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="13" font-weight="600" letter-spacing="0" fill="#E4E7EE">git history</text>
 <text x="745" y="500" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10.5" font-weight="400" letter-spacing="0" fill="#666C7C">opt-in gates only</text>
 <path d="M570 426V352" stroke="#3C4354" stroke-width="1.4" fill="none" marker-end="url(#a)"/>
-<text x="560" y="546" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" letter-spacing="0" fill="#666C7C">Every consumer talks to the same binary and the same store — findings you ignore in the editor stay ignored in CI.</text>
+<text x="560" y="546" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" letter-spacing="0" fill="#666C7C">Every consumer talks to the same binary and the same store: findings you ignore in the editor stay ignored in CI.</text>
 </svg>
