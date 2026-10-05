@@ -128,7 +128,7 @@ func evaluateMarkdownFile(rel, root string, source []byte, disabled map[string]b
 			if isAnchorOnly(dest) {
 				if !disabled["link_anchor_broken"] {
 					anchor := strings.TrimPrefix(dest, "#")
-					if !slugs[strings.ToLower(anchor)] {
+					if !anchorExists(slugs, anchor) {
 						out = append(out, mdFindingAt(rel, line,
 							mdRules["link_anchor_broken"],
 							fmt.Sprintf("anchor `#%s` does not match any heading in this document", anchor),
@@ -245,6 +245,20 @@ func isAnchorOnly(dest string) bool {
 	return strings.HasPrefix(dest, "#")
 }
 
+// anchorExists reports whether `#anchor` points at something in the document.
+// An empty anchor is the top of the page. A non-ASCII heading is as often linked
+// percent-encoded (`#caf%C3%A9`) as written out, and a browser decodes it before
+// looking for the id, so both spellings are tried.
+func anchorExists(slugs map[string]bool, anchor string) bool {
+	if anchor == "" || slugs[strings.ToLower(anchor)] {
+		return true
+	}
+	if dec, err := url.PathUnescape(anchor); err == nil && dec != anchor {
+		return slugs[strings.ToLower(dec)]
+	}
+	return false
+}
+
 func isLocalLink(dest string) bool {
 	if dest == "" {
 		return false
@@ -311,8 +325,11 @@ func localTargetExists(rel, root, dest string) bool {
 		return true
 	}
 	// Extensionless-link fallback: only when the original path has no
-	// extension (so we don't paper over typos like `foo.mdd`).
-	if filepath.Ext(decoded) == "" {
+	// extension (so we don't paper over typos like `foo.mdd`). A dotted version
+	// number is not an extension (`remediation-v11.2`, `release-1.0`): that name
+	// is read as one only under a site generator, which is the thing that maps
+	// the link to `remediation-v11.2.md`.
+	if filepath.Ext(decoded) == "" || (versionLikeExt(decoded) && underSiteGenerator(root, rel)) {
 		if _, err := os.Stat(target + ".md"); err == nil {
 			return true
 		}
@@ -343,7 +360,59 @@ func localTargetExists(rel, root, dest string) bool {
 			}
 		}
 	}
-	return false
+	return isGitHubRepoPageLink(rel, decoded)
+}
+
+// versionLikeExt reports whether the "extension" of a link path is a version
+// number rather than a file type: it holds a digit (`.2` of `v11.2`, `.0` of
+// `release-1.0`, `.v2`). `.png`, `.mdd` and `.html` hold none, so the typo guard
+// keeps its reach; the cost is that `.mp4`/`.7z` are read as versions too, which
+// only matters when a page named `clip.mp4.md` exists.
+func versionLikeExt(p string) bool {
+	return strings.ContainsAny(filepath.Ext(p), "0123456789")
+}
+
+// githubRepoPages are the pages of a repository that exist on github.com but not
+// in its tree. The list is closed on purpose: `../../docs/guide.md` and
+// `../../settings` are not among them.
+var githubRepoPages = map[string]bool{
+	"issues": true, "pulls": true, "actions": true, "wiki": true, "releases": true,
+	"security": true, "discussions": true, "projects": true, "tags": true,
+	"labels": true, "milestones": true, "pulse": true, "graphs": true,
+	"stargazers": true, "watchers": true, "forks": true, "compare": true,
+	"commits": true, "branches": true,
+}
+
+// isGitHubRepoPageLink reports whether dest is the GitHub-relative way of
+// linking a repository's own page from a file in it: a README renders at
+// /owner/repo/blob/<branch>/<dir>/, so `../../issues` from the root lands on
+// /owner/repo/issues. The number of `..` must be exactly the file's directory
+// depth plus two — from docs/guide/ it takes four — and what follows must be one
+// of githubRepoPages, so a wrong depth or any other target stays broken.
+func isGitHubRepoPageLink(rel, dest string) bool {
+	dir := filepath.ToSlash(filepath.Dir(rel))
+	depth := 0
+	if dir != "." && dir != "" {
+		depth = strings.Count(dir, "/") + 1
+	}
+	parts := strings.Split(filepath.ToSlash(dest), "/")
+	ups := 0
+	for ups < len(parts) && parts[ups] == ".." {
+		ups++
+	}
+	if ups != depth+2 || ups >= len(parts) {
+		return false
+	}
+	rest := parts[ups:]
+	if !githubRepoPages[rest[0]] {
+		return false
+	}
+	for _, seg := range rest[1:] {
+		if seg == ".." {
+			return false
+		}
+	}
+	return true
 }
 
 // siteGeneratorMarkers are config files and directories whose presence means
@@ -390,13 +459,22 @@ func underSiteGenerator(root, rel string) bool {
 // would false-positive on every link into a hand-written anchor.
 func collectHeadingSlugs(doc ast.Node, source []byte) map[string]bool {
 	out := map[string]bool{}
+	seen := map[string]int{}
 	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil
 		}
 		switch node := n.(type) {
 		case *ast.Heading:
-			out[githubSlug(extractText(node, source))] = true
+			slug := githubSlug(extractText(node, source))
+			// GitHub numbers a repeated heading: the second `## Usage` is
+			// `#usage-1`, the third `#usage-2`.
+			if n := seen[slug]; n > 0 {
+				out[fmt.Sprintf("%s-%d", slug, n)] = true
+			} else {
+				out[slug] = true
+			}
+			seen[slug]++
 		case *ast.RawHTML: // inline raw HTML, e.g. <a name="x"></a>
 			for i := 0; i < node.Segments.Len(); i++ {
 				seg := node.Segments.At(i)

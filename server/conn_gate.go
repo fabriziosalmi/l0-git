@@ -465,6 +465,13 @@ func scanConnectionLine(rel string, lineNum int, content []byte) []Finding {
 			if p.id == "http_remote" && httpHostExempt(text) {
 				continue
 			}
+			// A legacy or cleartext scheme pointed at THIS machine exposes
+			// nothing, which is why http://localhost is already exempt. Only
+			// loopback counts here: a LAN host, a `.lan` name or a single
+			// label still crosses a wire.
+			if legacySchemePatterns[p.id] && loopbackHostOnly(text) {
+				continue
+			}
 			// An XML/SGML system identifier or namespace URI is an
 			// identifier, not an endpoint: nothing is fetched over it, and
 			// the string is fixed by the format's own specification.
@@ -603,10 +610,84 @@ func hasPlausibleAuthority(match string) bool {
 		return false
 	}
 	switch rest[0] {
-	case '`', '|', '\\', ')', ']', '}', '/':
+	case '`', '|', '\\', ')', ']', '}', '/', ',', ';':
+		return false
+	}
+	// A host never contains an escaped dot: `ftp://127\.0\.0\.1!` is a regular
+	// expression that mentions the scheme, not an address.
+	// Only between two host characters, and only in the host: a query
+	// (`?re=a\.b`) or a sentence period escaped by a Markdown renderer
+	// (`ftp://prod.acme.io\.`) is not a regex-escaped dot in an address.
+	host := rest
+	if j := strings.IndexAny(host, "/?#:@"); j >= 0 {
+		host = host[:j]
+	}
+	if escapedDotInHostRe.MatchString(host) {
 		return false
 	}
 	return true
+}
+
+// `\.` in a regex, or `\\.` once a JSON or shell string has escaped the backslash.
+var escapedDotInHostRe = regexp.MustCompile(`[A-Za-z0-9]\\+\.[A-Za-z0-9]`)
+
+// legacySchemePatterns are the cleartext/legacy-protocol rules that carry no
+// host exemption of their own and share loopbackHostOnly.
+var legacySchemePatterns = map[string]bool{
+	"ftp": true, "telnet": true, "smb": true, "nfs": true, "rsync": true, "ldap_unencrypted": true,
+}
+
+// loopbackHostOnly reports whether the host of `scheme://[userinfo@]host…` is the
+// local machine and nothing else: `localhost`, `*.localhost`, `0.0.0.0` or a
+// loopback address (127.0.0.0/8, ::1, with or without brackets). It is far
+// narrower than urlHostExempt on purpose — a private address, `.lan`, `.local`
+// or a bare service name is another machine, and for a cleartext protocol that
+// is the whole point of the finding.
+//
+// Punctuation that a sentence or a shell line leaves glued to the host
+// (`ftp://127.0.0.1!`) is ignored; a name that merely STARTS like a loopback one
+// (`127.0.0.1.evil.com`, `localhost.evil.io`) is not parsed as one and stays.
+func loopbackHostOnly(match string) bool {
+	i := strings.Index(match, "://")
+	if i < 0 {
+		return false
+	}
+	rest := match[i+3:]
+	if at := userinfoEnd(rest); at >= 0 {
+		rest = rest[at+1:]
+	}
+	var host string
+	if strings.HasPrefix(rest, "[") {
+		end := strings.IndexByte(rest, ']')
+		if end < 0 {
+			return false
+		}
+		host = rest[1:end]
+		// Whatever follows the bracket must end the host: `[::1]evil` is not one.
+		if tail := rest[end+1:]; tail != "" && !strings.ContainsRune(":/?#", rune(tail[0])) {
+			return false
+		}
+	} else {
+		end := len(rest)
+		for j, c := range rest {
+			if c == '/' || c == ':' || c == '?' || c == '#' {
+				end = j
+				break
+			}
+		}
+		host = rest[:end]
+	}
+	host = strings.ToLower(strings.TrimRight(host, "!,;)]}>*"))
+	switch {
+	case host == "":
+		return false
+	case host == "localhost" || host == "localhost." || strings.HasSuffix(host, ".localhost"):
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback() || ip.IsUnspecified()
+	}
+	return false
 }
 
 // placeholderTokenRe matches a single template-placeholder token used in
