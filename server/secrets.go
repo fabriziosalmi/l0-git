@@ -215,10 +215,21 @@ const (
 // puts the whole key there, `"-----BEGIN PRIVATE KEY-----\nMIIEow…"` — then
 // walks the following lines, stepping over blank lines and RFC 1421 metadata
 // headers so an ENCRYPTED key is not mistaken for prose.
+// pemSameLineWindow is how much of the header's own line is read for key material.
+const pemSameLineWindow = 16 << 10
+
 func pemBodyFollows(content []byte, afterMatch int, following []byte) bool {
 	lines := make([][]byte, 0, pemBodyMaxLines+1)
 	if afterMatch < len(content) {
-		lines = append(lines, content[afterMatch:])
+		// Bounded: a header repeated along a very long line would otherwise
+		// re-read the whole rest of the line once per header. A key that sits on
+		// the header's own line starts within the first few KiB (a 4096-bit key
+		// is about 1.6 KiB of base64).
+		rest := content[afterMatch:]
+		if len(rest) > pemSameLineWindow {
+			rest = rest[:pemSameLineWindow]
+		}
+		lines = append(lines, rest)
 	}
 	for _, l := range bytes.SplitN(following, []byte("\n"), pemBodyMaxLines+1) {
 		lines = append(lines, l)

@@ -232,3 +232,17 @@ func TestHistoryBlob_ChecksumAndEveryMatch(t *testing.T) {
 		t.Errorf("an example before a real token must not hide it, got %v", got)
 	}
 }
+
+// The same-line read is a window, not the rest of the line: key material inside
+// it is found, material only beyond it is not looked for.
+func TestPemBodyFollows_SameLineWindow(t *testing.T) {
+	key := pseudoRandom(200) + "Zz9"
+	near := []byte(" " + key)
+	far := []byte(strings.Repeat(" ", pemSameLineWindow+10) + key)
+	if !pemBodyFollows(near, 0, nil) {
+		t.Errorf("key material right after the header must be found")
+	}
+	if pemBodyFollows(far, 0, nil) {
+		t.Errorf("key material beyond the window must not be read")
+	}
+}
