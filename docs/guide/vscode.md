@@ -48,8 +48,8 @@ setting or the output channel — it does not fail silently.
 |---|---|
 | **Activity-bar view** | Tree of findings, with grouping, sorting and filtering |
 | **Problems pane** | Every open finding as a `vscode.Diagnostic`, keyed by `(file, line)` with `code = gate_id` |
-| **Status bar** | `l0-git: clean`, or a per-severity count with a tooltip breakdown |
-| **Overview dashboard** | Severity bars, top gates, top files, tag chips, 7-day trend |
+| **Status bar** | `l0-git: clean`, or a per-severity count with a tooltip breakdown and the age of the last check |
+| **Overview dashboard** | How old the numbers are, severity bars, top gates, top files, tag chips, 7-day trend |
 
 ### What is visible by default
 
@@ -133,9 +133,21 @@ permission model.
 | `l0-git.binaryPath` | `""` | Absolute path to `lgit`. Empty uses the discovery order above. User settings only. |
 | `l0-git.dbPath` | `""` | Override the SQLite path (sets `LGIT_DB`). Empty uses `~/.l0-git/findings.db`. User settings only. |
 | `l0-git.notifyOnNew` | `true` | Toast on each new **error**. Warnings and info never toast. |
+| `l0-git.staleAfterDays` | `7` | Findings only change when a project is re-checked. Past this many days since the last full check, the Overview and the status-bar tooltip flag the numbers as stale. Minimum 1. |
 | `l0-git.runOnStartup` | `true` | Run gate checks when the workspace opens. |
 | `l0-git.autoStartMCP` | `false` | Spawn the MCP stdio server on activation. Usually unnecessary — see [Claude Code / MCP](./mcp). |
 | `l0-git.showBlame` | `false` | Annotate rows with `git blame` — commit, author, relative time. One git call per affected file. |
+
+## How old are the numbers
+
+Findings change only when a project is re-checked, so every count is as old as
+its last **full** check. The Overview shows it under the project name — "checked
+3 days ago", "never checked", or "directory not found" (an unmounted volume looks
+the same as a deleted folder, so it does not say "deleted") — as a warning once it
+passes `l0-git.staleAfterDays`. When the shared store holds projects whose
+directory is gone, a second line points at [`lgit prune`](/cli/). The status-bar
+tooltip carries the same age. A binary older than 0.3.0 does not report it, and
+then nothing is shown: an unknown age is never presented as "never checked".
 
 ## Blame annotation
 
