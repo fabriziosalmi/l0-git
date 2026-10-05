@@ -32,6 +32,16 @@ Every pattern except the private-key header also requires a **Shannon entropy of
 at least 3.5** over the match. That is what separates a real key from
 `AKIAIOSFODNN7EXAMPLE`-style filler in documentation.
 
+A classic GitHub token (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`) also carries a
+checksum: its last six characters are the CRC-32 of the thirty before them,
+written in base 62 (`0-9A-Za-z`). A string that fails it cannot have been issued
+by GitHub, so it is a typed example — and is reported at **info** instead of
+error. It is **downgraded, never dropped**, so a wrong assumption costs a
+hidden-by-default entry rather than a missed leak. A token that verifies, any
+fine-grained `github_pat_…` token and every other shape are reported exactly as
+before. Every match on a line is judged and the worst one wins, so an example in
+front of a real token does not hide it.
+
 A tracked `.env` file is reported on its own, regardless of contents.
 
 ### Scope

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	"math"
 	"os"
 	"os/exec"
@@ -317,18 +318,34 @@ func checkSecretsScan(ctx context.Context, root string, opts json.RawMessage) ([
 		start := 0
 		emit := func(content []byte, lineNum int, following []byte) {
 			for _, p := range secretPatterns {
-				idx := p.re.FindIndex(content)
-				if idx == nil {
+				// Every match on the line is judged, and the line is reported
+				// once, at the worst severity found: a first match that is
+				// suppressed (an example) must not hide a real token after it.
+				severity, found := "", false
+				for _, idx := range p.re.FindAllIndex(content, -1) {
+					match := content[idx[0]:idx[1]]
+					if secretMatchSuppressed(p, match, relForLookup, content, idx[0], following) {
+						continue
+					}
+					sev := SeverityError
+					if p.id == "github_pat_classic" && !githubTokenChecksumValid(string(match)) {
+						sev = SeverityInfo
+					}
+					if !found || severityRank(sev) > severityRank(severity) {
+						severity, found = sev, true
+					}
+				}
+				if !found {
 					continue
 				}
-				match := content[idx[0]:idx[1]]
-				if secretMatchSuppressed(p, match, relForLookup, content, idx[0], following) {
-					continue
+				msg := fmt.Sprintf("Possible %s in %s:%d. Verify, rotate if real, then purge it from git history (e.g. with git-filter-repo).", p.title, rel, lineNum)
+				if severity == SeverityInfo {
+					msg = fmt.Sprintf("A string shaped like a %s in %s:%d fails GitHub's own checksum, so GitHub cannot have issued it — almost certainly a typed example. It is still listed in case the checksum rule ever changes.", p.title, rel, lineNum)
 				}
 				out = append(out, Finding{
-					Severity: SeverityError,
+					Severity: severity,
 					Title:    p.title + " in tracked file",
-					Message:  fmt.Sprintf("Possible %s in %s:%d. Verify, rotate if real, then purge it from git history (e.g. with git-filter-repo).", p.title, rel, lineNum),
+					Message:  msg,
 					FilePath: fmt.Sprintf("%s:%d:%s", rel, lineNum, p.id),
 				})
 			}
@@ -554,4 +571,33 @@ func hasSequentialRun(s string) bool {
 		}
 	}
 	return false
+}
+
+// githubTokenChecksumValid reports whether a classic GitHub token
+// (`gh[pousr]_` + 36 characters) carries the checksum GitHub puts in it: the
+// last six characters are the CRC-32 (IEEE) of the preceding thirty, written in
+// base 62 with the alphabet 0-9A-Za-z and left-padded with zeros.
+//
+// A token that fails it cannot have been issued, so it is not a credential. The
+// check only ever LOWERS a finding to info, never drops it: where the algorithm
+// is wrong the cost is a hidden-by-default entry, not a missed leak. Anything
+// that is not exactly the classic shape reports true (treated as possibly real).
+//
+// Verified against a live OAuth token (`gho_`) on the author's machine, with only
+// a boolean printed: it matched under this alphabet and under none of the five
+// other combinations of alphabet and covered text tried. The other four prefixes
+// are documented by GitHub as sharing the format and are not independently checked.
+func githubTokenChecksumValid(tok string) bool {
+	if len(tok) != 3+1+36 || tok[:2] != "gh" || !strings.ContainsRune("pousr", rune(tok[2])) || tok[3] != '_' {
+		return true
+	}
+	body := tok[4:]
+	sum := crc32.ChecksumIEEE([]byte(body[:30]))
+	const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+	var enc [6]byte
+	for k := 5; k >= 0; k-- {
+		enc[k] = alphabet[sum%62]
+		sum /= 62
+	}
+	return string(enc[:]) == body[30:]
 }
