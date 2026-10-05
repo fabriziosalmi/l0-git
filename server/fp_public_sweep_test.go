@@ -49,7 +49,7 @@ func TestNetworkScan_SyntheticAndResolverNetworks(t *testing.T) {
 	// only ever moves a PUBLIC range.
 	for c, want := range map[string]string{
 		"10.11.12.0/24": "info/cidr_private", "172.17.18.0/24": "info/cidr_private",
-		"192.168.1.0/24": "info/cidr_private",
+		"192.168.1.0/24": "info/cidr_private", "0.1.2.0/24": "info/cidr_reserved",
 	} {
 		if got := networkCats(t, "allow = "+c); len(got) != 1 || got[0] != want {
 			t.Errorf("%s: want %s, got %v", c, want, got)
@@ -58,6 +58,9 @@ func TestNetworkScan_SyntheticAndResolverNetworks(t *testing.T) {
 	// The other axis: real prefixes stay warnings, and so do wide ones.
 	for _, c := range []string{
 		"51.222.140.0/24", "46.250.245.0/24", "100.1.2.0/24", "100.1.1.0/24", "20.30.41.0/24", "1.2.4.0/24",
+		"23.23.23.0/24", "52.53.54.0/24", "20.21.22.0/24", "12.13.14.0/24", "13.12.11.0/24", "34.35.36.0/24", // real prefixes of the same shape
+		"1.2.3.0/32", "1.1.1.0/31", // a host, not a network
+		"8.8.8.128/25", "4.2.2.128/25", // slices holding no resolver
 		"1.0.0.0/8",    // contains 1.1.1.1 but is not the resolver's prefix
 		"8.8.0.0/16",   // same
 		"1.2.3.0/16",   // synthetic only counts at /24 or narrower
@@ -193,7 +196,7 @@ func TestConnectionStrings_LegacySchemesToLoopbackAndNonHosts(t *testing.T) {
 		{"ftp://0.0.0.0/x", "ftp"}, {"telnet://localhost:2323", "telnet"}, {"smb://127.0.0.1/share", "smb"},
 		{"nfs://localhost/exports", "nfs"}, {"rsync://127.0.0.1/mod", "rsync"}, {"ldap://localhost:389", "ldap_unencrypted"},
 		{"ftp://127.0.0.1!", "ftp"}, {`ftp://127\.0\.0\.1!`, "ftp"}, {"schemes: http://, ftp://, sftp://", "ftp"},
-		{"ftp://,", "ftp"}, {"ftp://;x", "ftp"},
+		{`ftp://127\\.0\\.0\\.1!`, "ftp"}, {"ftp://,", "ftp"}, {"ftp://;x", "ftp"},
 		{"ftp://anonymous@localhost/pub", "ftp"}, {"ftp://ftp@127.0.0.1:21/", "ftp"},
 	} {
 		if firesLegacy(c.line, c.id) {
@@ -204,6 +207,8 @@ func TestConnectionStrings_LegacySchemesToLoopbackAndNonHosts(t *testing.T) {
 	for _, c := range []struct{ line, id string }{
 		{"ftp://files.acme.io/x", "ftp"}, {"ftp://pve.lan/x", "ftp"}, {"ftp://192.168.1.10/x", "ftp"},
 		{"ftp://127.0.0.1.evil.com/x", "ftp"}, {"ftp://localhost.evil.io/x", "ftp"}, {"ftp://10.0.0.5/x", "ftp"},
+		{"http://prod.acme.io?re=a\\.b", "http_remote"}, {"ftp://prod.acme.io:21?f=x\\.txt", "ftp"},
+		{"ftp://prod.acme.io\\.", "ftp"}, {"ftp://[::1]evil/x", "ftp"},
 		{"telnet://router.acme.io", "telnet"}, {"ldap://dc.acme.io", "ldap_unencrypted"},
 		{"ftp://user@127.0.0.1.evil.com/x", "ftp"},
 	} {

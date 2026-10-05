@@ -615,15 +615,21 @@ func hasPlausibleAuthority(match string) bool {
 	}
 	// A host never contains an escaped dot: `ftp://127\.0\.0\.1!` is a regular
 	// expression that mentions the scheme, not an address.
-	authority := rest
-	if j := strings.IndexByte(authority, '/'); j >= 0 {
-		authority = authority[:j]
+	// Only between two host characters, and only in the host: a query
+	// (`?re=a\.b`) or a sentence period escaped by a Markdown renderer
+	// (`ftp://prod.acme.io\.`) is not a regex-escaped dot in an address.
+	host := rest
+	if j := strings.IndexAny(host, "/?#:@"); j >= 0 {
+		host = host[:j]
 	}
-	if strings.Contains(authority, `\.`) {
+	if escapedDotInHostRe.MatchString(host) {
 		return false
 	}
 	return true
 }
+
+// `\.` in a regex, or `\\.` once a JSON or shell string has escaped the backslash.
+var escapedDotInHostRe = regexp.MustCompile(`[A-Za-z0-9]\\+\.[A-Za-z0-9]`)
 
 // legacySchemePatterns are the cleartext/legacy-protocol rules that carry no
 // host exemption of their own and share loopbackHostOnly.
@@ -657,6 +663,10 @@ func loopbackHostOnly(match string) bool {
 			return false
 		}
 		host = rest[1:end]
+		// Whatever follows the bracket must end the host: `[::1]evil` is not one.
+		if tail := rest[end+1:]; tail != "" && !strings.ContainsRune(":/?#", rune(tail[0])) {
+			return false
+		}
 	} else {
 		end := len(rest)
 		for j, c := range rest {

@@ -407,7 +407,7 @@ func classifyIPv4(ip net.IP) (string, string) {
 // says: warning for a public range.
 func classifyCIDR(ip net.IP, bits int) (string, string) {
 	sev, cat := classifyIPv4(ip)
-	if cat != "public" || bits < 24 || bits > 32 {
+	if cat != "public" || bits < 24 || bits > 30 {
 		return sev, cat
 	}
 	_, n, err := net.ParseCIDR(ip.String() + "/" + strconv.Itoa(bits))
@@ -425,12 +425,20 @@ func classifyCIDR(ip net.IP, bits int) (string, string) {
 	return sev, cat
 }
 
-// isSyntheticNetwork reports whether the first three octets of a /24 network
-// address are all equal (2.2.2.0, 3.3.3.0) or a run with a step of 1, either way
-// (1.2.3.0, 3.2.1.0) — the network-address counterpart of isSyntheticOctets, and
-// as strict as isSequentialOctets about the run.
+// isSyntheticNetwork reports whether the first three octets of a network address
+// are all equal (2.2.2.0, 3.3.3.0) or a run with a step of 1, either way
+// (1.2.3.0, 3.2.1.0, 5.6.7.0), AND every one of them is a single digit.
+//
+// That is stricter than the host rules, on purpose. A host needs four octets in
+// the pattern; a network address has only three to show, and with larger numbers
+// the same shape is a real prefix (23.23.23.0/24 is Amazon, 52.53.54.0/24 is AWS,
+// 20.21.22.0/24 and 12.13.14.0/24 are allocations) — found by review. People
+// invent networks out of 1-9, and that is what the sweep found.
 func isSyntheticNetwork(v4 net.IP) bool {
 	a, b, c := int(v4[0]), int(v4[1]), int(v4[2])
+	if a > 9 || b > 9 || c > 9 {
+		return false
+	}
 	if a == b && b == c {
 		return true
 	}
