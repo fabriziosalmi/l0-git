@@ -8,9 +8,9 @@ import (
 
 // The project's prose, comments and messages do not use the em dash. This keeps
 // it out: a colon, a comma or parentheses say the same thing. The character is
-// written as an escape here so that this file passes its own check.
+// built from its code point here so that this file passes its own check.
 func TestRepositoryHasNoEmDash(t *testing.T) {
-	out, err := exec.Command("git", "-C", "..", "grep", "-I", "-n", "-F", "—").Output()
+	out, err := exec.Command("git", "-C", "..", "grep", "-I", "-n", "-F", string(rune(0x2014))).Output()
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok && ee.ExitCode() == 1 {
 			return // no match
