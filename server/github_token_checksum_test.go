@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"strings"
 	"testing"
+	"time"
 )
 
 // mintToken builds a classic GitHub token with a CORRECT checksum, from an
@@ -159,4 +160,75 @@ func pseudoRandom(n int) string {
 		b[i] = a[x%uint32(len(a))]
 	}
 	return string(b)
+}
+
+// A match is the whole token only when no alphanumeric follows it: the pattern
+// takes 36 characters and stops, so a longer run is not the format that carries
+// this checksum and must stay an error.
+func TestGitHubToken_LongerRunIsNotJudgedByItsFirstWindow(t *testing.T) {
+	for _, n := range []int{37, 40, 50} {
+		line := "x=gho_" + pseudoRandom(n)
+		if got := githubSecretSeverities(t, line); len(got) != 1 || got[0] != SeverityError {
+			t.Errorf("%d characters after the prefix: want one error, got %v", n, got)
+		}
+	}
+	// And an exact-length bad token followed by punctuation is still an example.
+	bad := mintToken("gho_", tokenBody)
+	bad = bad[:len(bad)-1] + map[bool]string{true: "A", false: "B"}[bad[len(bad)-1] != 'A']
+	if got := githubSecretSeverities(t, "\""+bad+"\","); len(got) != 1 || got[0] != SeverityInfo {
+		t.Errorf("an exact-length bad token followed by punctuation: want info, got %v", got)
+	}
+}
+
+// A checksum with leading zeros exercises the padding.
+func TestGitHubToken_LeadingZeroChecksum(t *testing.T) {
+	for seed := 0; seed < 5000; seed++ {
+		body := pseudoRandom(30 + seed)[seed : seed+30]
+		tok := mintToken("ghp_", body)
+		if tok[len(tok)-6] != '0' {
+			continue
+		}
+		if !githubTokenChecksumValid(tok) {
+			t.Fatalf("a checksum with a leading zero was rejected")
+		}
+		return
+	}
+	t.Fatal("no leading-zero checksum found in 5000 seeds")
+}
+
+// The cost of a line is bounded: a single line of repeated look-alikes used to be
+// quadratic (each private-key header re-scanned the rest of the line).
+func TestSecretsScan_ManyMatchesOnOneLineIsBounded(t *testing.T) {
+	line := strings.Repeat("-----BEGIN PRIVATE KEY----- ", 20000) // ~560 KB, one line
+	start := time.Now()
+	root := initRepoWithFiles(t, map[string]string{"notes.txt": line + "\n"})
+	if _, err := checkSecretsScan(context.Background(), root, nil); err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d > 10*time.Second {
+		t.Errorf("a one-line file of repeated headers took %v", d)
+	}
+}
+
+// The history gate judges the same way: an example is info, and does not hide a
+// real token on the same line.
+func TestHistoryBlob_ChecksumAndEveryMatch(t *testing.T) {
+	good := mintToken("ghp_", tokenBody)
+	fake := good[:len(good)-1] + map[bool]string{true: "A", false: "B"}[good[len(good)-1] != 'A']
+	sev := func(line string) []string {
+		var out []string
+		for _, f := range scanHistoryBlob(blobInfo{Hash: "abcdef0123456789", Path: "README.md"}, []byte(line+"\n")) {
+			out = append(out, f.Severity)
+		}
+		return out
+	}
+	if got := sev("e.g. " + fake); len(got) != 1 || got[0] != SeverityInfo {
+		t.Errorf("a failing checksum in history: want one info, got %v", got)
+	}
+	if got := sev("token " + good); len(got) != 1 || got[0] != SeverityWarning {
+		t.Errorf("a valid token in history stays a warning, got %v", got)
+	}
+	if got := sev(fake + " then " + good); len(got) != 1 || got[0] != SeverityWarning {
+		t.Errorf("an example before a real token must not hide it, got %v", got)
+	}
 }

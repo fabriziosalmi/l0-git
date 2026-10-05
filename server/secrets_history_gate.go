@@ -110,25 +110,27 @@ func scanHistoryBlob(b blobInfo, data []byte) []Finding {
 	start := 0
 	emit := func(content []byte, lineNum int, following []byte) {
 		for _, p := range secretPatterns {
-			idx := p.re.FindIndex(content)
-			if idx == nil {
+			// Same judgement as the working-tree gate: entropy floor, known
+			// non-secret allowlist, source-literal private keys, and the
+			// GitHub checksum. History blobs are immutable, so an un-suppressed
+			// FP would re-surface on every scan forever with a destructive remedy.
+			verdict := judgeSecretLine(p, content, b.Path, following)
+			if verdict == verdictNone {
 				continue
 			}
-			match := content[idx[0]:idx[1]]
-			// Same FP-suppression chain as the working-tree gate: entropy
-			// floor, known-non-secret allowlist, source-literal private keys.
-			// History blobs are immutable, so an un-suppressed FP would
-			// re-surface on every scan forever with a destructive remedy.
-			if secretMatchSuppressed(p, match, b.Path, content, idx[0], following) {
-				continue
+			sev := SeverityWarning // never error — already in history, requires filter-repo
+			msg := fmt.Sprintf(
+				"Possible %s in blob %s (path %s, line %d). The secret is in repo history even if removed from the working tree — rotate the credential, then run `git filter-repo --invert-paths --path %s` (or BFG) to scrub it.",
+				p.title, shortHash(b.Hash), b.Path, lineNum, b.Path,
+			)
+			if verdict == verdictExample {
+				sev = SeverityInfo
+				msg = fmt.Sprintf("A string shaped like a %s in blob %s (path %s, line %d) fails GitHub's own checksum, so GitHub cannot have issued it — almost certainly a typed example. Nothing to rotate or scrub.", p.title, shortHash(b.Hash), b.Path, lineNum)
 			}
 			out = append(out, Finding{
-				Severity: SeverityWarning, // never error — already in history, requires filter-repo
+				Severity: sev,
 				Title:    p.title + " in git history",
-				Message: fmt.Sprintf(
-					"Possible %s in blob %s (path %s, line %d). The secret is in repo history even if removed from the working tree — rotate the credential, then run `git filter-repo --invert-paths --path %s` (or BFG) to scrub it.",
-					p.title, shortHash(b.Hash), b.Path, lineNum, b.Path,
-				),
+				Message:  msg,
 				// FilePath embeds the blob hash so each unique blob × line
 				// × pattern is its own finding (and survives upserts).
 				FilePath: fmt.Sprintf("history:%s:%d:%s", shortHash(b.Hash), lineNum, p.id),

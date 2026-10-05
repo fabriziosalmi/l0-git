@@ -39,8 +39,11 @@ by GitHub, so it is a typed example — and is reported at **info** instead of
 error. It is **downgraded, never dropped**, so a wrong assumption costs a
 hidden-by-default entry rather than a missed leak. A token that verifies, any
 fine-grained `github_pat_…` token and every other shape are reported exactly as
-before. Every match on a line is judged and the worst one wins, so an example in
-front of a real token does not hide it.
+before. The token must be the whole alphanumeric run: a longer one is not the
+format that carries this checksum and stays an error. Every match on a line is
+judged (the first 64) and the worst one wins, so an example in front of a real
+token does not hide it; the history gate judges the same way, an example there
+being info instead of a warning.
 
 A tracked `.env` file is reported on its own, regardless of contents.
 

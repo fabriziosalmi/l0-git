@@ -318,28 +318,16 @@ func checkSecretsScan(ctx context.Context, root string, opts json.RawMessage) ([
 		start := 0
 		emit := func(content []byte, lineNum int, following []byte) {
 			for _, p := range secretPatterns {
-				// Every match on the line is judged, and the line is reported
-				// once, at the worst severity found: a first match that is
-				// suppressed (an example) must not hide a real token after it.
-				severity, found := "", false
-				for _, idx := range p.re.FindAllIndex(content, -1) {
-					match := content[idx[0]:idx[1]]
-					if secretMatchSuppressed(p, match, relForLookup, content, idx[0], following) {
-						continue
-					}
-					sev := SeverityError
-					if p.id == "github_pat_classic" && !githubTokenChecksumValid(string(match)) {
-						sev = SeverityInfo
-					}
-					if !found || severityRank(sev) > severityRank(severity) {
-						severity, found = sev, true
-					}
-				}
-				if !found {
+				verdict := judgeSecretLine(p, content, relForLookup, following)
+				if verdict == verdictNone {
 					continue
 				}
+				severity := SeverityError
+				if verdict == verdictExample {
+					severity = SeverityInfo
+				}
 				msg := fmt.Sprintf("Possible %s in %s:%d. Verify, rotate if real, then purge it from git history (e.g. with git-filter-repo).", p.title, rel, lineNum)
-				if severity == SeverityInfo {
+				if verdict == verdictExample {
 					msg = fmt.Sprintf("A string shaped like a %s in %s:%d fails GitHub's own checksum, so GitHub cannot have issued it — almost certainly a typed example. It is still listed in case the checksum rule ever changes.", p.title, rel, lineNum)
 				}
 				out = append(out, Finding{
@@ -600,4 +588,51 @@ func githubTokenChecksumValid(tok string) bool {
 		sum /= 62
 	}
 	return string(enc[:]) == body[30:]
+}
+
+type secretVerdict int
+
+const (
+	verdictNone    secretVerdict = iota // nothing worth reporting on the line
+	verdictExample                      // shaped like a credential that cannot be one
+	verdictReal                         // report at full severity
+)
+
+// maxSecretMatchesPerLine bounds the work on one line. Each judged match costs an
+// entropy pass and, for a private-key header, a scan of the rest of the line, so a
+// 2 MiB line of repeated headers was quadratic. Past the cap the rest of the line
+// is not looked at: a real credential after sixty-four suppressed look-alikes on
+// one line is a hostile or generated file, and the first sixty-four are still
+// judged — more than the single match the gate judged before.
+const maxSecretMatchesPerLine = 64
+
+// judgeSecretLine judges every match of p on a line and returns the worst verdict,
+// so a suppressed example in front of a real credential cannot hide it. It stops at
+// the first real one. Shared by the working-tree and the history gate.
+//
+// A classic GitHub token whose checksum fails is an example — but only when the
+// match is the whole token: the pattern takes 36 characters and stops, so a
+// longer alphanumeric run is not the format being checked and stays real.
+func judgeSecretLine(p secretPattern, content []byte, path string, following []byte) secretVerdict {
+	verdict := verdictNone
+	for _, idx := range p.re.FindAllIndex(content, maxSecretMatchesPerLine) {
+		match := content[idx[0]:idx[1]]
+		if secretMatchSuppressed(p, match, path, content, idx[0], following) {
+			continue
+		}
+		if p.id == "github_pat_classic" && !githubTokenChecksumValid(string(match)) && !continuesAlnum(content, idx[1]) {
+			verdict = verdictExample
+			continue
+		}
+		return verdictReal
+	}
+	return verdict
+}
+
+func continuesAlnum(content []byte, end int) bool {
+	if end >= len(content) {
+		return false
+	}
+	c := content[end]
+	return c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
 }
