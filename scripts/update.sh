@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/update.sh — pull, rebuild, re-register, and remind you to restart.
+# scripts/update.sh: pull, rebuild, re-register, and remind you to restart.
 #
 # Usage:
 #   ./scripts/update.sh [options]
@@ -13,7 +13,7 @@
 #       --no-mcp      Skip Claude Code MCP re-registration
 #       --no-restart-hint  Suppress the editor restart reminder
 #
-# Run from the repo root or any subdirectory — the script always cd's to root.
+# Run from the repo root or any subdirectory: the script always cd's to root.
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -70,7 +70,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 run() {
-  # run <desc> <cmd> [args…]  — honours --dry-run
+  # run <desc> <cmd> [args…] : honours --dry-run
   local desc="$1"; shift
   if [ "$DRY_RUN" -eq 1 ]; then
     dry "$desc"
@@ -82,13 +82,13 @@ run() {
 
 # ── dependency check ──────────────────────────────────────────────────────────
 for cmd in git go; do
-  command -v "$cmd" >/dev/null 2>&1 || fatal "'$cmd' not found in PATH — cannot continue"
+  command -v "$cmd" >/dev/null 2>&1 || fatal "'$cmd' not found in PATH: cannot continue"
 done
 
 # ── 0. header + current state ─────────────────────────────────────────────────
 BINARY="$REPO_ROOT/server/lgit"
 CURRENT_VERSION="(not built)"
-CURRENT_COMMIT="—"
+CURRENT_COMMIT="-"
 if [ -x "$BINARY" ]; then
   CURRENT_VERSION="$("$BINARY" version 2>/dev/null || echo "unknown")"
 fi
@@ -106,7 +106,7 @@ _echo ""
 
 # ── dirty-tree warning ────────────────────────────────────────────────────────
 if [ -n "$DIRTY" ] && [ "$FORCE" -eq 0 ] && [ "$NO_PULL" -eq 0 ]; then
-  warn "Working tree has uncommitted changes — git pull --rebase may fail."
+  warn "Working tree has uncommitted changes: git pull --rebase may fail."
   warn "Use --force to build anyway, or --no-pull to skip pull."
   read -r -p "  Continue anyway? [y/N] " _ans
   [[ "$_ans" =~ ^[Yy]$ ]] || { info "Aborted."; exit 0; }
@@ -146,7 +146,7 @@ if [ -n "$PIDS" ]; then
     dry "kill $PIDS"
   fi
 else
-  info "No running lgit mcp process — nothing to stop"
+  info "No running lgit mcp process: nothing to stop"
 fi
 
 # ── 3. build ──────────────────────────────────────────────────────────────────
@@ -175,7 +175,7 @@ if [ "$NO_MCP" -eq 0 ]; then
   step "Registering MCP server with Claude Code…"
   if command -v claude >/dev/null 2>&1; then
     if [ "$DRY_RUN" -eq 0 ]; then
-      # User scope, so the tools exist in every project — checking a repo
+      # User scope, so the tools exist in every project: checking a repo
       # other than l0-git itself is the point. Remove from both scopes by
       # name: with the same server in two scopes, an unscoped remove refuses
       # to pick one, and `|| true` would have hidden that.
@@ -184,14 +184,14 @@ if [ "$NO_MCP" -eq 0 ]; then
       if claude mcp add -s user l0-git "$BINARY" mcp 2>&1 | sed 's/^/    /'; then
         ok "MCP registered: l0-git → $BINARY"
       else
-        warn "claude mcp add failed — verify with: claude mcp list"
+        warn "claude mcp add failed: verify with: claude mcp list"
       fi
     else
       dry "claude mcp remove -s local l0-git; claude mcp remove -s user l0-git"
       dry "claude mcp add -s user l0-git $BINARY mcp"
     fi
   else
-    warn "claude CLI not found in PATH — skipping MCP registration"
+    warn "claude CLI not found in PATH: skipping MCP registration"
     info "Run manually: claude mcp add -s user l0-git $BINARY mcp"
   fi
 else

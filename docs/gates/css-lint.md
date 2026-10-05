@@ -23,7 +23,7 @@ Scans tracked `.css`, `.scss`, `.less`, `.sass` and `.styl` files.
 | `hidden_scrollbar` | info | `display: none` on `::-webkit-scrollbar` |
 
 `hidden_scrollbar` reports at info because it is legitimate when the element
-has `overflow: hidden` — there is no scrollbar to hide — or when a custom
+has `overflow: hidden`, there is no scrollbar to hide, or when a custom
 scrollbar replaces it.
 
 Inline override: `/* l0git: ignore <rule_id> reason: … */`
@@ -62,7 +62,7 @@ Or keep it running at a lower severity:
 }
 ```
 
-For a single occurrence, prefer the inline directive — it records the reason next to the code:
+For a single occurrence, prefer the inline directive: it records the reason next to the code:
 
 ```text
 /* l0git: ignore <rule_id> reason: … */

@@ -43,7 +43,7 @@ var versionExtractors = []versionExtractor{
 var versionShape = regexp.MustCompile(`^v?\d+(?:\.\d+){1,3}(?:[-+][\w.\-]+)?$`)
 
 func checkVersionDrift(_ context.Context, root string, _ json.RawMessage) ([]Finding, error) {
-	// In monorepo layouts the root package.json is a workspace container —
+	// In monorepo layouts the root package.json is a workspace container,
 	// its version field is often a placeholder (0.0.0) and should not be
 	// compared against the other manifests' real versions.
 	skipPackageJSON := isMonorepoRoot(root)
@@ -91,7 +91,7 @@ func checkVersionDrift(_ context.Context, root string, _ json.RawMessage) ([]Fin
 		return nil, nil
 	}
 
-	// Pick the "leader" deterministically — alphabetical by path — and
+	// Pick the "leader" deterministically, alphabetical by path, and
 	// emit one finding per non-matching manifest pinned at its own file
 	// path. That way the Problems pane shows one mark per file.
 	sort.SliceStable(declared, func(i, j int) bool { return declared[i].path < declared[j].path })
@@ -207,7 +207,7 @@ func extractMixVersion(content string) (string, bool) {
 	return m[1], true
 }
 
-// extractPomVersion grabs the first <version> tag — for most pom.xml files
+// extractPomVersion grabs the first <version> tag: for most pom.xml files
 // that's the artifact's own version (parent versions tend to come later).
 var pomVersionRe = regexp.MustCompile(`<version>\s*([^<\s]+)\s*</version>`)
 

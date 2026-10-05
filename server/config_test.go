@@ -82,7 +82,7 @@ func TestProjectConfig_GlobalExcludePaths_InjectedIntoGateOptions(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	// secrets_scan has its own exclude_paths — global must be prepended.
+	// secrets_scan has its own exclude_paths: global must be prepended.
 	opts := parseScanOptions(cfg.optionsFor("secrets_scan"))
 	want := []string{"**/generated/**", "vendor/**", "**/fixtures/**"}
 	if len(opts.ExcludePaths) != len(want) {
@@ -94,7 +94,7 @@ func TestProjectConfig_GlobalExcludePaths_InjectedIntoGateOptions(t *testing.T) 
 		}
 	}
 
-	// conn_gate has no gate_options entry — only global patterns should appear.
+	// conn_gate has no gate_options entry, only global patterns should appear.
 	opts2 := parseScanOptions(cfg.optionsFor("connection_strings"))
 	if len(opts2.ExcludePaths) != 2 {
 		t.Fatalf("connection_strings ExcludePaths: got %v, want 2 global entries", opts2.ExcludePaths)

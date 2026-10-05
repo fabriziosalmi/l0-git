@@ -48,7 +48,7 @@ func TestConnectionStrings_PerScheme(t *testing.T) {
 }
 
 // http://localhost / http://127.0.0.1 / http://example.com etc. must not
-// fire — these are dev-environment / RFC-doc hosts, expected literal noise.
+// fire: these are dev-environment / RFC-doc hosts, expected literal noise.
 func TestConnectionStrings_HTTPLocalExempt(t *testing.T) {
 	exempt := []string{
 		"http://localhost:8080/",
@@ -129,9 +129,9 @@ func TestConnectionStrings_CredsInURLDeduplicates(t *testing.T) {
 // Template-style credentials (${VAR}, $VAR, %s, <name>, {{ var }}) are
 // placeholders supplied at runtime, not committed secrets. The
 // creds_in_url rule must stay quiet whenever the PASSWORD is a
-// placeholder — the username is non-sensitive (account name, not a
+// placeholder: the username is non-sensitive (account name, not a
 // secret), so mixed forms like `postgresql://nodeapp:$DBPASS@host`
-// also skip. The sensitive value is the password — if it's templated,
+// also skip. The sensitive value is the password, if it's templated,
 // nothing was leaked.
 func TestConnectionStrings_CredsArePlaceholder(t *testing.T) {
 	cases := []string{
@@ -141,7 +141,7 @@ func TestConnectionStrings_CredsArePlaceholder(t *testing.T) {
 		"https://${GITEA_USER}:${GITEA_TOKEN}@git.example.com/x.git",
 		"redis://<user>:<pass>@cache.example.com:6379",
 		"https://{{ user }}:{{ token }}@api.example.com",
-		// Mixed: literal username, placeholder password — still a
+		// Mixed: literal username, placeholder password, still a
 		// template (the secret value comes from the environment).
 		"postgresql://nodeapp:$DBPASS@localhost/nodeapp",
 		"postgresql://alma:${DB_PASSWORD}@postgres:5432/alma",
@@ -176,7 +176,7 @@ func TestConnectionStrings_CredsArePlaceholder(t *testing.T) {
 	}
 }
 
-// A real credential URL (literal password) must still fire — the
+// A real credential URL (literal password) must still fire: the
 // placeholder detection must not over-match. Username being literal
 // is fine; the trigger is a literal password.
 func TestConnectionStrings_RealCredsStillFire(t *testing.T) {
@@ -214,7 +214,7 @@ func TestConnectionStrings_RealCredsStillFire(t *testing.T) {
 
 // TestConnectionStrings_DefaultCredPairExempt locks in the FP fix: a URL whose
 // user AND password are both canonical service defaults (the docker-compose /
-// quickstart idiom) must NOT fire creds_in_url — while real-looking creds still
+// quickstart idiom) must NOT fire creds_in_url, while real-looking creds still
 // do (asserted by TestConnectionStrings_RealCredsStillFire).
 func TestConnectionStrings_DefaultCredPairExempt(t *testing.T) {
 	exempt := []string{
@@ -234,11 +234,11 @@ func TestConnectionStrings_DefaultCredPairExempt(t *testing.T) {
 	}
 }
 
-// Data files (.csv/.jsonl/...) are payload-bearing — their addresses
+// Data files (.csv/.jsonl/...) are payload-bearing: their addresses
 // and URLs ARE the file's content. Default behaviour: skipped by
 // content scanners.
 func TestConnectionStrings_DataFilesSkippedByDefault(t *testing.T) {
-	// Use api.acme.io — example.com is in the docs-host exempt list.
+	// Use api.acme.io: example.com is in the docs-host exempt list.
 	root := initRepoWithFiles(t, map[string]string{
 		"data/urls.csv": "id,url\n1,http://api.acme.io/v1\n2,ftp://leak.acme.io\n",
 		"src/main.go":   "url := \"http://api.acme.io/v1\"\n",
@@ -327,7 +327,7 @@ func TestConnectionStrings_SingleLabelHostExempt(t *testing.T) {
 	}
 }
 
-// `.internal` is ICANN-reserved for private use — http://service.internal
+// `.internal` is ICANN-reserved for private use: http://service.internal
 // resolves only inside the cluster, never on the public internet.
 func TestConn_InternalTLDExempt(t *testing.T) {
 	for _, url := range []string{
@@ -348,7 +348,7 @@ func TestConn_InternalTLDExempt(t *testing.T) {
 }
 
 // 169.254.0.0/16 link-local (the cloud metadata endpoint) is http-only by
-// design and unreachable off-host — never a cleartext-HTTP finding.
+// design and unreachable off-host, never a cleartext-HTTP finding.
 func TestConn_LinkLocalExempt(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
 		"conf.txt": "meta = http://169.254.169.254/latest/meta-data/\n",
@@ -364,7 +364,7 @@ func TestConn_LinkLocalExempt(t *testing.T) {
 	}
 }
 
-// A file that is overwhelmingly bare URLs is a link list — skipped by default,
+// A file that is overwhelmingly bare URLs is a link list: skipped by default,
 // scanned when skip_default_data_files is off.
 func TestConn_URLListSkippedByContent(t *testing.T) {
 	var b strings.Builder
@@ -443,7 +443,7 @@ func TestConnectionStrings_SchemeMentionWithoutHostIgnored(t *testing.T) {
 	}
 }
 
-// Anything with something to connect to must still be reported — including a
+// Anything with something to connect to must still be reported: including a
 // templated host, which is still a use of the protocol.
 func TestConnectionStrings_RealEndpointsStillFire(t *testing.T) {
 	cases := map[string]string{

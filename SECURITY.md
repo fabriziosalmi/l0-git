@@ -19,7 +19,7 @@ You can expect an acknowledgement within 7 days. Coordinated disclosure is appre
 ## Threat model
 
 - The `lgit` binary stores findings in a local SQLite file at `~/.l0-git/findings.db` (or `$LGIT_DB`).
-- The MCP server reads/writes via stdio — no network listener, no authentication beyond OS file permissions.
+- The MCP server reads/writes via stdio: no network listener, no authentication beyond OS file permissions.
 - Gates only **read** project files; they never modify them.
 - The VSCode extension shells out to `lgit` and is bound to the user's local environment.
-- Findings (titles, messages, file paths) are stored in plaintext. If a future gate scans for secrets, the *fact* that a secret was found is recorded along with file path and line number — but never the secret value itself.
+- Findings (titles, messages, file paths) are stored in plaintext. If a future gate scans for secrets, the *fact* that a secret was found is recorded along with file path and line number, but never the secret value itself.

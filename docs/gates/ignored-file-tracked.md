@@ -1,6 +1,6 @@
 ---
 title: "Tracked file matches .gitignore"
-description: "Reports files that are in the git index even though the repository's own .gitignore excludes them — committed before the rule existed, or…"
+description: "Reports files that are in the git index even though the repository's own .gitignore excludes them: committed before the rule existed, or…"
 ---
 
 # Tracked file matches .gitignore
@@ -12,7 +12,7 @@ says it is. One of the two is wrong, and nothing else will tell you which.
 
 ## What it checks
 
-Reports files that are in the git index even though the repository's own .gitignore excludes them — committed before the rule existed, or force-added. Grouped by directory. Only committed .gitignore files are consulted, never .git/info/exclude or the user's global excludes, so the result is the same on every machine. .gitkeep files, env templates and vendored trees are left to the gates that own them.
+Reports files that are in the git index even though the repository's own .gitignore excludes them: committed before the rule existed, or force-added. Grouped by directory. Only committed .gitignore files are consulted, never .git/info/exclude or the user's global excludes, so the result is the same on every machine. .gitkeep files, env templates and vendored trees are left to the gates that own them.
 
 A file ends up both tracked and ignored in one of two ways:
 
@@ -30,7 +30,7 @@ It was built after a sweep of the author's public repositories found node
 identity keys tracked under a `data/` directory the `.gitignore` excluded, a
 committed `.env`, `__pycache__/`, a coverage report, and 260 cache and report
 files in a single repository. In every case the author had already decided the
-files should not be committed — the `.gitignore` said so.
+files should not be committed: the `.gitignore` said so.
 
 ### Grouping
 
@@ -38,7 +38,7 @@ One finding per top-level directory, keyed on the deepest directory that holds
 every file in the group, with a count and a few examples. 260 files in `cache/`
 are one statement, not 260.
 
-Files at the repository root form one group too, keyed on `.gitignore` — only
+Files at the repository root form one group too, keyed on `.gitignore`, only
 the root `.gitignore` can have excluded them. A single root file keeps its own
 path, which is what an editor needs to jump to.
 
@@ -73,7 +73,7 @@ git commit -m "untrack files the .gitignore already excludes"
 ```
 
 This removes them from the index and leaves them on disk. It does **not**
-remove them from history — if they are secrets, rotate them first, then see
+remove them from history, if they are secrets, rotate them first, then see
 [Secrets scan (history)](/gates/secrets-scan-history).
 
 If they belong in the repository, write the exception down:
@@ -88,7 +88,7 @@ reader of `.gitignore` sees the intent.
 
 ## Options
 
-The shared scan options apply — `exclude_paths` in particular:
+The shared scan options apply: `exclude_paths` in particular:
 
 ```json
 {

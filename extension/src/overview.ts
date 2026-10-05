@@ -40,7 +40,7 @@ export async function refreshOverviewIfOpen(): Promise<void> {
 }
 
 // showOverview opens (or focuses) the singleton Overview panel and pushes
-// a fresh render. Re-callable from any command — second invocations just
+// a fresh render. Re-callable from any command: second invocations just
 // reveal the existing panel.
 export async function showOverview(
   context: vscode.ExtensionContext,
@@ -279,7 +279,7 @@ button.secondary:hover { background: var(--vscode-button-secondaryHoverBackgroun
     <h2>Total (all statuses)</h2>
     <div class="totals">
       <div class="total">${s.total}</div>
-      <div class="total-label">${s.total === 1 ? "finding" : "findings"} stored — across open / ignored / resolved</div>
+      <div class="total-label">${s.total === 1 ? "finding" : "findings"} stored: across open / ignored / resolved</div>
     </div>
     <div class="status-chips">
       ${statusChips}
@@ -303,7 +303,7 @@ button.secondary:hover { background: var(--vscode-button-secondaryHoverBackgroun
 
   <div class="card full-row">
     <h2>Tags (open)</h2>
-    <div class="card-hint">A finding can carry multiple tags — counts add up to more than the open total when gates are tagged in multiple themes (e.g. <code>security,network</code>).</div>
+    <div class="card-hint">A finding can carry multiple tags: counts add up to more than the open total when gates are tagged in multiple themes (e.g. <code>security,network</code>).</div>
     ${tagChips || `<div class="empty">No tagged open findings.</div>`}
   </div>
 
@@ -320,7 +320,7 @@ const vscode = acquireVsCodeApi();
 
 // Double-click guard: a scan takes seconds, so an impatient user can
 // fire several runChecks in parallel. Disabling both action buttons +
-// aria-busy on body for the duration is enough — the next refresh
+// aria-busy on body for the duration is enough: the next refresh
 // re-renders the whole panel, which replaces these elements wholesale.
 const runBtn = document.getElementById("run");
 const refreshBtn = document.getElementById("refresh");
@@ -372,7 +372,7 @@ function renderSeverityBars(sev: Record<string, number>): string {
   const order: Array<keyof Record<string, number>> = ["error", "warning", "info"];
   // Bars + percentages are both relative to the OPEN total (sum of the
   // open-only by_severity counts) so percentages always sum to 100%.
-  // Using s.total here would mix scopes — bars are open-only but the
+  // Using s.total here would mix scopes: bars are open-only but the
   // denominator would include resolved/ignored.
   const openTotal = order.reduce((acc, k) => acc + (sev[k as string] || 0), 0);
   return order
@@ -437,7 +437,7 @@ function renderTagChips(rows: KeyCount[]): string {
 }
 
 // sparklineHint shows a small caption under the 7-day chart when most
-// days are flat at zero — typical of fresh DBs / newly-installed
+// days are flat at zero: typical of fresh DBs / newly-installed
 // projects, where the chart is otherwise visually misleading.
 function sparklineHint(days: DayCount[]): string {
   if (!days || days.length === 0) return "";
@@ -575,7 +575,7 @@ function shortDate(iso: string): string {
   return iso.length === 10 ? iso.slice(5) : iso;
 }
 
-// CSP nonces must be unpredictable — Math.random is not cryptographically
+// CSP nonces must be unpredictable: Math.random is not cryptographically
 // secure. Use Node's crypto RNG (always present in the extension host) and
 // emit url-safe base64 so the value plugs into a CSP header unchanged.
 function makeNonce(): string {

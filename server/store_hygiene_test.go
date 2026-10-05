@@ -22,8 +22,8 @@ func openFindings(t *testing.T, s *Store, project, gate string) []Finding {
 }
 
 // A directory that is not a git repository makes every gate that reads the index
-// say so. Sixteen identical notices were one fact stated sixteen times — 238 rows
-// in one real store — and they multiplied in every count.
+// say so. Sixteen identical notices were one fact stated sixteen times: 238 rows
+// in one real store, and they multiplied in every count.
 func TestRunChecks_NotAGitRepoIsReportedOnce(t *testing.T) {
 	s := newTestStore(t)
 	dir := t.TempDir()
@@ -81,7 +81,7 @@ func TestRunChecks_NotAGitRepoNoticeIsRetiredByGitInit(t *testing.T) {
 	}
 }
 
-// Rows written by earlier versions — one open notice per gate — must be retired
+// Rows written by earlier versions, one open notice per gate, must be retired
 // by the first run of this one, or the store keeps showing both.
 func TestRunChecks_OldPerGateNoticesAreRetired(t *testing.T) {
 	s := newTestStore(t)
@@ -269,7 +269,7 @@ func TestPrune_DryRunChangesNothing(t *testing.T) {
 	}
 	// Resolved = the live project's two plus the unmounted project's one: with no
 	// retention window every resolved finding goes, wherever it is. What must NOT
-	// go from an unreachable project is its OPEN findings — see
+	// go from an unreachable project is its OPEN findings: see
 	// TestPrune_NeverTreatsAnUnreachableProjectAsGone.
 	if rep.VanishedFindings != 3 || rep.ResolvedFindings != 3 || rep.IgnoredKept != 1 {
 		t.Errorf("report = vanished %d resolved %d ignored-kept %d, want 3, 3, 1", rep.VanishedFindings, rep.ResolvedFindings, rep.IgnoredKept)
@@ -439,7 +439,7 @@ func TestClassifyProject(t *testing.T) {
 		t.Errorf("a deleted project next to its neighbours = %v, want vanished", got)
 	}
 
-	// A whole TREE deleted — `work/` and every clone in it. These were the
+	// A whole TREE deleted: `work/` and every clone in it. These were the
 	// largest piles of findings nothing could ever resolve, and the first version
 	// of the rule ("the parent must exist") left all of them alone.
 	if got := classifyProject(filepath.Join(parent, "work", "clones", "audiolibri")); got != projectVanished {

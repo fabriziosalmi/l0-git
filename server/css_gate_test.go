@@ -47,7 +47,7 @@ func TestCSS_ThinFontWeightOnBodyText(t *testing.T) {
 	}
 }
 
-// Thin font weight on a class selector is conservative-skipped — we
+// Thin font weight on a class selector is conservative-skipped: we
 // can't tell if it's body copy or a tiny decorative element.
 func TestCSS_ThinFontWeightOnClassIsSkipped(t *testing.T) {
 	src := `.tiny-label { font-weight: 100; }`
@@ -132,7 +132,7 @@ func TestCSS_CommentsPreserveLines(t *testing.T) {
 	}
 }
 
-// body.dark-theme is still body text — thin weight should fire.
+// body.dark-theme is still body text: thin weight should fire.
 func TestCSS_ThinFontWeight_BodyWithModifierClass(t *testing.T) {
 	src := `body.dark-theme { font-weight: 100; }
 `
@@ -142,7 +142,7 @@ func TestCSS_ThinFontWeight_BodyWithModifierClass(t *testing.T) {
 	}
 }
 
-// Comma-separated selector list — one body-text part is enough.
+// Comma-separated selector list: one body-text part is enough.
 func TestCSS_ThinFontWeight_CommaSelector(t *testing.T) {
 	src := `html, body { font-weight: 200; }
 `

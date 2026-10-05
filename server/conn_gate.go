@@ -16,10 +16,10 @@ import (
 
 // connectionPattern is one rule for the connection_strings gate. We tier
 // by what's actually risky:
-//   - credsInline   — error: any scheme with user:pass@ host
-//   - legacy/cleartext schemes (ftp, telnet, smb, nfs, rsync) — warning
-//   - DB schemes (mongodb, postgres, …) — info
-//   - http://non-local, ldap://, imap:// (vs encrypted variants) — info
+//   - credsInline  : error: any scheme with user:pass@ host
+//   - legacy/cleartext schemes (ftp, telnet, smb, nfs, rsync): warning
+//   - DB schemes (mongodb, postgres, …): info
+//   - http://non-local, ldap://, imap:// (vs encrypted variants): info
 type connectionPattern struct {
 	id       string
 	severity string
@@ -36,11 +36,11 @@ var connectionPatterns = []connectionPattern{
 		id:       "creds_in_url",
 		severity: SeverityError,
 		title:    "Credentials in connection URL",
-		advice:   "Remove the inline user:password from the URL — read it from a vault, env var, or secret manager instead. Also rotate, since the URL has been committed.",
+		advice:   "Remove the inline user:password from the URL: read it from a vault, env var, or secret manager instead. Also rotate, since the URL has been committed.",
 		// The username may be EMPTY: `redis://:password@host` is how Redis,
 		// and plenty of AMQP clients, spell a password-only credential. With
 		// `+` there the rule never matched those, so a production Redis
-		// password surfaced as an info-level db_uri — or, for rediss://,
+		// password surfaced as an info-level db_uri, or, for rediss://,
 		// not at all.
 		re: regexp.MustCompile(`\b[a-zA-Z][a-zA-Z0-9+\-.]*://[^\s/@:"']*:[^\s/@"']+@[^\s"']+`),
 	},
@@ -93,7 +93,7 @@ var connectionPatterns = []connectionPattern{
 		id:       "jdbc",
 		severity: SeverityInfo,
 		title:    "JDBC connection string",
-		advice:   "JDBC URLs sometimes embed credentials inline — double-check this one isn't doing that.",
+		advice:   "JDBC URLs sometimes embed credentials inline: double-check this one isn't doing that.",
 		re:       regexp.MustCompile(`\bjdbc:[a-z0-9]+:[^\s"'<>]+`),
 	},
 	{
@@ -152,7 +152,7 @@ func splitHostPath(rest string) (host, path string) {
 var pkiFetchSuffixes = []string{".crt", ".cer", ".crl", ".p7b", ".p7c"}
 
 // isPKIFetchURL reports whether a cleartext URL is a certificate-chain,
-// revocation or OCSP fetch. RFC 5280 makes these http:// by design — Authority
+// revocation or OCSP fetch. RFC 5280 makes these http:// by design: Authority
 // Information Access, CRL distribution points and OCSP responders cannot depend
 // on the TLS they are being used to bootstrap, and what is fetched is verified
 // by signature, not by the channel. certmate's chain fixtures alone held 88.
@@ -174,8 +174,8 @@ func isPKIFetchURL(host, path string) bool {
 
 // licenseURLs name, per host, the FIRST PATH SEGMENT of a license or standard
 // identifier quoted in a source header or a schema declaration. `http://` is the
-// canonical spelling of every one of them — `Licensed under the Apache License
-// … http://www.apache.org/licenses/LICENSE-2.0` heads millions of files — and
+// canonical spelling of every one of them: `Licensed under the Apache License
+// … http://www.apache.org/licenses/LICENSE-2.0` heads millions of files, and
 // nothing is ever fetched over the wire. The segment is matched WHOLE, not as a
 // string prefix, and only after the path has been cleaned: the same hosts serve
 // downloads, `http://www.apache.org/dist/…zip` is a genuine cleartext fetch, and
@@ -215,7 +215,7 @@ func isLicenseOrStandardURL(host, path string) bool {
 
 // inventedAttackerHostRe matches the stock fake adversary of a security test or
 // an example: `evil.com`, `sub.attacker.com`, `malicious.io`, `evil.example`.
-// The label must be exactly one of the three, directly under the TLD —
+// The label must be exactly one of the three, directly under the TLD,
 // `evil-corp.com`, `notevil.com` and `evil.acme.io` are not matched.
 var inventedAttackerHostRe = regexp.MustCompile(`^(?:[a-z0-9-]+\.)*(?:evil|attacker|malicious)\.[a-z]{2,}$`)
 
@@ -224,7 +224,7 @@ var inventedPlaceholderHosts = map[string]bool{
 	"yourserver.com": true, "yourdomain.com": true, "yoursite.com": true, "yourhost.com": true,
 }
 
-// ipLikePrefixRe matches a host whose FIRST LABEL is a number — `192.168.evil.net`,
+// ipLikePrefixRe matches a host whose FIRST LABEL is a number: `192.168.evil.net`,
 // `10.evil.com`, `0177.0.0.1.evil.com`, `0x7f.evil.com`. That is the classic way
 // to smuggle a public name past a check that looks for a private range, and the
 // one thing that must never be read as an example, whatever the name after it
@@ -259,7 +259,7 @@ func urlHostExempt(rest string) bool {
 	}
 	// Reserved-range tests run on a PARSED address, never on a string prefix.
 	// `strings.HasPrefix(host, "10.")` also accepts `10.example.com`, and
-	// `"100."` accepts `100.64.123.evil` — a public hostname whose cleartext
+	// `"100."` accepts `100.64.123.evil`: a public hostname whose cleartext
 	// URL would then be silently exempt.
 	if ip := net.ParseIP(host); ip != nil {
 		switch {
@@ -271,7 +271,7 @@ func urlHostExempt(rest string) bool {
 			// HTTP MITM" never applies.
 			return true
 		}
-		// 100.64.0.0/10 — RFC 6598 shared address space, which is what
+		// 100.64.0.0/10: RFC 6598 shared address space, which is what
 		// Tailscale hands out. Such a URL is reachable only from inside the
 		// tailnet, so cleartext there is no more exposed than loopback;
 		// network_scan already treats the range the same way.
@@ -283,13 +283,13 @@ func urlHostExempt(rest string) bool {
 		strings.HasSuffix(host, ".test") || strings.HasSuffix(host, ".localhost") ||
 		strings.HasSuffix(host, ".invalid") || strings.HasSuffix(host, ".local") ||
 		host == "internal" || strings.HasSuffix(host, ".internal") {
-		// `.internal` is ICANN-reserved (2024) for private use — a
+		// `.internal` is ICANN-reserved (2024) for private use: a
 		// service.internal / pushgateway.internal host resolves only inside
 		// the cluster, never on the public internet.
 		return true
 	}
 	// Single-label hostnames (no dot) are never reachable on the public
-	// internet — they resolve only in private DNS (Docker service names,
+	// internet: they resolve only in private DNS (Docker service names,
 	// Kubernetes cluster-internal names, /etc/hosts entries, …).
 	// Flagging http://kafka or http://db-primary as "cleartext HTTP" is
 	// pure noise in every containerised project.
@@ -298,7 +298,7 @@ func urlHostExempt(rest string) bool {
 	}
 	// Well-known specification / standard-body hosts whose URIs appear
 	// routinely in documentation, XML namespaces, and MIME type registries.
-	// These are never operational URLs — flagging them is pure noise.
+	// These are never operational URLs: flagging them is pure noise.
 	for _, exempt := range httpSpecHosts {
 		if host == exempt || strings.HasSuffix(host, "."+exempt) {
 			return true
@@ -368,7 +368,7 @@ func atoiSafe(s string) int {
 
 func checkConnectionStrings(ctx context.Context, root string, opts json.RawMessage) ([]Finding, error) {
 	if skip, stop := requireGitRepo(root, "connection_strings",
-		"Initialize git or run gates from inside a clone — this gate scans tracked files only."); stop {
+		"Initialize git or run gates from inside a clone: this gate scans tracked files only."); stop {
 		return skip, nil
 	}
 	files, err := gitLsFiles(ctx, root)
@@ -388,7 +388,7 @@ func checkConnectionStrings(ctx context.Context, root string, opts json.RawMessa
 			continue
 		}
 		// Changelog / release-note files describe the history of the
-		// project — http:// links, FTP mirrors, and connection strings
+		// project: http:// links, FTP mirrors, and connection strings
 		// listed there are quotations of past behaviour, not current
 		// configuration. Same rationale as network_scan.
 		if isChangelogBasename(filepath.Base(rel)) {
@@ -420,7 +420,7 @@ func checkConnectionStrings(ctx context.Context, root string, opts json.RawMessa
 			continue
 		}
 		// A file whose lines are overwhelmingly bare URLs is a link list
-		// (feed dump, seed list, crawl frontier) — the URLs ARE the payload,
+		// (feed dump, seed list, crawl frontier): the URLs ARE the payload,
 		// so every line is a self-evident FP. Same heuristic shape and knob
 		// as network_scan's address-list detection.
 		if skipEnabled(scan.SkipDefaultDataFiles) && looksLikeURLList(data) {
@@ -484,7 +484,7 @@ func scanConnectionLine(rel string, lineNum int, content []byte) []Finding {
 			// no credentials (`redis://redis:6379/0`,
 			// `postgres://localhost:5432/app`) states only that the project
 			// uses a database. It carries no secret and no coupling to
-			// external infrastructure — the same reasoning that already
+			// external infrastructure: the same reasoning that already
 			// exempts http://kafka for http_remote.
 			if (p.id == "db_uri" || p.id == "jdbc") && dbURIHostExempt(text) {
 				continue
@@ -503,7 +503,7 @@ func scanConnectionLine(rel string, lineNum int, content []byte) []Finding {
 			severity, advice := p.severity, p.advice
 			if p.id == "creds_in_url" && credsHostIsLocalOnly(text) {
 				severity = SeverityWarning
-				advice += " The host is reachable only from this machine or its container network, so this is reported as a warning rather than an error — but the password is still in the repository, and passwords get reused."
+				advice += " The host is reachable only from this machine or its container network, so this is reported as a warning rather than an error, but the password is still in the repository, and passwords get reused."
 			}
 			out = append(out, Finding{
 				Severity: severity,
@@ -526,7 +526,7 @@ func scanConnectionLine(rel string, lineNum int, content []byte) []Finding {
 //
 // Such a finding is DOWNGRADED from error to warning, never dropped. The
 // public-repo sweep had ~24 credential findings at error of the shape
-// `postgresql://nis2:nis2secret@localhost` and `proximity_dev_password@db` —
+// `postgresql://nis2:nis2secret@localhost` and `proximity_dev_password@db`,
 // development defaults whose only reachable target is the developer's own
 // stack. Suppressing them was already ruled out: the password vocabulary rule
 // must keep `readonly_dev_pass` firing, because real passwords contain
@@ -640,7 +640,7 @@ var legacySchemePatterns = map[string]bool{
 // loopbackHostOnly reports whether the host of `scheme://[userinfo@]host…` is the
 // local machine and nothing else: `localhost`, `*.localhost`, `0.0.0.0` or a
 // loopback address (127.0.0.0/8, ::1, with or without brackets). It is far
-// narrower than urlHostExempt on purpose — a private address, `.lan`, `.local`
+// narrower than urlHostExempt on purpose: a private address, `.lan`, `.local`
 // or a bare service name is another machine, and for a cleartext protocol that
 // is the whole point of the finding.
 //
@@ -703,7 +703,7 @@ var placeholderTokenRe = regexp.MustCompile(
 		// Python f-string / str.format fields: {passwd}, {settings.RABBITMQ_PASS},
 		// {cfg.db.password!r}, {}, {0}. The public-repo sweep found
 		// `amqp://{user}:{passwd}@{host}` reported at ERROR as a committed
-		// credential — the password there is an interpolation, not a value.
+		// credential: the password there is an interpolation, not a value.
 		// The field must be the WHOLE password, so `pa{ss}word` still fires.
 		`|\{(?:[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*|\d*)(?:![rsa])?\}` +
 		`|#\{[^}]+\}` + // Ruby interpolation: #{password}
@@ -751,7 +751,7 @@ func splitUserInfo(rest string) (user, pass string, ok bool) {
 // as non-sensitive: account names rarely qualify as secrets, and
 // patterns like `postgresql://nodeapp:$DBPASS@host` are templates
 // where only the password is supplied at runtime. The sensitive value
-// is the password — if it's a placeholder, nothing real was committed.
+// is the password, if it's a placeholder, nothing real was committed.
 // Required input shape matches creds_in_url's regex:
 // scheme://USER:PASS@rest.
 func credsArePlaceholder(url string) bool {
@@ -769,7 +769,7 @@ func credsArePlaceholder(url string) bool {
 // knownDefaultCredentials are username/password values that are canonical
 // docker-compose / quickstart defaults. A URL where BOTH the user and the
 // password are drawn from this set (postgres:postgres, guest:guest,
-// root:example, …) grants access to nothing real — it's an example, not a leak.
+// root:example, …) grants access to nothing real: it's an example, not a leak.
 var knownDefaultCredentials = map[string]bool{
 	"postgres": true, "root": true, "admin": true, "guest": true,
 	"example": true, "password": true, "changeme": true, "test": true,
@@ -781,7 +781,7 @@ var knownDefaultCredentials = map[string]bool{
 // credential exemption: a URL where BOTH the user and the password are canonical
 // service defaults (postgres:postgres, guest:guest, root:example) is a docker-
 // compose / quickstart example, not a committed secret. The HOST is deliberately
-// NOT considered — per the gate's contract, real-looking credentials must fire
+// NOT considered: per the gate's contract, real-looking credentials must fire
 // even on localhost or an RFC1918 address (committing real creds is a leak
 // regardless of host reachability); only a default:default pair is exempt.
 func credsAreNonSecret(rawURL string) bool {
@@ -806,7 +806,7 @@ func credsAreNonSecret(rawURL string) bool {
 	if knownDefaultCredentials[user] && knownDefaultCredentials[pass] {
 		return true
 	}
-	// `portal:portal`, `hattrick:hattrick`, `acmedns:acmedns` — a user
+	// `portal:portal`, `hattrick:hattrick`, `acmedns:acmedns`: a user
 	// repeated as its own password is a scaffold default nobody chose.
 	//
 	// Unlike the closed knownDefaultCredentials list above, this rule is
@@ -818,7 +818,7 @@ func credsAreNonSecret(rawURL string) bool {
 		return true
 	}
 	// Structural markers disqualify the whole URL: a regex metacharacter
-	// means this is a detection rule, not a URL — on either side.
+	// means this is a detection rule, not a URL: on either side.
 	//
 	// That is also what recognises a hook that greps for credentials,
 	// `postgresql://[^:]+:[^@]+@|sk_(test|live)_`. It had been silenced only
@@ -834,7 +834,7 @@ func credsAreNonSecret(rawURL string) bool {
 	// (`scheme://u:p@host`, `user:…@host`), never an issued credential.
 	//
 	// This used to be applied to the username as well, which silenced the
-	// whole URL whenever the USER was short — and `sa` (SQL Server's default
+	// whole URL whenever the USER was short, and `sa` (SQL Server's default
 	// login) and `x` (`https://x:<token>@github.com`) are both real logins in
 	// front of real passwords. The username is not the secret; only the
 	// password's shape says whether there is one.
@@ -845,13 +845,13 @@ func credsAreNonSecret(rawURL string) bool {
 		return true
 	}
 	// Vocabulary rules apply to the PASSWORD only. The username is not the
-	// secret, and a real password may well contain a word from the list —
+	// secret, and a real password may well contain a word from the list,
 	// `minerva_ro:readonly_dev_pass@…` is a credential, not a placeholder.
 	return isPlaceholderPassword(rawPass)
 }
 
-// regexMetaRe matches regex SYNTAX — an escape sequence, a character class,
-// a group, or an alternation — rather than individual metacharacters. Their
+// regexMetaRe matches regex SYNTAX: an escape sequence, a character class,
+// a group, or an alternation: rather than individual metacharacters. Their
 // presence means the "URL" is a detection rule or a format string:
 //
 //	(?i)(mongodb(\+srv)?://|postgres(ql)?://)(\S+:)?\S+@
@@ -903,7 +903,7 @@ var placeholderNouns = map[string]bool{
 // `svc:mySecretValue@db` as a placeholder and silently drop a real credential.
 // The prefix must therefore be followed by a separator (`my_password`,
 // `your-token`, `CHANGE_ME`) or by a placeholder noun with nothing after it
-// (`changeme`, `yourpassword`) — never by arbitrary text.
+// (`changeme`, `yourpassword`), never by arbitrary text.
 func hasPlaceholderPrefix(lower string) bool {
 	for _, p := range placeholderPrefixes {
 		if !strings.HasPrefix(lower, p) {
@@ -923,8 +923,8 @@ func hasPlaceholderPrefix(lower string) bool {
 	return false
 }
 
-// hasRegexSyntax reports whether a userinfo segment is regex syntax — an
-// escape, a character class, a group or an alternation — which means the
+// hasRegexSyntax reports whether a userinfo segment is regex syntax: an
+// escape, a character class, a group or an alternation, which means the
 // "URL" is a detection rule or a format string rather than a credential.
 func hasRegexSyntax(seg string) bool {
 	return seg != "" && regexMetaRe.MatchString(seg)
@@ -940,7 +940,7 @@ func isProseShorthand(pass string) bool {
 
 // isPlaceholderPassword reports whether the password segment is documentation
 // scaffolding. Every rule is about the SHAPE of the value, so a real password
-// — high-entropy and carrying none of these markers — is never silenced.
+// , high-entropy and carrying none of these markers, is never silenced.
 func isPlaceholderPassword(seg string) bool {
 	if seg == "" {
 		return false
@@ -977,12 +977,12 @@ func overlapsClaimed(a, b int, spans []claimedSpan) bool {
 // the docker-compose default every project ships; flagging it is a statement
 // that the project uses a database, not a finding.
 //
-// A URI with inline credentials is never exempt here — creds_in_url claims
+// A URI with inline credentials is never exempt here: creds_in_url claims
 // that span first, at error severity, and must keep doing so.
 func dbURIHostExempt(rawURL string) bool {
 	schemeEnd := strings.Index(rawURL, "://")
 	if schemeEnd < 0 {
-		// jdbc:postgresql://host/db — strip the outer `jdbc:` and retry.
+		// jdbc:postgresql://host/db: strip the outer `jdbc:` and retry.
 		if rest := strings.TrimPrefix(rawURL, "jdbc:"); rest != rawURL {
 			return dbURIHostExempt(rest)
 		}
@@ -1011,13 +1011,13 @@ func dbURIHostExempt(rawURL string) bool {
 var markupAttrRe = regexp.MustCompile(`(?i)\b(?:xmlns(?::[a-z0-9_.-]+)?|schemaLocation|xsi:schemaLocation|systemId|namespace)\s*=\s*["']$`)
 
 // doctypeOpenRe matches an unclosed DOCTYPE / ENTITY declaration. Inside one,
-// the quoted URI is a system identifier naming a DTD — nothing is fetched:
+// the quoted URI is a system identifier naming a DTD: nothing is fetched:
 //
 //	<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://…/PropertyList-1.0.dtd">
 var doctypeOpenRe = regexp.MustCompile(`(?i)<!(?:DOCTYPE|ENTITY)\b[^>]*$`)
 
 // isMarkupIdentifierURL reports whether the URL starting at offset `at` is an
-// XML/SGML system identifier or namespace URI — a NAME, not an address.
+// XML/SGML system identifier or namespace URI: a NAME, not an address.
 // Nothing connects over either, so "cleartext MITM" cannot apply, yet every
 // .plist, .svg, and XML document in existence carries one.
 func isMarkupIdentifierURL(content []byte, at int) bool {

@@ -5,13 +5,13 @@ description: "Verifies the repo tracks branch-protection rules as code via .gith
 
 # Branch protection declared
 
-Checks that branch protection is declared as code. It cannot check that branch protection is actually on — and it says so.
+Checks that branch protection is declared as code. It cannot check that branch protection is actually on, and it says so.
 
 <GateMeta id="branch_protection_declared" severity="info" tags="governance,security" scope="Project root" />
 
 ## What it checks
 
-Verifies the repo tracks branch-protection rules as code via .github/settings.yml (Probot Settings format). Cannot verify the actual GitHub server-side state — that's reachable only via the REST API with auth. Opt-in (gate_options.branch_protection_declared.enabled = true) so users who manage protection via the UI don't get a false signal.
+Verifies the repo tracks branch-protection rules as code via .github/settings.yml (Probot Settings format). Cannot verify the actual GitHub server-side state: that's reachable only via the REST API with auth. Opt-in (gate_options.branch_protection_declared.enabled = true) so users who manage protection via the UI don't get a false signal.
 
 ::: warning What this gate can and cannot see
 Real branch-protection state lives on GitHub's servers and is reachable only
@@ -32,7 +32,7 @@ that is simply wrong.
 ## What a finding says
 
 ```text
-no .github/settings.yml tracked. l0-git can only verify protection-as-code (Probot Settings format) — actual branch-protection rules live server-side on GitHub and aren't readable from the filesystem.
+no .github/settings.yml tracked. l0-git can only verify protection-as-code (Probot Settings format): actual branch-protection rules live server-side on GitHub and aren't readable from the filesystem.
 ```
 
 ## Options

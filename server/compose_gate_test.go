@@ -69,7 +69,7 @@ func TestCompose_DockerSocketShortAndLongForm(t *testing.T) {
 	for name, src := range map[string]string{"short": short, "long": long} {
 		t.Run(name, func(t *testing.T) {
 			fs := runComposeRules(t, src)
-			// Traefik is a known orchestrator image — finding must be demoted to info.
+			// Traefik is a known orchestrator image: finding must be demoted to info.
 			f := findFindingByRule(fs, "docker_socket_mount_orchestrator")
 			if f == nil {
 				t.Errorf("expected docker_socket_mount_orchestrator (info) for Traefik %s form, got: %+v", name, fs)
@@ -127,7 +127,7 @@ func TestCompose_MemLimitV2OK(t *testing.T) {
 }
 
 // Build-only services (no image/command/entrypoint) shouldn't trip the
-// memory rule — they're not runtime workloads.
+// memory rule: they're not runtime workloads.
 func TestCompose_BuildOnlyServiceSkipsMemoryRule(t *testing.T) {
 	src := `services:
   builder:
@@ -202,7 +202,7 @@ func TestCompose_InlineOverride(t *testing.T) {
 }
 
 // disabled_rules suppresses everything for that rule, including the
-// override_accepted info — it's a stronger silence than the inline form.
+// override_accepted info: it's a stronger silence than the inline form.
 func TestCompose_DisabledRules(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
 		"compose.yml": `services:
@@ -248,7 +248,7 @@ func TestCompose_SuggestWhenMissing(t *testing.T) {
 	}
 }
 
-// nginx is now an orchestrator — should be demoted to info.
+// nginx is now an orchestrator: should be demoted to info.
 func TestCompose_NginxProxyDemotedToInfo(t *testing.T) {
 	src := `services:
   proxy:

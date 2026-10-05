@@ -89,7 +89,7 @@ func TestStore_TightensAnExistingDefaultStore(t *testing.T) {
 
 // A database the user chose with LGIT_DB is theirs: it may be shared on purpose
 // (a group-readable cache on a CI runner), so an EXISTING one is left exactly as
-// it was — and so is the directory around it.
+// it was, and so is the directory around it.
 func TestStore_ExistingFileChosenWithLGITDBIsNotChmodded(t *testing.T) {
 	withPermissiveUmask(t)
 	dir := filepath.Join(t.TempDir(), "shared")

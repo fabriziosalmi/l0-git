@@ -134,7 +134,7 @@ func isInScriptDir(rel string) bool {
 }
 
 // looksLikeLockfile catches package-lock.json, Cargo.lock, poetry.lock,
-// yarn.lock, etc. — extensions don't always carry the signal (no extension
+// yarn.lock, etc.: extensions don't always carry the signal (no extension
 // at all on Cargo.lock; .lock is reused by other tools).
 func looksLikeLockfile(base string) bool {
 	switch base {
@@ -211,7 +211,7 @@ func checkVendoredDirTracked(ctx context.Context, root string, opts json.RawMess
 	// this project (i.e. not a mistake to commit).
 	legitimateVendor := buildLegitimateVendorSet(root)
 
-	// One finding per offending top-level directory, not per file —
+	// One finding per offending top-level directory, not per file,
 	// otherwise a stray node_modules with 50k files would bury the
 	// Problems pane.
 	seen := map[string]bool{}
@@ -220,7 +220,7 @@ func checkVendoredDirTracked(ctx context.Context, root string, opts json.RawMess
 		if scan.shouldSkip(rel) {
 			continue
 		}
-		// Match either at root or any depth — vendoring at any depth is bad.
+		// Match either at root or any depth: vendoring at any depth is bad.
 		for _, prefix := range vendoredDirPrefixes {
 			if dirMatchesAtAnyDepth(rel, prefix) {
 				key := vendoredKey(rel, prefix)
@@ -231,7 +231,7 @@ func checkVendoredDirTracked(ctx context.Context, root string, opts json.RawMess
 				// vendor/, dist/, build/ of hand-committed web assets (self-hosted
 				// fonts/CSS/JS that kill third-party egress, or a committed CDN /
 				// GitHub-Pages bundle like docs/.vitepress/dist) are served, not
-				// rebuildable — `git rm` would 404 the deployed page, so never untrack.
+				// rebuildable: `git rm` would 404 the deployed page, so never untrack.
 				// node_modules/bower_components are never web-served, so stay flagged.
 				servedAssetsExempt := prefix == "vendor/" || prefix == "dist/" || prefix == "build/"
 				if legitimateVendor[prefix] || underServedStaticRoot(key) ||
@@ -249,7 +249,7 @@ func checkVendoredDirTracked(ctx context.Context, root string, opts json.RawMess
 					Severity: SeverityWarning,
 					Title:    "Vendored directory tracked in git",
 					Message: fmt.Sprintf(
-						"%s is tracked. %s is meant to rebuild from a manifest — committing it bloats the repo and produces merge conflicts. Add %s to .gitignore and remove with `git rm -r --cached %s`.",
+						"%s is tracked. %s is meant to rebuild from a manifest: committing it bloats the repo and produces merge conflicts. Add %s to .gitignore and remove with `git rm -r --cached %s`.",
 						key, strings.TrimSuffix(prefix, "/"), strings.TrimSuffix(prefix, "/"), key,
 					),
 					FilePath: key,
@@ -290,7 +290,7 @@ func buildLegitimateVendorSet(root string) map[string]bool {
 }
 
 // anyMarkerPresent reports whether any marker filename exists at the repo root
-// or in the directory that contains the matched vendored dir — so a monorepo
+// or in the directory that contains the matched vendored dir, so a monorepo
 // crate's crates/foo/target is corroborated by crates/foo/Cargo.toml as well as
 // a root-level marker.
 func anyMarkerPresent(root, key string, markers []string) bool {
@@ -310,7 +310,7 @@ func anyMarkerPresent(root, key string, markers []string) bool {
 
 // servedStaticRoots are web roots whose contents are served as-is. A vendored
 // directory under one of these (e.g. ui/public/vendor) holds hand-committed
-// third-party assets that nothing rebuilds — removing it from git would break
+// third-party assets that nothing rebuilds: removing it from git would break
 // the site. That is the opposite of package-manager vendoring or build outputs,
 // so such directories must NOT be flagged for untracking.
 var servedStaticRoots = map[string]bool{
@@ -331,7 +331,7 @@ func underServedStaticRoot(key string) bool {
 
 // servedWebAssetExts are extensions a browser fetches directly. A vendor/ dir
 // holding these is hand-committed third-party web assets (self-hosted fonts /
-// CSS / JS to remove third-party egress) that NOTHING rebuilds — `git rm` would
+// CSS / JS to remove third-party egress) that NOTHING rebuilds: `git rm` would
 // 404 the deployed site. That is the inverse of a package-manager vendor dir, so
 // it must not be flagged for untracking.
 var servedWebAssetExts = map[string]bool{
@@ -403,7 +403,7 @@ var ideArtifactDirPrefixes = []string{
 
 // sharedVscodeBasenames are the .vscode/ files that VS Code itself defines as
 // project-level and shareable. The canonical GitHub `VisualStudioCode.gitignore`
-// ignores `.vscode/*` and then explicitly un-ignores exactly these — committing
+// ignores `.vscode/*` and then explicitly un-ignores exactly these: committing
 // them is the documented convention (agreed debug configs, recommended
 // extensions, shared tasks), not an accident. Flagging them told users to
 // delete files their editor expects the repo to carry.
@@ -501,8 +501,8 @@ func matchesAnySuffix(s string, suffixes []string) bool {
 //
 // Filenames with whitespace or non-ASCII characters are technically valid
 // but break naive shell pipelines, archive tools, and CI scripts that
-// don't quote properly. Severity info — sometimes it's intentional (docs,
-// localised assets) — but always worth surfacing.
+// don't quote properly. Severity info: sometimes it's intentional (docs,
+// localised assets), but always worth surfacing.
 
 func checkFilenameQuality(ctx context.Context, root string, opts json.RawMessage) ([]Finding, error) {
 	if skip, stop := requireGitRepo(root, "filename_quality",
@@ -545,7 +545,7 @@ func checkFilenameQuality(ctx context.Context, root string, opts json.RawMessage
 
 // isBidiControl reports whether r is a Unicode bidirectional formatting
 // character. These reorder how text is DISPLAYED without changing its bytes,
-// so a file name can render as something other than what it is — the
+// so a file name can render as something other than what it is: the
 // "Trojan Source" class (CVE-2021-42574) applied to paths.
 func isBidiControl(r rune) bool {
 	switch r {
@@ -579,8 +579,8 @@ func isInvisible(r rune) bool {
 // A blanket "non-ASCII" rule used to live here and was removed: it accounted
 // for 82% of this gate's output across a 220-repository sweep, and every hit
 // was a correctly-spelled word in the project's own language
-// (`it_esperto_di_sostenibilità_….txt`). The gate's stated harm — shell
-// pipelines that don't quote argv — follows from WHITESPACE, not from an
+// (`it_esperto_di_sostenibilità_….txt`). The gate's stated harm: shell
+// pipelines that don't quote argv: follows from WHITESPACE, not from an
 // accent; `à` word-splits exactly as `a` does. Flagging a project for writing
 // its own language is not a defect report.
 //
@@ -654,7 +654,7 @@ func checkNvmrcMissing(_ context.Context, root string, _ json.RawMessage) ([]Fin
 }
 
 // pkgNodeVersionDeclared returns true when package.json at pkgPath
-// carries an engines.node constraint or a volta.node pin — either is a
+// carries an engines.node constraint or a volta.node pin: either is a
 // sufficient, standards-compliant alternative to .nvmrc / .node-version.
 func pkgNodeVersionDeclared(pkgPath string) bool {
 	data, err := os.ReadFile(pkgPath)

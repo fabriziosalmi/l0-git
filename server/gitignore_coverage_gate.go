@@ -14,7 +14,7 @@ import (
 // table is fixed, the .gitignore parsing is line-by-line, no heuristics.
 //
 // Patterns we expect are normalised so all the equivalent ways of writing
-// them in .gitignore — `node_modules`, `node_modules/`, `/node_modules` —
+// them in .gitignore: `node_modules`, `node_modules/`, `/node_modules`,
 // are treated as equivalent coverage.
 
 type stackRequirement struct {
@@ -58,7 +58,7 @@ var stackRequirements = []stackRequirement{
 	},
 }
 
-// universalPatterns are added unconditionally — these are universally
+// universalPatterns are added unconditionally: these are universally
 // noise regardless of stack.
 var universalPatterns = []string{
 	".DS_Store",
@@ -78,7 +78,7 @@ func checkGitignoreCoverage(_ context.Context, root string, opts json.RawMessage
 	}
 
 	required := []stackRequirement{}
-	// Apply universals only if we have *anything* tracked — otherwise
+	// Apply universals only if we have *anything* tracked, otherwise
 	// it's an empty repo where the noise hasn't materialised yet.
 	if hasAnyMarker(root) {
 		required = append(required, stackRequirement{
@@ -99,7 +99,7 @@ func checkGitignoreCoverage(_ context.Context, root string, opts json.RawMessage
 		return nil, nil
 	}
 
-	// Read .gitignore (missing is its own gate — gitignore_present).
+	// Read .gitignore (missing is its own gate: gitignore_present).
 	covered, err := readGitignorePatterns(root)
 	if err != nil {
 		return nil, nil
@@ -156,7 +156,7 @@ func hasAnyMarker(root string) bool {
 
 // readGitignorePatterns parses .gitignore at the project root and
 // returns the set of normalised patterns it covers. Negation lines (!) and
-// directory-internal .gitignores are ignored — this gate is about the
+// directory-internal .gitignores are ignored: this gate is about the
 // repo's top-level coverage.
 func readGitignorePatterns(root string) (map[string]bool, error) {
 	data, err := os.ReadFile(filepath.Join(root, ".gitignore"))
@@ -175,7 +175,7 @@ func readGitignorePatterns(root string) (map[string]bool, error) {
 }
 
 // coveredBy reports whether `want` is already covered by an existing .gitignore
-// pattern — exact match OR a glob that matches it (e.g. `*.DS_Store` already
+// pattern: exact match OR a glob that matches it (e.g. `*.DS_Store` already
 // covers `.DS_Store`, `*.log` does not cover `.DS_Store`). Without the glob
 // check the gate would propose a redundant entry that adds nothing.
 func coveredBy(covered map[string]bool, want string) bool {
@@ -200,7 +200,7 @@ func coveredBy(covered map[string]bool, want string) bool {
 // globCovers reports whether a .gitignore glob pat matches name. Go's
 // filepath.Match has no recursive `**`, so a `**/`-anchored pattern (the
 // canonical recursive form, e.g. `**/__pycache__/`) is also tested with the
-// `**/` prefix stripped — otherwise the gate proposes a redundant entry the
+// `**/` prefix stripped, otherwise the gate proposes a redundant entry the
 // user already has.
 func globCovers(pat, name string) bool {
 	if ok, _ := filepath.Match(pat, name); ok {

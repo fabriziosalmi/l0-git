@@ -18,8 +18,8 @@ import (
 // -----------------------------------------------------------------------
 
 // Inline SVG path data was, by itself, 54% of every finding produced across
-// the corpus (15,402 of 28,531). SVG packs decimals — `1.08.58 1.23.82.72`
-// is five numbers — so a GitHub icon embedded in a page reports as five
+// the corpus (15,402 of 28,531). SVG packs decimals: `1.08.58 1.23.82.72`
+// is five numbers, so a GitHub icon embedded in a page reports as five
 // hardcoded public IPv4 addresses, once per page.
 func TestNetworkScan_SvgPathDataIsNotAnAddress(t *testing.T) {
 	const githubIcon = `<a href="/x"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">` +
@@ -34,7 +34,7 @@ func TestNetworkScan_SvgPathDataIsNotAnAddress(t *testing.T) {
 	}
 }
 
-// A standalone .svg made only of geometry produces nothing — not because the
+// A standalone .svg made only of geometry produces nothing, not because the
 // file is skipped (it is not; see TestNetworkScan_SvgKeepsNonGeometryContent)
 // but because every coordinate attribute is blanked before matching.
 func TestNetworkScan_SvgGeometryOnlyIsSilent(t *testing.T) {
@@ -51,7 +51,7 @@ func TestNetworkScan_SvgGeometryOnlyIsSilent(t *testing.T) {
 }
 
 // A four-component version is byte-identical to a dotted quad. Without
-// context these all reported as hardcoded public addresses — the User-Agent
+// context these all reported as hardcoded public addresses: the User-Agent
 // case (`Chrome/120.0.0.0`) appears in almost every scraper ever written.
 func TestNetworkScan_VersionLiteralsAreNotAddresses(t *testing.T) {
 	cases := map[string]string{
@@ -62,7 +62,7 @@ func TestNetworkScan_VersionLiteralsAreNotAddresses(t *testing.T) {
 		// NB: no `@1.2.3.4` row. An npm spec and `user@host` are
 		// indistinguishable, and the bare `@` rule was removed because it
 		// silenced `ssh root@192.168.0.136`. A row asserting silence here
-		// would only pass by accident — which is exactly how it read before.
+		// would only pass by accident, which is exactly how it read before.
 		// Prose versions without a `:`/`=` ("# build 4.18.2.1") are likewise
 		// out of scope: widening the rule to reach them brings the `@` false
 		// negative straight back.
@@ -126,7 +126,7 @@ func TestNetworkScan_ResolversAndPlaceholdersAreInfo(t *testing.T) {
 				t.Fatal(err)
 			}
 			// Assert the finding EXISTS at info. "no warning" alone is also
-			// satisfied by a finding that was dropped outright — which is how
+			// satisfied by a finding that was dropped outright, which is how
 			// a category routed into the suppressed `doc-range` bucket got
 			// past review. The classification is the point, not silence.
 			if len(fs) != 1 {
@@ -139,7 +139,7 @@ func TestNetworkScan_ResolversAndPlaceholdersAreInfo(t *testing.T) {
 	}
 }
 
-// RFC-designated documentation ranges stay suppressed outright — they are
+// RFC-designated documentation ranges stay suppressed outright: they are
 // reserved for the purpose, so there is nothing to tell the reader.
 // Consecutive-octet placeholders are NOT the same thing: those ranges are
 // really allocated, so they are reported at info instead of dropped.
@@ -403,7 +403,7 @@ func TestSecretsScan_PemHeaderInsideStringLiteral(t *testing.T) {
 	}
 }
 
-// A real key file must still fire — the literal check must not swallow it.
+// A real key file must still fire: the literal check must not swallow it.
 func TestSecretsScan_RealPemFileStillFires(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
 		"ssl/server.key": "-----BEGIN PRIVATE KEY-----\nMIIEowIBAAKCAQEA\n-----END PRIVATE KEY-----\n",
@@ -481,7 +481,7 @@ func TestFixturePath_CamelCaseTestDirectories(t *testing.T) {
 // -----------------------------------------------------------------------
 
 // The canonical VisualStudioCode.gitignore ignores `.vscode/*` and then
-// explicitly un-ignores these — committing them is the documented convention.
+// explicitly un-ignores these: committing them is the documented convention.
 func TestIdeArtifact_SharedVscodeConfigAllowed(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
 		".vscode/settings.json":    "{}",
@@ -507,7 +507,7 @@ func TestIdeArtifact_SharedVscodeConfigAllowed(t *testing.T) {
 
 // Tailscale hands out RFC 6598 shared address space (100.64.0.0/10). A
 // service URL on the tailnet is unreachable from the public internet, so
-// cleartext there carries the same exposure as loopback — which the gate
+// cleartext there carries the same exposure as loopback, which the gate
 // already exempts.
 func TestConnectionStrings_TailnetHostExempt(t *testing.T) {
 	exempt := []string{
@@ -568,7 +568,7 @@ func TestContentGates_SkipCacheDirs(t *testing.T) {
 	}
 }
 
-// Documentation quotes an EXCERPT of a JSON document — the members without
+// Documentation quotes an EXCERPT of a JSON document: the members without
 // their braces. Wrapping and reparsing is exact, not a heuristic.
 func TestMarkdown_JsonFragmentBlockAccepted(t *testing.T) {
 	fragments := []string{
@@ -601,7 +601,7 @@ func TestMarkdown_YamlDuplicateKeyBlockAccepted(t *testing.T) {
 }
 
 // Minified bundles carry the addresses of whatever library was bundled.
-// secrets_scan still reads them — a build-injected key lives nowhere else.
+// secrets_scan still reads them: a build-injected key lives nowhere else.
 func TestContentGates_SkipMinifiedBundlesButNotSecrets(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
 		"static/js/jspdf.umd.min.js": "var u='http://json5.org/';var k='AKIA1A2B3C4D5E6F7G8H';\n",
@@ -961,7 +961,7 @@ func TestSkipRules_DoNotSwallowFirstPartySource(t *testing.T) {
 }
 
 // A strong password contains `$`, `^`, `+`, `*`, `?` constantly. The
-// regex-syntax check must recognise a detection rule without silencing one —
+// regex-syntax check must recognise a detection rule without silencing one,
 // a suppressed credential is the leak this gate exists to catch.
 func TestConnectionStrings_RegexSyntaxVsStrongPassword(t *testing.T) {
 	rules := []string{`(\S+:)?\S+@`, `[^:]+`, `[a-zA-Z0-9_\-]+`, `mongodb|postgres`}
@@ -990,7 +990,7 @@ func TestConnectionStrings_RegexSyntaxVsStrongPassword(t *testing.T) {
 
 // A tool directory that mixes a hand-written config with a third-party cache
 // must not be skipped wholesale. `.cargo/config.toml` holds registry and
-// mirror URLs — and sometimes credentials — and is authored, not installed.
+// mirror URLs, and sometimes credentials, and is authored, not installed.
 func TestDependencyPath_ToolDirsWithFirstPartyConfig(t *testing.T) {
 	mustScan := []string{
 		".cargo/config.toml",
@@ -1024,7 +1024,7 @@ func TestDependencyPath_ToolDirsWithFirstPartyConfig(t *testing.T) {
 // also accepts a public hostname that merely starts with the same digits.
 func TestConnectionStrings_HostRangesRequireAnIPLiteral(t *testing.T) {
 	mustFire := []string{
-		// NB: not `10.example.com` — that is exempt for a different and valid
+		// NB: not `10.example.com`: that is exempt for a different and valid
 		// reason (RFC 2606 reserves example.com), which would make the row
 		// pass without testing anything.
 		"http://10.acme.io/api",
@@ -1049,7 +1049,7 @@ func TestConnectionStrings_HostRangesRequireAnIPLiteral(t *testing.T) {
 }
 
 // A placeholder prefix needs a token boundary. Without one, any password
-// starting with "my" is discarded — and that is a real credential leaking.
+// starting with "my" is discarded, and that is a real credential leaking.
 func TestConnectionStrings_PlaceholderPrefixNeedsABoundary(t *testing.T) {
 	mustFire := []string{
 		"postgres://svc:mySecretValue@db.acme.com:5432/app",
@@ -1126,7 +1126,7 @@ func TestSecretsScan_KeyMaterialOutranksSourceLiteral(t *testing.T) {
 				t.Fatal(err)
 			}
 			if !findingsContainPattern(fs, "private_key_header") {
-				t.Errorf("key material present — must fire; got: %+v", fs)
+				t.Errorf("key material present: must fire; got: %+v", fs)
 			}
 		})
 	}
@@ -1179,7 +1179,7 @@ func TestSecretsScan_PemBodyIsNotAnyLongIdentifier(t *testing.T) {
 
 // The dependency / generated / binary skips must NOT reach secrets_scan.
 // The first draft put them in the shared base helper on the reasoning that
-// vendored_dir_tracked already reports the tree — but a legitimate Go
+// vendored_dir_tracked already reports the tree, but a legitimate Go
 // `vendor/` (go.mod + vendor/modules.txt) is exempt from that gate, so a
 // credential committed there would have produced no finding at all.
 func TestSecretsScan_StillReadsVendoredAndGeneratedTrees(t *testing.T) {

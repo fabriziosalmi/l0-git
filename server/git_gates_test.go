@@ -64,8 +64,8 @@ func TestMergeConflictMarkers_DetectsAllThreeMarkerKinds(t *testing.T) {
 // chars, prose) must NOT trigger.
 func TestMergeConflictMarkers_NoFalsePositives(t *testing.T) {
 	body := strings.Join([]string{
-		"<<<< three less-than-only",    // 4 < — too short
-		"<<<<<<<<<X — eight, no space", // 9 with no space → fail
+		"<<<< three less-than-only",   // 4 <: too short
+		"<<<<<<<<<X: eight, no space", // 9 with no space → fail
 		"normal text",
 		"======= three equals separator", // separator alone (we don't trigger)
 		"some <<<<<<< inline doesn't count because it's not at column 0",
@@ -94,11 +94,11 @@ func TestMergeConflictMarkers_NotGitRepo(t *testing.T) {
 func TestLargeFileTracked_TripsAtThreshold(t *testing.T) {
 	root := t.TempDir()
 	gitInit(t, root)
-	// 100 KiB file — well under default 5 MiB.
+	// 100 KiB file: well under default 5 MiB.
 	if err := os.WriteFile(filepath.Join(root, "small.bin"), make([]byte, 100*1024), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// 7 MiB file — over the default threshold.
+	// 7 MiB file: over the default threshold.
 	if err := os.WriteFile(filepath.Join(root, "big.bin"), make([]byte, 7*1024*1024), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestLargeFileTracked_TripsAtThreshold(t *testing.T) {
 }
 
 // The config knob lowers the threshold so a normally-fine file becomes a
-// finding — confirms gate_options plumbing.
+// finding: confirms gate_options plumbing.
 func TestLargeFileTracked_RespectsCustomThreshold(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
 		"medium.bin": strings.Repeat("a", 200*1024), // 200 KiB
@@ -134,7 +134,7 @@ func TestLargeFileTracked_RespectsCustomThreshold(t *testing.T) {
 		t.Fatalf("expected zero findings at 1 MiB threshold, got: %+v", fs)
 	}
 
-	// Now drop the threshold below the file size — 1 MiB is still 1 MiB
+	// Now drop the threshold below the file size: 1 MiB is still 1 MiB
 	// because we accept threshold_mb >= 1 only. Build a 2 MiB file and
 	// re-run with threshold_mb=1 to confirm the path fires.
 	root2 := initRepoWithFiles(t, map[string]string{

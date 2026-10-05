@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/release.sh — one-command release flow for l0-git.
+# scripts/release.sh: one-command release flow for l0-git.
 #
 # Usage:
 #   ./scripts/release.sh patch        # 0.1.13 -> 0.1.14
@@ -17,11 +17,11 @@
 #   2. Compute the new version from current `extension/package.json`
 #   3. Bump `extension/package.json` and `extension/package-lock.json`
 #   4. Rotate the CHANGELOG `[Unreleased]` section to `[X.Y.Z] - YYYY-MM-DD`
-#      (only if a non-empty `[Unreleased]` section exists — otherwise inserts a
+#      (only if a non-empty `[Unreleased]` section exists, otherwise inserts a
 #      bare new section so the format stays consistent)
 #   5. Commit `chore(release): vX.Y.Z`
 #   6. Create an annotated tag `vX.Y.Z`
-#   7. Push `main` and the tag — triggers `.github/workflows/release.yml`
+#   7. Push `main` and the tag: triggers `.github/workflows/release.yml`
 #      which publishes the GitHub Release with cross-arch binaries + .vsix.
 #
 # Designed to be safe: every destructive step (commit, tag, push) is gated by a
@@ -98,14 +98,14 @@ current_branch="$(git rev-parse --abbrev-ref HEAD)"
 [ "$current_branch" = "main" ] || die "must be on 'main' (current: $current_branch)"
 
 if ! git diff --quiet || ! git diff --cached --quiet; then
-  die "working tree is dirty — commit or stash first"
+  die "working tree is dirty: commit or stash first"
 fi
 
 git fetch --tags origin >/dev/null 2>&1 || die "git fetch failed"
 
 local_sha="$(git rev-parse HEAD)"
 remote_sha="$(git rev-parse origin/main)"
-[ "$local_sha" = "$remote_sha" ] || die "local main and origin/main differ — pull/rebase first"
+[ "$local_sha" = "$remote_sha" ] || die "local main and origin/main differ: pull/rebase first"
 
 ok "on main, clean, in sync with origin"
 
@@ -134,7 +134,7 @@ case "$BUMP" in
 esac
 
 [[ "$NEW" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "invalid version: $NEW"
-[ "$NEW" != "$CURRENT" ] || die "new version equals current ($NEW) — nothing to do"
+[ "$NEW" != "$CURRENT" ] || die "new version equals current ($NEW): nothing to do"
 
 TAG="v$NEW"
 git rev-parse "$TAG" >/dev/null 2>&1 && die "tag $TAG already exists locally"
@@ -199,7 +199,7 @@ if grep -qE '^## \[Unreleased\]' CHANGELOG.md; then
       { print }
     ' CHANGELOG.md > CHANGELOG.md.tmp && mv CHANGELOG.md.tmp CHANGELOG.md"
   else
-    info "[Unreleased] is empty — inserting placeholder section for $NEW"
+    info "[Unreleased] is empty: inserting placeholder section for $NEW"
     run "awk -v new=\"$NEW\" -v today=\"$TODAY\" '
       /^## \[Unreleased\]/ {
         print
@@ -208,7 +208,7 @@ if grep -qE '^## \[Unreleased\]' CHANGELOG.md; then
         print \"\"
         print \"### Changed\"
         print \"\"
-        print \"- Release \" new \" (no notes — fill me in)\"
+        print \"- Release \" new \" (no notes: fill me in)\"
         seen=1
         next
       }
@@ -216,7 +216,7 @@ if grep -qE '^## \[Unreleased\]' CHANGELOG.md; then
     ' CHANGELOG.md > CHANGELOG.md.tmp && mv CHANGELOG.md.tmp CHANGELOG.md"
   fi
 else
-  warn "CHANGELOG.md has no [Unreleased] section — skipping rotation"
+  warn "CHANGELOG.md has no [Unreleased] section: skipping rotation"
 fi
 
 # ── 3. commit ────────────────────────────────────────────────────────────────

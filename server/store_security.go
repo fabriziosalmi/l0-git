@@ -17,7 +17,7 @@ const (
 )
 
 // tightenMode removes group and other access from path. It only ever REMOVES
-// bits — a 0444 file becomes 0400, never 0600 — and it does not follow a
+// bits, a 0444 file becomes 0400, never 0600, and it does not follow a
 // symlink: a `~/.l0-git` that links to a shared directory must not have the
 // shared directory's mode changed. There are no POSIX modes to tighten on
 // Windows, where the store inherits the ACL of its directory.
@@ -94,15 +94,15 @@ func migrateStore(db *sql.DB) error {
 // redactSecrets, the file is rebuilt, and only then is the version bumped.
 //
 // Until this version connection_strings stored the matched URL verbatim, so a
-// store that has been used for a while holds real passwords — including in
+// store that has been used for a while holds real passwords: including in
 // rows already marked resolved, long after the credential left the repository.
 func scrubWholeStore(db *sql.DB) error {
 	if _, err := rewriteMessages(db, 0); err != nil {
 		return fmt.Errorf("scrub stored credentials: %w", err)
 	}
 	// Rewriting the rows is not enough. The previous text of each one is still
-	// in the file — in pages freed when rows were deleted or replaced, and in
-	// the earlier versions an upsert leaves behind — and secure_delete only
+	// in the file: in pages freed when rows were deleted or replaced, and in
+	// the earlier versions an upsert leaves behind, and secure_delete only
 	// protects what is freed from now on. A measured run on a real 39 MB store
 	// left 9 of 47 distinctive passwords readable after the UPDATEs alone.
 	// VACUUM rebuilds the whole file, so nothing old survives it.
@@ -245,7 +245,7 @@ func checkpointTruncate(db *sql.DB) bool {
 }
 
 // checkpointWithRetry tries a few times, briefly. The store's normal busy
-// timeout is 15 s — right for a write that has to wait its turn, wrong here:
+// timeout is 15 s: right for a write that has to wait its turn, wrong here:
 // a checkpoint blocked by a long-lived reader waits the whole timeout before
 // giving up, and five of those would freeze the open for over a minute. The
 // pool holds one connection, so the pragma applies to the calls below and is

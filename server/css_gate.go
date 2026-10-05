@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// css_lint covers a deliberately tiny set of "objective crimes" — patterns
+// css_lint covers a deliberately tiny set of "objective crimes": patterns
 // that have no legitimate use on the modern web and are recognisable
 // without a real CSS AST. We tokenize lazily by tracking selector blocks
 // (the text between balanced `{` `}` braces) and which selector applies.
@@ -84,7 +84,7 @@ type cssBlock struct {
 
 // extractCssBlocks tokenizes the source into top-level rules, line-tracking
 // throughout. Nested rules (SCSS/LESS) are flattened to their outer
-// selector — good enough for the rules we run.
+// selector: good enough for the rules we run.
 func extractCssBlocks(src string) []cssBlock {
 	src = stripCssComments(src)
 	out := []cssBlock{}
@@ -205,7 +205,7 @@ func evaluateCssFile(rel, src string, disabled map[string]bool) []Finding {
 		}
 
 		// justified_text: text-align: justify on any selector.
-		// @media print is explicitly exempt — justified text is standard
+		// @media print is explicitly exempt: justified text is standard
 		// typographic practice in print layouts where hyphenation is
 		// controlled by the printer/renderer. Sass @mixin/@include/@function
 		// and %placeholder definitions are also exempt: their final applied
@@ -262,7 +262,7 @@ func selectorContains(selector, needle string) bool {
 }
 
 // isPrintMediaQuery returns true when the selector is (or contains) a
-// @media print block — justified text is conventional in print contexts.
+// @media print block: justified text is conventional in print contexts.
 func isPrintMediaQuery(selector string) bool {
 	s := strings.ToLower(strings.TrimSpace(selector))
 	return strings.Contains(s, "@media") && strings.Contains(s, "print")
@@ -279,7 +279,7 @@ func isSassFragmentSelector(selector string) bool {
 }
 
 // bodyTextElements are element selectors that represent flowing document
-// body text — used by selectorIsBodyText.
+// body text: used by selectorIsBodyText.
 var bodyTextElements = map[string]bool{
 	"body": true, "html": true, "p": true, "article": true, "main": true,
 }

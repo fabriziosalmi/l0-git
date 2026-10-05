@@ -382,9 +382,9 @@ var htmlRules = map[string]htmlRule{
 	// vulnerability. Every evergreen browser has implied rel="noopener" for
 	// target="_blank" since 2021 (Chrome 88, Firefox 79, Safari 12.1,
 	// WHATWG HTML #4078), so reverse tabnabbing is not reachable and the
-	// old wording asserted a hazard that does not exist. What is left —
+	// old wording asserted a hazard that does not exist. What is left,
 	// suppressing the Referer header with noreferrer, and supporting
-	// pre-2021 browsers — is a preference, so the rule reports rather
+	// pre-2021 browsers: is a preference, so the rule reports rather
 	// than warns.
 	"target_blank_no_rel": {
 		id:       "target_blank_no_rel",
@@ -402,7 +402,7 @@ var htmlRules = map[string]htmlRule{
 		id:       "placeholder_as_label",
 		severity: SeverityWarning,
 		title:    "Input uses placeholder as a label",
-		advice:   "Placeholders disappear on focus and have poor contrast — they're not labels. Add a <label for=…> or aria-label.",
+		advice:   "Placeholders disappear on focus and have poor contrast: they're not labels. Add a <label for=…> or aria-label.",
 	},
 	"reset_button": {
 		id:       "reset_button",

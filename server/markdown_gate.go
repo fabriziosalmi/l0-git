@@ -152,7 +152,7 @@ func evaluateMarkdownFile(rel, root string, source []byte, disabled map[string]b
 			if lang == "" {
 				// CHANGELOG / HISTORY / RELEASES routinely paste raw
 				// output, log excerpts, and ad-hoc snippets where a
-				// language tag isn't worth the churn — and old entries
+				// language tag isn't worth the churn, and old entries
 				// rot the moment anyone retags them. Suppress this one
 				// rule there; structural rules (broken links, payload
 				// parse) still run.
@@ -312,7 +312,7 @@ func splitPathAndAnchor(dest string) (string, string) {
 // those two fallbacks before declaring the link broken.
 func localTargetExists(rel, root, dest string) bool {
 	if dest == "" {
-		// Pure anchor or empty link — handled elsewhere.
+		// Pure anchor or empty link: handled elsewhere.
 		return true
 	}
 	decoded, err := url.PathUnescape(dest)
@@ -387,7 +387,7 @@ var githubRepoPages = map[string]bool{
 // linking a repository's own page from a file in it: a README renders at
 // /owner/repo/blob/<branch>/<dir>/, so `../../issues` from the root lands on
 // /owner/repo/issues. The number of `..` must be exactly the file's directory
-// depth plus two — from docs/guide/ it takes four — and what follows must be one
+// depth plus two, from docs/guide/ it takes four, and what follows must be one
 // of githubRepoPages, so a wrong depth or any other target stays broken.
 func isGitHubRepoPageLink(rel, dest string) bool {
 	dir := filepath.ToSlash(filepath.Dir(rel))
@@ -507,7 +507,7 @@ func addHTMLAnchors(out map[string]bool, html []byte) {
 // html-pipeline TableOfContentsFilter): lower-case, drop every character that is
 // not a Unicode word character / hyphen / space, then turn each space into a
 // single hyphen. Crucially it does NOT collapse runs of hyphens, does NOT trim
-// leading/trailing hyphens, and preserves Unicode letters — the three ways the
+// leading/trailing hyphens, and preserves Unicode letters: the three ways the
 // previous ASCII approximation diverged from GitHub and produced false anchors.
 //
 //	"Node.js & npm"        -> "nodejs--npm"      (punctuation dropped, double dash kept)
@@ -544,7 +544,7 @@ func extractText(n ast.Node, source []byte) string {
 		case *ast.String:
 			b.Write(c.Value)
 		case *ast.CodeSpan:
-			// Inline code inside a heading like `## The `cfg` file` — treat
+			// Inline code inside a heading like `## The `cfg` file`: treat
 			// as part of the slug text. Emit the code text here and SKIP the
 			// children: otherwise ast.Walk descends into the same Text nodes
 			// and counts the code text twice, corrupting every slug of a
@@ -584,8 +584,8 @@ func computeLineStarts(source []byte) []int {
 //
 // Inline nodes (links, images) carry no position of their own in goldmark, so
 // a naive walk to the enclosing block reports the line the BLOCK starts on.
-// For a multi-line paragraph — or a GFM table, which goldmark parses as one
-// paragraph when the table extension is off — that puts every link in the
+// For a multi-line paragraph, or a GFM table, which goldmark parses as one
+// paragraph when the table extension is off: that puts every link in the
 // block on the same wrong line: a README with a 30-row link table reported
 // thirty findings all pointing at the table header. Descending to the first
 // positioned descendant fixes that, and falls back to the block start only
@@ -635,7 +635,7 @@ func fencedBlockBody(b *ast.FencedCodeBlock, source []byte) string {
 
 // validatePayload returns "" when a code block parses cleanly under its
 // declared language, or a short error string when it doesn't. Only strict
-// JSON and YAML are validated — JSON supersets (jsonc, json5, hjson) and
+// JSON and YAML are validated: JSON supersets (jsonc, json5, hjson) and
 // line-delimited variants (ndjson, jsonl) are passed through unchanged
 // because the Go stdlib parser rejects their legal syntax.
 func validatePayload(lang, body string) string {
@@ -644,7 +644,7 @@ func validatePayload(lang, body string) string {
 		// Docs routinely abbreviate a JSON example with an ellipsis
 		// ("...": more fields here) or annotate it with // and /* */
 		// comments. Both are illegal in strict JSON but are universal
-		// "this is illustrative, not literal" markers — validating them as
+		// "this is illustrative, not literal" markers: validating them as
 		// real JSON is a guaranteed false positive. Treat such a block as a
 		// documentation snippet and pass it through.
 		if isIllustrativeJSON(body) {
@@ -653,7 +653,7 @@ func validatePayload(lang, body string) string {
 		var v any
 		if err := json.Unmarshal([]byte(body), &v); err != nil {
 			// Documentation routinely quotes an EXCERPT of a larger
-			// document — the members of an object without its braces:
+			// document: the members of an object without its braces:
 			//
 			//	```json
 			//	"meta": { "objective": "O1", "split": "test" }
@@ -664,9 +664,9 @@ func validatePayload(lang, body string) string {
 			if isJSONFragment(body) {
 				return ""
 			}
-			// A run of JSON values one after another — `{"detail": "a"}` then
+			// A run of JSON values one after another: `{"detail": "a"}` then
 			// `{"detail": "b"}`, how a troubleshooting page lists the
-			// alternative responses — is a stream, not one document.
+			// alternative responses: is a stream, not one document.
 			if isJSONStream(body) {
 				return ""
 			}
@@ -681,7 +681,7 @@ func validatePayload(lang, body string) string {
 			}
 			return err.Error()
 		}
-	// JSON supersets: pass through — stdlib json.Unmarshal rejects
+	// JSON supersets: pass through: stdlib json.Unmarshal rejects
 	// comments, trailing commas, unquoted keys, etc.
 	case "jsonc", "json5", "hjson", "json with comments":
 		return ""
@@ -722,11 +722,11 @@ func validatePayload(lang, body string) string {
 func isIllustrativeJSON(body string) bool {
 	// Ellipsis: "more fields omitted" shorthand. A literal "..." inside a
 	// string value is rare and, if the rest is valid, the block parses anyway
-	// — so this only ever suppresses a genuine doc abbreviation.
+	//, so this only ever suppresses a genuine doc abbreviation.
 	if strings.Contains(body, "...") {
 		return true
 	}
-	// Comment markers, but only as a line lead — `//` and `/*` appear inside
+	// Comment markers, but only as a line lead: `//` and `/*` appear inside
 	// legitimate string values (URLs like http://… , glob patterns), so an
 	// anywhere-match would mask real parse errors.
 	for _, line := range strings.Split(body, "\n") {
@@ -748,7 +748,7 @@ func parseMarkdownOptions(opts json.RawMessage) markdownLintOptions {
 }
 
 // firstInlineOffset returns the source byte offset of the first positioned
-// descendant of an inline node — the link/image label text, which always sits
+// descendant of an inline node: the link/image label text, which always sits
 // on the same line as the opening bracket. Returns ok=false when the subtree
 // carries no text segment.
 func firstInlineOffset(n ast.Node) (int, bool) {
@@ -766,7 +766,7 @@ func firstInlineOffset(n ast.Node) (int, bool) {
 // isJSONFragment reports whether body is a well-formed excerpt of a JSON
 // document rather than a document: object members without their enclosing
 // braces, or array elements without their brackets. Both wrap-and-reparse
-// attempts are exact — a genuinely malformed block fails them too.
+// attempts are exact: a genuinely malformed block fails them too.
 func isJSONFragment(body string) bool {
 	trimmed := strings.TrimSpace(body)
 	if trimmed == "" {
@@ -781,7 +781,7 @@ func isJSONFragment(body string) bool {
 
 // isJSONStream reports whether body is two or more JSON values in a row.
 // Exact: every value must decode, so one broken value fails the whole block.
-// A single value is excluded — it would already have parsed on its own.
+// A single value is excluded: it would already have parsed on its own.
 func isJSONStream(body string) bool {
 	dec := json.NewDecoder(strings.NewReader(body))
 	n := 0
@@ -810,7 +810,7 @@ func isValuePosition(written string) bool {
 }
 
 // neutralizeJSONIllustrations removes `//` and `/* */` comments and replaces
-// `<placeholder>` tokens with null, both OUTSIDE string literals — `//` inside
+// `<placeholder>` tokens with null, both OUTSIDE string literals: `//` inside
 // "http://x" and `<` inside "<uuid>" are data, and are left alone. The bool
 // reports whether anything changed, so the caller can tell "illustrative" from
 // "just broken".
@@ -881,12 +881,12 @@ var counterExampleLabelRe = regexp.MustCompile(
 
 // counterExampleCommentRe matches a comment that labels the block as wrong:
 // `# Bad: Missing space after colon`. It is applied to the FIRST line of the
-// block only — that is where a label goes — because a comment in the middle of a
+// block only, that is where a label goes, because a comment in the middle of a
 // YAML block that happens to say `# Don't: expose 5432 publicly` or
 // `# Invalid: use 'image' not 'img'` is advice about the configuration, and
 // letting it excuse the whole block would hide a snippet that really is broken.
 var counterExampleCommentRe = regexp.MustCompile(
-	`(?i)^\s*(?:#|//|--|;)\s*(?:❌|✗|✘)?\s*(?:bad|wrong|incorrect|invalid)\b\s*[:\-–—]`)
+	`(?i)^\s*(?:#|//|--|;)\s*(?:❌|✗|✘)?\s*(?:bad|wrong|incorrect|invalid)\b\s*[:\-\x{2013}\x{2014}]`)
 
 // firstNonBlankLine returns the first line of s that is not blank.
 func firstNonBlankLine(s string) string {
@@ -915,7 +915,7 @@ func isLabelledCounterExample(body, previousLine string) bool {
 }
 
 // previousNonBlankLine returns the closest non-blank line above 1-based line k,
-// looking at most two lines back — so a label is "directly above" a block even
+// looking at most two lines back, so a label is "directly above" a block even
 // with one blank line between them, and no further ("" when there is none).
 func previousNonBlankLine(source []byte, lineStarts []int, k int) string {
 	for back := 1; back <= 2; back++ {

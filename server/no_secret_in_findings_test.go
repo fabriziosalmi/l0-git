@@ -9,7 +9,7 @@ import (
 )
 
 // Secrets the fixtures plant. None of them may appear anywhere in what a
-// finding hands out, in any of its fields — and neither may any alphanumeric
+// finding hands out, in any of its fields, and neither may any alphanumeric
 // fragment of one, because a redaction that masks the first half of a password
 // and leaves the rest is not a redaction.
 var plantedSecrets = []string{
@@ -28,7 +28,7 @@ func fixtureWithSecrets() map[string]string {
 		"db.conf":  "jdbc:sqlserver://db.acme.io;databaseName=app;password=V3cR9tL2hN8w;encrypt=true\n",
 		"sync.sh":  "ftp://deploy:Tk5sB1mW7eH4@files.acme.io/dump.tar\n",
 		// The gate reads the password up to the FIRST `@` (`Ab1`, three characters
-		// — not shorthand), so this one is reported; the redactor must mask up to
+		//, not shorthand), so this one is reported; the redactor must mask up to
 		// the LAST `@` or `xyzQw9Lm` stays behind.
 		"odd.txt":  "postgres://app:Ab1@xyzQw9Lm@db.prod.acme.io/app\n",
 		"notes.md": "token for CI: ghp_K8qM2xV9LpR4tZ7wYb3NcD6sFh1JgA5uE0xV\n",
@@ -90,7 +90,7 @@ func TestConnectionStrings_MessageNeverCarriesTheSecret(t *testing.T) {
 }
 
 // End to end: through RunChecks into the store, the JSON the CLI and MCP print,
-// and every column of every row. This is the contract — a finding says where a
+// and every column of every row. This is the contract: a finding says where a
 // secret is and never what it is, from any gate.
 func TestRunChecks_NoSecretReachesOutputOrStore(t *testing.T) {
 	root := initRepoWithFiles(t, fixtureWithSecrets())

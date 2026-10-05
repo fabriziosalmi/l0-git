@@ -40,7 +40,7 @@ export function stubFor(gateId: string, projectAbsPath: string): Stub | null {
 // licenseChoices is the curated set we offer when the user picks "Generate
 // stub LICENSE". Each value lists a permissive top tier first.
 export const licenseChoices: Array<{ label: string; description: string; spdx: string }> = [
-  { label: "MIT", description: "Permissive — most common for libraries.", spdx: "MIT" },
+  { label: "MIT", description: "Permissive: most common for libraries.", spdx: "MIT" },
   { label: "Apache-2.0", description: "Permissive with an explicit patent grant.", spdx: "Apache-2.0" },
   { label: "BSD-3-Clause", description: "Permissive, no patent grant.", spdx: "BSD-3-Clause" },
   { label: "GPL-3.0-or-later", description: "Strong copyleft.", spdx: "GPL-3.0-or-later" },
@@ -64,7 +64,7 @@ export function licenseStub(spdx: string, holder: string): Stub {
     case "Unlicense":
       return { relPath: "LICENSE", content: unlicense() };
     default:
-      // Fall back to MIT — every supported SPDX is enumerated above, so this
+      // Fall back to MIT: every supported SPDX is enumerated above, so this
       // path is unreachable in practice; we keep it defensive for forward
       // compatibility if a caller adds a value to licenseChoices but forgets
       // the switch arm.
@@ -248,7 +248,7 @@ function probotSettingsStub(): string {
 
 repository:
   # Optional: lock the repo's default settings as code. Uncomment to
-  # take ownership of these — otherwise the live values stay untouched.
+  # take ownership of these, otherwise the live values stay untouched.
   # name: my-repo
   # description: Short description.
   # has_issues: true
@@ -296,7 +296,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Set up your toolchain below — the commented examples are for Go.
+      # Set up your toolchain below: the commented examples are for Go.
       # - uses: actions/setup-go@v5
       #   with: { go-version: '1.23.x' }
       # - run: go test ./...

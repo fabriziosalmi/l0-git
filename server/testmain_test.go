@@ -12,7 +12,7 @@ import (
 // `~/.config/git/ignore` then decides what a fixture repository tracks:
 // `.DS_Store` is in nearly every macOS user's global ignore, so
 // TestIdeArtifactTracked_FlagsArtefacts failed on those machines and passed on
-// CI — a suite whose result depends on whose laptop runs it.
+// CI: a suite whose result depends on whose laptop runs it.
 //
 // Three things can reach a fixture from outside, and all three are cut:
 //   - the global and system configuration (GIT_CONFIG_GLOBAL needs git 2.32+,

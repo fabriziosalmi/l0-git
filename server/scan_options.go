@@ -24,7 +24,7 @@ type scanOptions struct {
 	// plus any path traversing test/, tests/, __tests__/, spec/,
 	// testdata/, fixtures/, __fixtures__/.
 	//
-	// Default true — test fixtures legitimately contain mock secrets,
+	// Default true: test fixtures legitimately contain mock secrets,
 	// fake IPs, and placeholder URLs. Set to false explicitly in
 	// .l0git.json gate_options to scan fixture files as well.
 	SkipDefaultFixturePaths *bool `json:"skip_default_fixture_paths,omitempty"`
@@ -41,7 +41,7 @@ type scanOptions struct {
 	// (network_scan: a .txt/other file whose lines are overwhelmingly bare
 	// IP/CIDR literals) and gate that on this same flag.
 	//
-	// Default true — scanning a 100k-row blocklist CSV for "public IPs"
+	// Default true: scanning a 100k-row blocklist CSV for "public IPs"
 	// is millions of findings against the file's reason to exist. Set
 	// to false in .l0git.json gate_options if you're treating data
 	// files as code (rare).
@@ -51,7 +51,7 @@ type scanOptions struct {
 	// files that look like local backups (bak/, backup/, backups/,
 	// archive/, archived/ directories, or .bak/.backup/.old/.orig
 	// extensions, or basenames ending in `-backup-YYYYMMDD-HHMMSS`).
-	// These are tagged-and-shelved snapshots of past code — every
+	// These are tagged-and-shelved snapshots of past code: every
 	// TODO, http://, or private key header inside them is a stale echo
 	// of something that exists in the live tree.
 	//
@@ -65,7 +65,7 @@ type scanOptions struct {
 	// a build (or a value already present in the scanned source): source
 	// maps (.map), dependency lockfiles (package-lock.json, go.sum,
 	// Cargo.lock, …), and generated code (.pb.go). Minified bundles
-	// (.min.js) are deliberately NOT included — build-time-injected
+	// (.min.js) are deliberately NOT included: build-time-injected
 	// frontend secrets live there and nowhere else.
 	//
 	// Default true. Set to false to scan generated files too.
@@ -76,8 +76,8 @@ type scanOptions struct {
 	// datasets/, corpus/, samples/, payloads/, wordlists/, …) carrying an
 	// ambiguous data extension (.json/.txt/.xml/.cm/.nl/.dat), PLUS list/log
 	// files anywhere in the tree (.log/.list/.lst and log dumps such as
-	// log.json). Inside a dataset dir those extensions are the payload — a
-	// JSON corpus of attack strings, a .txt blocklist, an nl2bash .cm dump —
+	// log.json). Inside a dataset dir those extensions are the payload: a
+	// JSON corpus of attack strings, a .txt blocklist, an nl2bash .cm dump,
 	// and a .log/.list is always payload, so every IP / URL / token inside is
 	// a self-evident FP. A code file in a dataset tree (.go/.py/.ts/…) is NOT
 	// skipped: the extension allowlist is deliberately data-only so a real
@@ -94,7 +94,7 @@ type scanOptions struct {
 	// third-party dependency trees installed by a package manager
 	// (node_modules/, vendor/, site-packages/, .venv/, Pods/, …). Nothing
 	// under those paths was authored here, so every TODO, http:// URL, mock
-	// credential, or IP literal inside is upstream's, not the user's — and
+	// credential, or IP literal inside is upstream's, not the user's, and
 	// the one actionable statement about the tree ("this shouldn't be
 	// committed") is already made once by vendored_dir_tracked.
 	//
@@ -108,7 +108,7 @@ type scanOptions struct {
 	// SkipDefaultGeneratedDirs controls whether content-scan gates skip
 	// unambiguous tool-output directories (.next/, .vitepress/, _site/,
 	// __pycache__/, htmlcov/, …). Findings there describe a build artefact
-	// that is regenerated on the next run, so fixing them is impossible —
+	// that is regenerated on the next run, so fixing them is impossible,
 	// the fix belongs in the source the tool consumed.
 	//
 	// Deliberately does NOT cover dist/, build/, out/ or target/: those
@@ -167,7 +167,7 @@ func skipEnabled(p *bool) bool {
 
 // shouldSkip combines pathExcluded with the optional default-fixture
 // skip. Used by every gate. Note: this does NOT honour
-// SkipDefaultDataFiles — metadata-only gates (vendored_dir_tracked,
+// SkipDefaultDataFiles: metadata-only gates (vendored_dir_tracked,
 // large_file_tracked, …) must still see data files. Content-scan gates
 // should call shouldSkipContent instead.
 func (s scanOptions) shouldSkip(rel string) bool {
@@ -184,7 +184,7 @@ func (s scanOptions) shouldSkip(rel string) bool {
 // default-backup-path skips. Used by gates that read file contents
 // and would otherwise drown in findings on tabular data files
 // (blocklists, fingerprint datasets) or local snapshot folders
-// (bak/, backup/, archive/ — stale echoes of the live tree).
+// (bak/, backup/, archive/: stale echoes of the live tree).
 func (s scanOptions) shouldSkipContent(rel string) bool {
 	if s.shouldSkipContentExceptDataDirs(rel) {
 		return true
@@ -202,7 +202,7 @@ func (s scanOptions) shouldSkipContent(rel string) bool {
 	// "vendored_dir_tracked already says the one actionable thing about the
 	// tree". That reasoning is wrong exactly where it matters: a legitimate
 	// Go `vendor/` (go.mod + vendor/modules.txt) is EXEMPT from that gate, so
-	// a credential committed there would have produced no finding at all —
+	// a credential committed there would have produced no finding at all,
 	// silently breaking the secrets gate's contract over tracked files.
 	// The noise these remove is address/URL/TODO noise, and only those gates
 	// need protecting from it.
@@ -213,7 +213,7 @@ func (s scanOptions) shouldSkipContent(rel string) bool {
 		return true
 	}
 	// Binary payloads are never source. isBinary (NUL byte in the first
-	// 8 KiB) misses formats with an ASCII header — PDFs above all — so the
+	// 8 KiB) misses formats with an ASCII header, PDFs above all, so the
 	// extension check runs first.
 	if isBinaryPath(rel) {
 		return true
@@ -242,7 +242,7 @@ func (s scanOptions) shouldSkipContentExceptDataDirs(rel string) bool {
 	return false
 }
 
-// generatedFileBasenames are dependency lockfiles — generated and updated by a
+// generatedFileBasenames are dependency lockfiles: generated and updated by a
 // package manager, never hand-edited. Any address / hash / URL inside is the
 // tool's bookkeeping, not an authored literal.
 var generatedFileBasenames = map[string]bool{
@@ -262,8 +262,8 @@ var generatedFileBasenames = map[string]bool{
 // versionPinLockfiles are lockfiles of package managers that were missing from
 // generatedFileBasenames. They are NOT added to it, because that list makes
 // EVERY content gate skip the file, and these files routinely record a git URL
-// verbatim — `Podfile.lock`, `Package.resolved`, `mix.lock` and `pubspec.lock`
-// keep the credentials of a private dependency — so secrets_scan and
+// verbatim: `Podfile.lock`, `Package.resolved`, `mix.lock` and `pubspec.lock`
+// keep the credentials of a private dependency, so secrets_scan and
 // connection_strings must keep reading them. What misled network_scan was the
 // version pins (`version = "1.2.0.2"` in a uv.lock, eleven times as a public
 // address), and that is the only gate that skips them. Exact names, lower case.
@@ -309,7 +309,7 @@ func isDefaultGeneratedFile(rel string) bool {
 }
 
 // pathExcluded returns true when rel matches any of the patterns. Match
-// errors (bad glob) are ignored — patterns silently miss rather than
+// errors (bad glob) are ignored: patterns silently miss rather than
 // fail the entire run.
 func pathExcluded(rel string, patterns []string) bool {
 	for _, p := range patterns {
@@ -382,7 +382,7 @@ var dataDirNames = map[string]bool{
 
 // dataDirExtensions are extensions that are ambiguous globally (a .json can
 // be config, a .txt can be docs) but are unmistakably dataset payload when
-// they live under a dataDirNames directory. Deliberately data-only — source
+// they live under a dataDirNames directory. Deliberately data-only: source
 // extensions (.go/.py/.ts/…) are absent so a real source file under data/ is
 // never silenced.
 var dataDirExtensions = map[string]bool{
@@ -397,7 +397,7 @@ var dataDirExtensions = map[string]bool{
 // listLogExtensions are list/log payload files whose contents are the payload
 // anywhere in the tree (not just under a dataset dir): a `.log` access log, a
 // `.list`/`.lst` block/allow list. Never source. Skipped by the noisy content
-// gates but — like the dataset-dir skip — NOT by secrets, since logs and lists
+// gates but, like the dataset-dir skip, NOT by secrets, since logs and lists
 // are a real credential-leak vector.
 var listLogExtensions = map[string]bool{
 	".log":  true,
@@ -511,7 +511,7 @@ var backupExtensions = map[string]bool{
 var backupTimestampedRe = regexp.MustCompile(`[-_ .]backup[-_]\d{8}([-_]\d{6})?`)
 
 // isDefaultBackupPath returns true for files that look like local
-// backups/snapshots — a directory component matches backupDirNames,
+// backups/snapshots: a directory component matches backupDirNames,
 // any directory component embeds a `backup-YYYYMMDD` timestamp, the
 // extension is one of backupExtensions, or the basename embeds a
 // `backup-YYYYMMDD` timestamp.
@@ -567,7 +567,7 @@ func isDefaultFixturePath(rel string) bool {
 func isCamelCaseTestDir(name string) bool {
 	// Deliberately no "Spec"/"Specs": Ruby's lower-case `spec/` is already an
 	// exact match above, and a CamelCase `OpenApiSpec/` is an API definition,
-	// not a test target — silencing it could hide a real credential.
+	// not a test target: silencing it could hide a real credential.
 	for _, suffix := range []string{"Tests", "Test"} {
 		if len(name) > len(suffix) && strings.HasSuffix(name, suffix) {
 			return true
@@ -605,7 +605,7 @@ var dependencyDirNames = map[string]bool{
 	".terraform":       true,
 	".pub-cache":       true,
 	// NOTE: CocoaPods' "Pods" is deliberately absent from this map and
-	// matched case-sensitively below — a lower-case `pods/` is a normal
+	// matched case-sensitively below: a lower-case `pods/` is a normal
 	// Kubernetes manifest directory, and skipping it would hide real
 	// findings in hand-written YAML.
 	"third_party": true,
@@ -615,8 +615,8 @@ var dependencyDirNames = map[string]bool{
 
 // dependencySubtrees covers tool directories that mix a first-party config
 // file with a third-party cache. `.cargo/config.toml` and `.bundle/config`
-// are hand-written — the first commonly holds registry and mirror URLs and can
-// hold credentials — so only the named cache subtrees below count as
+// are hand-written: the first commonly holds registry and mirror URLs and can
+// hold credentials, so only the named cache subtrees below count as
 // dependency code. Anything else under these directories is still scanned.
 var dependencySubtrees = map[string]map[string]bool{
 	".cargo":  {"registry": true, "git": true, "bin": true},
@@ -651,8 +651,8 @@ func isDependencyPath(rel string) bool {
 // generatedDirNames are directory names that, anywhere in a path, mark the
 // file as build/tool output rather than source. Every one of these is created
 // by a tool and is unambiguous: unlike `dist/`, `build/`, `out/` or `target/`
-// — which are routinely hand-authored content directories and are therefore
-// deliberately absent here — no project hand-writes a `.next/` or a
+// , which are routinely hand-authored content directories and are therefore
+// deliberately absent here: no project hand-writes a `.next/` or a
 // `__pycache__/`.
 var generatedDirNames = map[string]bool{
 	".next":              true,
@@ -716,18 +716,18 @@ var coverageSourceExts = map[string]bool{
 //
 // `htmlcov/` (coverage.py) was already skipped by name, but the JavaScript
 // equivalent was not, and the public-repo sweep found one committed vitest
-// report producing 288 html_lint findings from a single file — every line
+// report producing 288 html_lint findings from a single file: every line
 // number in the report is an anchor with no text.
 //
 // The directory name alone is not enough: `coverage/` is also an ordinary
 // first-party name (a product feature, a docs section, `src/coverage/`). The
-// double extension is what makes it unambiguous — nobody hand-writes
+// double extension is what makes it unambiguous: nobody hand-writes
 // `KeyboardPlugin.ts.html`. A report's own `index.html` is deliberately not
 // matched by this; it is one page, not hundreds.
 func isCoverageReportPage(rel string) bool {
 	// Everything below works on the slash form with package path, not
 	// filepath: filepath.Dir on Windows hands back backslashes, and splitting
-	// that on "/" found no `coverage` component at all — the skip was inert on
+	// that on "/" found no `coverage` component at all: the skip was inert on
 	// Windows, and only CI's Windows row noticed.
 	slash := filepath.ToSlash(rel)
 	base := strings.ToLower(path.Base(slash))
@@ -757,7 +757,7 @@ func isMinifiedBundle(rel string) bool {
 }
 
 // binaryFileExtensions are extensions whose payload is binary even when the
-// first 8 KiB happens to contain no NUL byte — the case isBinary misses. A
+// first 8 KiB happens to contain no NUL byte: the case isBinary misses. A
 // PDF in particular starts with an ASCII header and an uncompressed object
 // table, so a byte-scan of one yields "IPv4 addresses" and "http:// URLs"
 // lifted out of compressed streams and font tables.
@@ -806,7 +806,7 @@ var buildOutputSubPaths = [][2]string{
 // would merely restate what vendored_dir_tracked already says once about the
 // whole directory. `node_modules/typescript/lib/typescript.js is 8.7 MiB` and
 // `node_modules/didyoumean/package.json is mode 100755` are not separate
-// problems from "node_modules is tracked" — they are the same problem,
+// problems from "node_modules is tracked": they are the same problem,
 // itemised. Metadata gates use this so the actionable finding stays alone.
 func isSubsumedByVendoredFinding(rel string) bool {
 	if isDependencyPath(rel) || isGeneratedDirPath(rel) {

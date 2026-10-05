@@ -83,7 +83,7 @@ func TestValidateGateOptions_AcceptsValidConfig(t *testing.T) {
 	}
 }
 
-// Reported in a stable order — the caller joins these into one string, and map
+// Reported in a stable order: the caller joins these into one string, and map
 // iteration would reshuffle it between otherwise identical runs.
 func TestValidateGateOptions_DeterministicOrder(t *testing.T) {
 	raw := `{"gate_options":{"zzz_nope":{},"aaa_nope":{},"mmm_nope":{}}}`
@@ -114,7 +114,7 @@ func equalStrings(a, b []string) bool {
 }
 
 // A prototype that is not a struct pointer, or one that somehow permits
-// unknown fields, would make validation silently useless for that gate —
+// unknown fields, would make validation silently useless for that gate,
 // which is the exact failure being fixed, reintroduced one gate at a time.
 func TestGateOptions_EveryPrototypeRejectsUnknownFields(t *testing.T) {
 	for _, g := range gateRegistry() {
@@ -134,7 +134,7 @@ func TestGateOptions_EveryPrototypeRejectsUnknownFields(t *testing.T) {
 // The omission this guards against: a gate starts reading options but nobody
 // adds NewOptions, so its whole options block goes back to being validated by
 // nothing. A gate that truly ignores options must produce identical findings
-// whether or not options are passed — so if this fails, the gate reads them.
+// whether or not options are passed, so if this fails, the gate reads them.
 func TestGateOptions_GatesWithoutAPrototypeReallyIgnoreOptions(t *testing.T) {
 	root := initRepoWithCommit(t, map[string]string{
 		"README.md":         "# x\n\nTODO: something\n",
@@ -170,7 +170,7 @@ func TestGateOptions_GatesWithoutAPrototypeReallyIgnoreOptions(t *testing.T) {
 			// message or a path while the count stays put, and a count-only
 			// assertion would stay green while validation was being bypassed.
 			if a, b := fingerprint(withNil), fingerprint(withOpts); a != b {
-				t.Errorf("gate has no NewOptions but reacts to them — give it a "+
+				t.Errorf("gate has no NewOptions but reacts to them: give it a "+
 					"prototype so gate_options.%s is validated\n with nil:  %s\n with opts: %s",
 					g.ID, a, b)
 			}

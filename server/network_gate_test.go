@@ -55,7 +55,7 @@ func TestNetworkScan_Classification(t *testing.T) {
 }
 
 // Doc-range addresses (RFC 5737 / 2544 / 6598, MCAST-TEST-NET) are intended
-// for documentation/testing — emitting a finding only adds noise.
+// for documentation/testing: emitting a finding only adds noise.
 func TestNetworkScan_DocRangeSuppressed(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -80,7 +80,7 @@ func TestNetworkScan_DocRangeSuppressed(t *testing.T) {
 }
 
 // Changelog / release-notes files reference IPs descriptively, not wired
-// addresses — every match is a self-referential FP. Skip by basename.
+// addresses: every match is a self-referential FP. Skip by basename.
 func TestNetworkScan_SkipsChangelogFiles(t *testing.T) {
 	for _, name := range []string{"CHANGELOG.md", "HISTORY.md", "RELEASES.md", "CHANGES.md"} {
 		t.Run(name, func(t *testing.T) {
@@ -96,7 +96,7 @@ func TestNetworkScan_SkipsChangelogFiles(t *testing.T) {
 	}
 }
 
-// Tabular data files (CSV/JSONL/TSV/…) ARE address lists by definition —
+// Tabular data files (CSV/JSONL/TSV/…) ARE address lists by definition,
 // blocklists, ASN dumps, fingerprint datasets. Default behaviour:
 // skipped by network_scan so users aren't drowned in payload findings.
 func TestNetworkScan_SkipsDataFilesByDefault(t *testing.T) {
@@ -196,7 +196,7 @@ func TestNetworkScan_UnspecifiedOptIn(t *testing.T) {
 }
 
 // A file whose lines are overwhelmingly bare IP/CIDR literals is an address
-// list (blocklist, Tor dump, resolver cache) — the addresses are the payload.
+// list (blocklist, Tor dump, resolver cache): the addresses are the payload.
 // These have no structured data-file extension, so they must be caught by
 // content, not by isDefaultDataFile.
 func TestNetworkScan_SkipsBareAddressListByContent(t *testing.T) {
@@ -274,7 +274,7 @@ func TestNetworkScan_SourceWithFewAddressesNotSkipped(t *testing.T) {
 	}
 }
 
-// A short list under the line floor is still scanned — too few lines to be
+// A short list under the line floor is still scanned: too few lines to be
 // confident it's a payload dump rather than a pinned-host config.
 func TestNetworkScan_ShortAddressListStillScanned(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
@@ -295,7 +295,7 @@ func TestNetworkScan_ShortAddressListStillScanned(t *testing.T) {
 	}
 }
 
-// CIDR matches must shadow the bare IPv4 inside them — otherwise we'd emit
+// CIDR matches must shadow the bare IPv4 inside them, otherwise we'd emit
 // "10.0.0.0/8 (cidr)" AND "10.0.0.0 (ipv4)" for the same span.
 func TestNetworkScan_CIDRDoesNotDoubleFire(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{"net.txt": "block 10.0.0.0/8 here\n"})
@@ -311,7 +311,7 @@ func TestNetworkScan_CIDRDoesNotDoubleFire(t *testing.T) {
 	}
 }
 
-// Octet > 255 must not pass the parse step — protects against false hits
+// Octet > 255 must not pass the parse step: protects against false hits
 // like "256.300.0.1".
 // Extended documentation ranges (TEST-NET-2, CGNAT, MCAST-TEST-NET) must
 // be classified as doc-range (info), not flagged as public (warning).
@@ -379,7 +379,7 @@ func TestClassifyIPv4_SpecialPurposeRanges(t *testing.T) {
 		}
 	}
 	// The ranges' immediate neighbours are ordinary allocated space and must
-	// keep reporting as public — a boundary one address too wide would hide a
+	// keep reporting as public: a boundary one address too wide would hide a
 	// hardcoded production endpoint.
 	public := []string{"192.0.1.1", "191.255.255.254", "192.88.98.1", "192.88.100.1", "1.0.0.9"}
 	for _, a := range public {

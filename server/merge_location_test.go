@@ -45,7 +45,7 @@ func TestMergeSameLocation_IdenticalDuplicatesStayPlain(t *testing.T) {
 
 // Last write used to win on severity too. With credential severity depending
 // on the host, a local and a remote credential on one line could be stored as
-// a warning — losing the error.
+// a warning: losing the error.
 func TestMergeSameLocation_KeepsHighestSeverity(t *testing.T) {
 	got := mergeSameLocation([]Finding{
 		{FilePath: "x:1:creds_in_url", Severity: SeverityError, Title: "remote", Message: "remote cred"},

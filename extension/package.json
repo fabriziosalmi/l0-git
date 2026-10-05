@@ -1,7 +1,7 @@
 {
   "name": "l0-git",
   "displayName": "l0-git",
-  "description": "36 deterministic quality gates for the open repository — secrets, Dockerfiles, CI, git hygiene — in the sidebar and Problems pane. The same findings in the CLI and in Claude Code over MCP.",
+  "description": "36 deterministic quality gates for the open repository, secrets, Dockerfiles, CI, git hygiene, in the sidebar and Problems pane. The same findings in the CLI and in Claude Code over MCP.",
   "version": "0.3.2",
   "publisher": "fabriziosalmi",
   "license": "MIT",
@@ -253,7 +253,7 @@
         "l0-git.notifyOnNew": {
           "type": "boolean",
           "default": true,
-          "description": "Show a toast when a new ERROR-severity finding appears (cap 3 + summary). Warnings and info never toast — they're visible in the sidebar tree and Problems pane."
+          "description": "Show a toast when a new ERROR-severity finding appears (cap 3 + summary). Warnings and info never toast: they're visible in the sidebar tree and Problems pane."
         },
         "l0-git.staleAfterDays": {
           "type": "number",
@@ -269,12 +269,12 @@
         "l0-git.autoStartMCP": {
           "type": "boolean",
           "default": false,
-          "description": "If true, the extension spawns the MCP stdio server in the background on activation. Usually unnecessary — Claude Code starts the server itself."
+          "description": "If true, the extension spawns the MCP stdio server in the background on activation. Usually unnecessary: Claude Code starts the server itself."
         },
         "l0-git.showBlame": {
           "type": "boolean",
           "default": false,
-          "description": "Annotate every finding row with `git blame` info (commit · author · relative date). Adds one git invocation per affected file on every refresh — fine for typical repos, leave off on very large ones."
+          "description": "Annotate every finding row with `git blame` info (commit · author · relative date). Adds one git invocation per affected file on every refresh: fine for typical repos, leave off on very large ones."
         }
       }
     }

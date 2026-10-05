@@ -14,7 +14,7 @@ A repository with no README is a repository nobody can adopt. This is the cheape
 Project root must contain a README file (README, README.md, README.rst, README.txt).
 
 Accepted names, case-insensitive: `README`, `README.md`, `README.rst`,
-`README.txt`. The file only has to exist — l0-git does not judge its contents.
+`README.txt`. The file only has to exist: l0-git does not judge its contents.
 
 ## What a finding says
 

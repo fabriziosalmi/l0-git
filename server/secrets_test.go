@@ -12,7 +12,7 @@ import (
 // initRepoWithFiles creates a temp git repo, writes the given files, and
 // STAGES them. It deliberately does not commit: every working-tree gate
 // enumerates through `git ls-files`, which reads the index, so the commit was
-// pure cost — roughly a quarter of the suite's runtime, and the slowest git
+// pure cost: roughly a quarter of the suite's runtime, and the slowest git
 // operation of the four.
 //
 // History gates (secrets_scan_history, large_blob_in_history) walk objects
@@ -51,7 +51,7 @@ func writeAll(t *testing.T, root string, files map[string]string) {
 
 // runGit shells out to git with the committer identity supplied inline. Tests
 // used to persist it with two `git config` calls per repo, which cost 478
-// extra processes across the suite and bought nothing — `-c` applies to every
+// extra processes across the suite and bought nothing: `-c` applies to every
 // subcommand, so `commit` is just as happy.
 func runGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
@@ -79,7 +79,7 @@ func TestSecretsScan_PatternsFire(t *testing.T) {
 		content   string
 		patternID string
 	}{
-		// AWS: charset is [0-9A-Z] only — use uppercase + digits.
+		// AWS: charset is [0-9A-Z] only: use uppercase + digits.
 		{"aws", "AKIA1A2B3C4D5E6F7G8H", "aws_access_key"},
 		// GitHub classic: mixed case + digits.
 		{"github_classic", "ghp_" + highEntropyAlnum(36), "github_pat_classic"},
@@ -185,7 +185,7 @@ func TestSecretsScan_TrackedEnvFile(t *testing.T) {
 	}
 }
 
-// TestSecretsScan_GitignoredFileSkipped confirms .gitignore is honoured —
+// TestSecretsScan_GitignoredFileSkipped confirms .gitignore is honoured,
 // untracked files are invisible to the gate.
 func TestSecretsScan_GitignoredFileSkipped(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
@@ -291,7 +291,7 @@ func TestSecretsScan_ExcludePaths(t *testing.T) {
 // highEntropyAlnum builds a deterministic, credential-looking string. The
 // stride of 17 is coprime with the 62-character alphabet, so every character
 // is distinct (maximal entropy) while no two adjacent characters are adjacent
-// code points — the naive `i%len(alphabet)` walk produced `0123456789ABC…`,
+// code points: the naive `i%len(alphabet)` walk produced `0123456789ABC…`,
 // which is exactly the synthetic filler hasSequentialRun now rejects.
 func highEntropyAlnum(n int) string {
 	const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -326,7 +326,7 @@ func TestShannonEntropy(t *testing.T) {
 // entropy below 3.5 bits/char are silently dropped (not false-positived).
 func TestSecretsScan_LowEntropySkipped(t *testing.T) {
 	cases := []string{
-		"AKIA" + strings.Repeat("A", 16), // AWS mock — all same char
+		"AKIA" + strings.Repeat("A", 16), // AWS mock: all same char
 		"ghp_" + strings.Repeat("a", 36), // GitHub mock
 		"sk-" + strings.Repeat("a", 48),  // OpenAI mock
 	}
@@ -349,7 +349,7 @@ func TestSecretsScan_LowEntropySkipped(t *testing.T) {
 
 // YARA / detection-rule files contain secret-shaped strings (header
 // markers, token formats) as the rule's payload. The file's reason to
-// exist IS the pattern — flagging is pure noise on security toolkit
+// exist IS the pattern: flagging is pure noise on security toolkit
 // repos.
 func TestSecretsScan_DetectionRuleFilesSkipped(t *testing.T) {
 	pem := "-----BEGIN PRIVATE KEY-----"
@@ -387,7 +387,7 @@ func TestSecretsScan_DetectionRuleFilesSkipped(t *testing.T) {
 }
 
 // In key-parsing / key-matching code, the header string appears as a
-// string literal next to an opening quote — it's a header constant, not
+// string literal next to an opening quote: it's a header constant, not
 // committed key material. Detect by the immediate-preceding-quote
 // + source-file-extension signature.
 func TestSecretsScan_PrivateKeyHeaderLiteralInSource(t *testing.T) {
@@ -477,7 +477,7 @@ func TestSecretsScan_PrivateKeyHeaderInComment(t *testing.T) {
 }
 
 // A genuine PEM blob (header at column 0 on its own line) MUST still
-// fire — the literal-in-source heuristic must not over-match.
+// fire: the literal-in-source heuristic must not over-match.
 func TestSecretsScan_PrivateKeyHeaderGenuinePEM(t *testing.T) {
 	cases := []struct {
 		path    string
@@ -485,7 +485,7 @@ func TestSecretsScan_PrivateKeyHeaderGenuinePEM(t *testing.T) {
 	}{
 		{"key.pem", "-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n"},
 		{"secrets/leaked.txt", "-----BEGIN RSA PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj\n"},
-		// Even in a source file — if the header isn't preceded by a
+		// Even in a source file, if the header isn't preceded by a
 		// quote (no string-literal pattern), it's a leak.
 		{"main.go", "/*\n-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj\n*/\n"},
 	}

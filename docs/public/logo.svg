@@ -2,7 +2,7 @@
   <title>l0-git</title>
   <style>
     /* CSS beats presentation attributes in SVG, so fill and stroke are
-       declared on separate classes — a single `.mark { fill: … }` would
+       declared on separate classes: a single `.mark { fill: … }` would
        silently override fill="none" and flood the counter of the zero. */
     .plate     { fill: #111318; }
     .fg-fill   { fill: #FFFFFF; }

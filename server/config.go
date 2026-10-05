@@ -110,8 +110,8 @@ func (c *ProjectConfig) severityOverride(gateID string) (string, bool) {
 // the gate that owns it, and returns one human-readable problem per offence.
 //
 // This is the check that was missing. Each gate parses its own options with
-// `_ = json.Unmarshal(opts, &o)`, so a decode failure — a mistyped key, a
-// string where a number belongs, an object where a list belongs — was thrown
+// `_ = json.Unmarshal(opts, &o)`, so a decode failure: a mistyped key, a
+// string where a number belongs, an object where a list belongs: was thrown
 // away and the gate silently ran on defaults. `"threshold_mb": "20"` left the
 // threshold at 5, `"exclude_path"` excluded nothing, and neither produced an
 // error, a warning, or a non-zero exit. The config file did not do what it
@@ -122,7 +122,7 @@ func (c *ProjectConfig) severityOverride(gateID string) (string, bool) {
 //
 // Problems are reported, never fatal: RunChecks folds them into
 // CheckResult.ConfigError, which is the channel the top-level config error
-// already uses, for the reason recorded there — a bad config should not take
+// already uses, for the reason recorded there: a bad config should not take
 // the whole run with it.
 func validateGateOptions(c *ProjectConfig, gates []Gate) (problems []string, rejected map[string]bool) {
 	rejected = map[string]bool{}
@@ -156,7 +156,7 @@ func validateGateOptions(c *ProjectConfig, gates []Gate) (problems []string, rej
 		}
 		// A JSON null decodes into any pointer without error, so it would slip
 		// past the strict decode below and leave the gate on defaults with
-		// nothing said — the exact silence this function exists to end.
+		// nothing said: the exact silence this function exists to end.
 		trimmed := bytes.TrimSpace(raw)
 		if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
 			problems = append(problems, fmt.Sprintf(
@@ -191,7 +191,7 @@ func (c *ProjectConfig) optionsFor(gateID string) json.RawMessage {
 //
 // Dropping the whole sub-tree rather than letting the gate's lenient parser
 // salvage what it can is deliberate. `{"threshold_mb": 20, "treshold_mb": 1}`
-// used to warn and then apply 20 anyway — a config half-obeyed is the same
+// used to warn and then apply 20 anyway: a config half-obeyed is the same
 // class of problem as one silently ignored, and it is impossible to document
 // in a sentence a reader will remember.
 func (c *ProjectConfig) optionsWithoutGateEntry() json.RawMessage {
@@ -213,7 +213,7 @@ func (c *ProjectConfig) withGlobalExcludes(raw json.RawMessage) json.RawMessage 
 	}
 	// Merge: global first, gate-specific appended so per-gate patterns
 	// always win (they're evaluated last, but filepath.Match semantics
-	// means first-match wins — global patterns therefore take precedence,
+	// means first-match wins: global patterns therefore take precedence,
 	// which is correct: a global exclusion can't be overridden by a gate).
 	var gateExcludes []string
 	if existing, ok := m["exclude_paths"]; ok {

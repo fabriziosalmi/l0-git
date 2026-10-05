@@ -49,7 +49,7 @@ var schemeRe = regexp.MustCompile(`\b[a-zA-Z][a-zA-Z0-9+\-.]*://`)
 // Every `scheme://` is handled on its own, and its authority ends at the first
 // `/`, whitespace or quote. In a list with no path between its members
 // (`amqp://u:p@h1:5672,amqp://u2:p2@h2:5672`) the first authority therefore ends
-// at the `//` of the second URL, and the second is found by its own scheme — a
+// at the `//` of the second URL, and the second is found by its own scheme: a
 // single pass that let one match swallow the next left every password after the
 // first in the clear. Angle brackets are NOT a boundary, because the
 // creds_in_url rule accepts them inside a password.
@@ -100,7 +100,7 @@ func redactAuthority(a string) string {
 }
 
 // userinfoEnd returns the index of the `@` that ends the userinfo of the
-// authority that starts rest — the text after `scheme://` — or -1 when there is
+// authority that starts rest, the text after `scheme://`, or -1 when there is
 // none. It is the one place that decides where a password stops, used by the
 // scanner (to read the password) and by the redactor (to mask it), because two
 // definitions disagree exactly on the URLs that matter.
@@ -111,7 +111,7 @@ func redactAuthority(a string) string {
 // password as `p` and drops the URL as two-character prose shorthand.
 //
 // A `?` or `#` makes that ambiguous. It may start a QUERY, whose `@`
-// (`https://user:pw@host?x=a@b`) is not the end of any userinfo — or it may be
+// (`https://user:pw@host?x=a@b`) is not the end of any userinfo, or it may be
 // INSIDE the password, and the creds_in_url rule accepts it there
 // (`P@ssw0rd#2024`, `8675309#Secret`). The two readings are told apart by what
 // lies between the `?`/`#` and the last `@`: a query is `key=value`, a
@@ -170,7 +170,7 @@ func looksLikeBareToken(s string) bool {
 }
 
 // oracleJDBCRe matches the thin/OCI JDBC form that carries its credentials as
-// `user/password@host` — no `://` and no `=`, which is why nothing else sees it.
+// `user/password@host`: no `://` and no `=`, which is why nothing else sees it.
 var oracleJDBCRe = regexp.MustCompile(`(?i)(jdbc:[a-z0-9]+:(?:thin|oci8?):)([^/\s@:]+)/([^@\s]+)@`)
 
 func redactOracleJDBC(s string) string {
@@ -181,8 +181,8 @@ func redactOracleJDBC(s string) string {
 // credential: the delimiter before it (a separator, a fragment mark, a path or
 // query delimiter, whitespace, or the start of the text) and the name itself.
 //
-// Over-matching is harmless here — this only ever rewrites message text, never
-// detection — and it is the safe direction: `primary_key=` being masked costs
+// Over-matching is harmless here: this only ever rewrites message text, never
+// detection, and it is the safe direction: `primary_key=` being masked costs
 // nothing, `db_password=` being missed leaks. A prefix is allowed before the
 // keyword so that `bindpw=`, `authpass=` and `X-Amz-Signature=` are caught.
 var secretParamRe = regexp.MustCompile(
@@ -191,13 +191,13 @@ var secretParamRe = regexp.MustCompile(
 		`(?:password|passwd|pwd|passphrase|pass|pswd|psw|pw|secret|token|apikey|api_key|api-key|` +
 		`signature|credentials?|authorization|auth|sig|sas|key)=)`)
 
-// anotherParamRe recognises `,name=` — a comma that ends a value because a NEW
+// anotherParamRe recognises `,name=`: a comma that ends a value because a NEW
 // parameter follows it, as opposed to a comma inside the value itself.
 var anotherParamRe = regexp.MustCompile(`^,[A-Za-z0-9_.\-]+=`)
 
 // redactSecretParams masks the VALUE of every credential-looking parameter. The
-// value runs to whatever ends a URL parameter — `&`, `;`, whitespace, a quote, a
-// bracket or backtick — but a comma only ends it when another parameter
+// value runs to whatever ends a URL parameter: `&`, `;`, whitespace, a quote, a
+// bracket or backtick, but a comma only ends it when another parameter
 // follows, and a `{…}` value (JDBC's way of writing a value that contains `;`)
 // is taken whole.
 func redactSecretParams(s string) string {

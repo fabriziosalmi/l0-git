@@ -35,7 +35,7 @@ at least 3.5** over the match. That is what separates a real key from
 A classic GitHub token (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`) also carries a
 checksum: its last six characters are the CRC-32 of the thirty before them,
 written in base 62 (`0-9A-Za-z`). A string that fails it cannot have been issued
-by GitHub, so it is a typed example — and is reported at **info** instead of
+by GitHub, so it is a typed example, and is reported at **info** instead of
 error. It is **downgraded, never dropped**, so a wrong assumption costs a
 hidden-by-default entry rather than a missed leak. A token that verifies, any
 fine-grained `github_pat_…` token and every other shape are reported exactly as
@@ -51,11 +51,11 @@ A tracked `.env` file is reported on its own, regardless of contents.
 
 The gate enumerates files with `git ls-files`, so anything already ignored is
 never read. Files above 2 MiB and detected binaries are skipped. Test fixtures
-and data files are skipped by default — see [Configuration](/guide/configuration#scan-options).
+and data files are skipped by default: see [Configuration](/guide/configuration#scan-options).
 
 ::: warning A finding is not proof
 The entropy floor cuts most filler, but the only thing the gate can prove is
-that a string *has the shape* of a credential. Verify before you rotate — and
+that a string *has the shape* of a credential. Verify before you rotate, and
 if it is real, remember that removing it from the working tree does not remove
 it from history. See [secrets_scan_history](/gates/secrets-scan-history).
 :::

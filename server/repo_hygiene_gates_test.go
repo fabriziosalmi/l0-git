@@ -131,7 +131,7 @@ func TestVendoredDirTracked_FlagsCommonDirs(t *testing.T) {
 
 // TestVendoredDirTracked_AmbiguousNameNeedsMarker locks in the FP fix: build/,
 // dist/, target/, .cache/ double as ordinary content dirs. Without a matching
-// build-tool marker the dir is hand-authored source — flagging it would propose
+// build-tool marker the dir is hand-authored source: flagging it would propose
 // a destructive `git rm -r --cached`.
 func TestVendoredDirTracked_AmbiguousNameNeedsMarker(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
@@ -200,7 +200,7 @@ func TestVendoredDirTracked_SilentForGoVendor(t *testing.T) {
 }
 
 // A `vendor` dir under a served static web root (e.g. ui/public/vendor) is
-// hand-committed assets, not rebuildable package vendoring — must NOT be flagged
+// hand-committed assets, not rebuildable package vendoring: must NOT be flagged
 // (untracking would delete served files nothing rebuilds).
 func TestVendoredDirTracked_SkipsServedStaticAssets(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
@@ -226,7 +226,7 @@ func TestVendoredDirTracked_SkipsServedStaticAssets(t *testing.T) {
 }
 
 // A vendor/ of hand-committed web assets (self-hosted fonts/CSS/JS that kill
-// third-party egress) is served, not rebuildable — must NOT be flagged, even at
+// third-party egress) is served, not rebuildable: must NOT be flagged, even at
 // the repo root (lws/vendor/font-awesome) or under docs/ for GitHub Pages
 // (blacklists/docs/vendor/chart.js), neither of which the served-static-root
 // list covers. node_modules with .js MUST still be flagged.
@@ -309,7 +309,7 @@ func TestFilenameQuality_Classifications(t *testing.T) {
 		// Zero-width joiner: indistinguishable from "shadow.go" in any UI.
 		"shadow\u200D.go": "x",
 		// A correctly-spelled word in the project's own language is NOT a
-		// defect — `à` word-splits exactly as `a` does.
+		// defect: `à` word-splits exactly as `a` does.
 		"café.txt":         "x",
 		"sostenibilità.md": "x",
 		"plain.go":         "package x",

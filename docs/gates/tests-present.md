@@ -5,7 +5,7 @@ description: "Scans the project for common test file/dir conventions (*_test.go,
 
 # Tests present
 
-Detects whether the project has any tests at all. It says nothing about coverage or quality — only that a test suite exists to run.
+Detects whether the project has any tests at all. It says nothing about coverage or quality, only that a test suite exists to run.
 
 <GateMeta id="tests_present" severity="warning" tags="quality" scope="Whole project tree" />
 

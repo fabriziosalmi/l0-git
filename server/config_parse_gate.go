@@ -15,7 +15,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// config_parse_error flags tracked JSON/YAML config files that fail to parse —
+// config_parse_error flags tracked JSON/YAML config files that fail to parse,
 // a broken package.json, CI workflow, or k8s manifest is a deterministic
 // defect that breaks downstream tooling the moment it lands.
 //
@@ -25,7 +25,7 @@ import (
 //     commas. Skipped by path; any other .json that uses them is rescued by a
 //     tolerant re-parse before we'd ever flag it.
 //   - Templates: Helm/Jinja `{{ }}` and ERB `<% %>` files are rendered into
-//     YAML elsewhere — not standalone YAML. Skipped on marker detection.
+//     YAML elsewhere, not standalone YAML. Skipped on marker detection.
 //   - Custom YAML tags (CloudFormation `!Ref`/`!GetAtt`, …): we decode into a
 //     yaml.Node, which is tag-agnostic and errors only on real syntax faults.
 // TOML and INI are intentionally out of scope: no parser ships in go.mod
@@ -156,7 +156,7 @@ func configParseError(kind cfgKind, rel string, data []byte) (string, bool) {
 
 // jsonParseError flags genuinely-broken JSON. A plain .json that merely uses
 // JSONC niceties (comments, trailing commas) is rescued by a tolerant re-parse
-// and never flagged — strict-JSON pedantry is not a hygiene defect.
+// and never flagged: strict-JSON pedantry is not a hygiene defect.
 func jsonParseError(rel string, data []byte) (string, bool) {
 	b := bytes.TrimPrefix(data, []byte("\xef\xbb\xbf")) // tolerate a UTF-8 BOM
 	if json.Valid(b) {
@@ -178,7 +178,7 @@ func jsonParseError(rel string, data []byte) (string, bool) {
 // deliberately permissive: it accepts custom tags (!Ref, !GetAtt, …) and any
 // document shape, erroring only on real syntax faults (bad indentation, a tab,
 // an unterminated quote). Multi-document files (`---` separated) are each
-// validated. Template files are skipped — they aren't standalone YAML.
+// validated. Template files are skipped: they aren't standalone YAML.
 func yamlParseError(rel string, data []byte) (string, bool) {
 	if looksLikeTemplate(data) {
 		return "", false
@@ -217,7 +217,7 @@ var trailingCommaRe = regexp.MustCompile(`,(\s*[}\]])`)
 
 // stripJSONC removes // line comments, /* */ block comments, and trailing
 // commas, so a tolerant json.Valid check can tell JSONC apart from genuine
-// corruption. String-literal aware — it never edits inside a double-quoted
+// corruption. String-literal aware: it never edits inside a double-quoted
 // string (so a "//" or "," within a value survives untouched).
 func stripJSONC(b []byte) []byte {
 	var out bytes.Buffer

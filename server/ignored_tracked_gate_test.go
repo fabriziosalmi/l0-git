@@ -9,7 +9,7 @@ import (
 )
 
 // ignoredRepo builds a repo, commits `tracked` normally, then force-adds each
-// of `forced` past the .gitignore — the two ways a file ends up both tracked
+// of `forced` past the .gitignore: the two ways a file ends up both tracked
 // and ignored.
 func ignoredRepo(t *testing.T, gitignore string, tracked, forced map[string]string) string {
 	t.Helper()
@@ -65,7 +65,7 @@ func TestIgnoredFileTracked_CommittedBeforeTheRule(t *testing.T) {
 	}
 }
 
-// 260 files in one directory are one statement, not 260 — the count and a few
+// 260 files in one directory are one statement, not 260: the count and a few
 // examples carry the rest.
 func TestIgnoredFileTracked_GroupsByDirectory(t *testing.T) {
 	forced := map[string]string{}
@@ -98,7 +98,7 @@ func TestIgnoredFileTracked_ExemptFiles(t *testing.T) {
 }
 
 // A negation is how an intentional exception is written down, and git then no
-// longer considers the file ignored — so it must not be reported.
+// longer considers the file ignored, so it must not be reported.
 func TestIgnoredFileTracked_NegationIsRespected(t *testing.T) {
 	root := initRepoWithFiles(t, map[string]string{
 		".gitignore":      "data/*\n!data/schema.sql\n",

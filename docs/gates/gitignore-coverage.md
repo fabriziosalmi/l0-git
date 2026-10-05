@@ -13,7 +13,7 @@ Having a `.gitignore` is not the same as having the right one. This gate cross-c
 
 Cross-checks .gitignore against a hardcoded `if-stack-then-must-ignore` table: package.json → node_modules, Cargo.toml → target, pyproject.toml/setup.py → __pycache__/.venv, Gemfile → .bundle/vendor/bundle, plus the universal .DS_Store. Silent on repos with no recognised stack markers.
 
-The rule table is fixed and small — *if this marker exists, then
+The rule table is fixed and small, *if this marker exists, then
 these entries must be covered*:
 
 | Marker | Required entries |
@@ -25,7 +25,7 @@ these entries must be covered*:
 | `Gemfile` | `.bundle`, `vendor/bundle` |
 | *(any recognised stack)* | `.DS_Store` |
 
-`go.mod` deliberately requires nothing — vendored Go modules are an opt-in
+`go.mod` deliberately requires nothing: vendored Go modules are an opt-in
 choice, not an accident.
 
 The gate is silent on repositories with no recognised stack marker, and it

@@ -1,5 +1,5 @@
 # l0-git developer Makefile.
-# Convenience targets only — CI does the canonical builds.
+# Convenience targets only: CI does the canonical builds.
 
 # Same format as the release binaries: git describe without the leading v.
 # `make install-mcp` builds through here, so a fixed `dev` stamped over a
@@ -11,21 +11,21 @@ LDFLAGS  := -s -w -X main.Version=$(VERSION)
 
 help:
 	@echo "Targets:"
-	@echo "  build             — build server binary into server/lgit"
-	@echo "  test              — go vet + go test (race) for server"
-	@echo "  vet               — go vet ./... in server/"
-	@echo "  extension-bins    — cross-compile lgit into extension/bin/<os>-<arch>/"
-	@echo "  extension-compile — tsc compile of the extension"
-	@echo "  vsix              — package the extension (.vsix)"
-	@echo "  install-mcp       — register the local lgit with claude code"
-	@echo "  update            — pull latest, rebuild, re-register MCP (+ restart hints)"
-	@echo "  update-local      — same as 'update' but without git pull"
-	@echo "  status            — show binary version and MCP registration state"
-	@echo "  release-patch     — bump patch (X.Y.Z+1), tag, push → triggers GH release"
-	@echo "  release-minor     — bump minor (X.Y+1.0), tag, push → triggers GH release"
-	@echo "  release-major     — bump major (X+1.0.0), tag, push → triggers GH release"
-	@echo "  release-dry       — show what 'release-patch' WOULD do (no changes)"
-	@echo "  clean             — remove server binary, extension/bin, .vsix files"
+	@echo "  build            : build server binary into server/lgit"
+	@echo "  test             : go vet + go test (race) for server"
+	@echo "  vet              : go vet ./... in server/"
+	@echo "  extension-bins   : cross-compile lgit into extension/bin/<os>-<arch>/"
+	@echo "  extension-compile: tsc compile of the extension"
+	@echo "  vsix             : package the extension (.vsix)"
+	@echo "  install-mcp      : register the local lgit with claude code"
+	@echo "  update           : pull latest, rebuild, re-register MCP (+ restart hints)"
+	@echo "  update-local     : same as 'update' but without git pull"
+	@echo "  status           : show binary version and MCP registration state"
+	@echo "  release-patch    : bump patch (X.Y.Z+1), tag, push → triggers GH release"
+	@echo "  release-minor    : bump minor (X.Y+1.0), tag, push → triggers GH release"
+	@echo "  release-major    : bump major (X+1.0.0), tag, push → triggers GH release"
+	@echo "  release-dry      : show what 'release-patch' WOULD do (no changes)"
+	@echo "  clean            : remove server binary, extension/bin, .vsix files"
 
 build:
 	cd server && go build -trimpath -ldflags="$(LDFLAGS)" -o lgit .
@@ -66,7 +66,7 @@ status:
 		echo "  version : $$(server/lgit version 2>/dev/null || echo '?')"; \
 		echo "  built   : $$(stat -f '%Sm' -t '%Y-%m-%d %H:%M' server/lgit 2>/dev/null || stat -c '%y' server/lgit 2>/dev/null | cut -d. -f1)"; \
 	else \
-		echo "  NOT BUILT — run: make build"; \
+		echo "  NOT BUILT: run: make build"; \
 	fi
 	@echo ""
 	@echo "=== running lgit processes ==="

@@ -34,13 +34,13 @@ searching for it in the Extensions view finds nothing. Install the `.vsix`.
 The extension resolves `lgit` in this order, and stops at the first hit:
 
 1. `l0-git.binaryPath`, if set.
-2. The binary bundled inside the extension — `bin/<goos>-<goarch>/lgit`.
-3. The dev layout — `../server/lgit`, next to the extension folder.
+2. The binary bundled inside the extension: `bin/<goos>-<goarch>/lgit`.
+3. The dev layout: `../server/lgit`, next to the extension folder.
 4. `/usr/local/bin`, `/opt/homebrew/bin`, `~/.local/bin`, `~/go/bin`.
 5. Whatever `lgit` resolves to on `PATH`.
 
 If none of them match, the sidebar offers a one-click action to open the
-setting or the output channel — it does not fail silently.
+setting or the output channel: it does not fail silently.
 
 ## Where findings show up
 
@@ -53,8 +53,8 @@ setting or the output channel — it does not fail silently.
 
 ### What is visible by default
 
-The sidebar shows **error and warning only**. Info findings — TODO markers, a
-missing `CONTRIBUTING.md`, network literals — are hidden until you turn them on
+The sidebar shows **error and warning only**. Info findings: TODO markers, a
+missing `CONTRIBUTING.md`, network literals: are hidden until you turn them on
 with the severity filter. They are the audit layer, not the work queue.
 
 Toasts fire for **errors only**, and cap at three plus a summary. Warnings and
@@ -77,7 +77,7 @@ They still land in the store and show up in the dashboard and in
 | `l0-git.showOverview` | Open the dashboard webview |
 | `l0-git.clearFilters` | Reset every view filter |
 
-The active state — `12 findings · group: severity · status: ignored` — is shown
+The active state, `12 findings · group: severity · status: ignored`, is shown
 in the view's description line, and persists across sessions.
 
 ## Quick fixes
@@ -113,12 +113,12 @@ Every finding row has two inline actions beyond ignore and delete:
 | `l0-git.showRemediation` | Opens the `lgit fix <id>` output: summary, exact commands, file edits, caveats, verification step |
 | `l0-git.copyClaudePrompt` | Copies a structured prompt to the clipboard for Claude Code to act on |
 
-Recipes are deterministic for eight gates — `vendored_dir_tracked`,
+Recipes are deterministic for eight gates: `vendored_dir_tracked`,
 `ide_artifact_tracked`, `gitignore_coverage`, `unexpected_executable_bit`,
 `env_example_uncommented`, `merge_conflict_markers`, `large_blob_in_history`
 and `secrets_scan_history`. For those you get exact commands, safe to
 copy-paste. For the rest the recipe is empty and the prompt frames the ask for
-an agent instead — rotate this credential first, pick a specific image tag, and
+an agent instead: rotate this credential first, pick a specific image tag, and
 so on.
 
 ::: tip The extension never runs the fix
@@ -135,15 +135,15 @@ permission model.
 | `l0-git.notifyOnNew` | `true` | Toast on each new **error**. Warnings and info never toast. |
 | `l0-git.staleAfterDays` | `7` | Findings only change when a project is re-checked. Past this many days since the last full check, the Overview and the status-bar tooltip flag the numbers as stale. Minimum 1. |
 | `l0-git.runOnStartup` | `true` | Run gate checks when the workspace opens. |
-| `l0-git.autoStartMCP` | `false` | Spawn the MCP stdio server on activation. Usually unnecessary — see [Claude Code / MCP](./mcp). |
-| `l0-git.showBlame` | `false` | Annotate rows with `git blame` — commit, author, relative time. One git call per affected file. |
+| `l0-git.autoStartMCP` | `false` | Spawn the MCP stdio server on activation. Usually unnecessary: see [Claude Code / MCP](./mcp). |
+| `l0-git.showBlame` | `false` | Annotate rows with `git blame`: commit, author, relative time. One git call per affected file. |
 
 ## How old are the numbers
 
 Findings change only when a project is re-checked, so every count is as old as
-its last **full** check. The Overview shows it under the project name — "checked
+its last **full** check. The Overview shows it under the project name: "checked
 3 days ago", "never checked", or "directory not found" (an unmounted volume looks
-the same as a deleted folder, so it does not say "deleted") — as a warning once it
+the same as a deleted folder, so it does not say "deleted"), as a warning once it
 passes `l0-git.staleAfterDays`. When the shared store holds projects whose
 directory is gone, a second line points at [`lgit prune`](/cli/). The status-bar
 tooltip carries the same age. A binary older than 0.3.0 does not report it, and
