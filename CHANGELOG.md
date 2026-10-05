@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-05
+
 ### Fixed
 
 False positives found by re-running 0.3.0 over the author's 89 public, non-archived repositories. The old and the new binary were run back to back over the same working trees and diffed in both directions: 34 findings gone, 23 network warnings re-reported as info (21 + two on lines with two networks), and nothing added at warning or above; every disappeared finding was read and is a false positive. Each class below has a test that fails without the fix, plus the case that must keep firing.
