@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/fabriziosalmi/l0-git/main/docs/public/extension/banner.png" alt="l0-git — deterministic quality gates for the open workspace" width="820">
+  <img src="https://raw.githubusercontent.com/fabriziosalmi/l0-git/main/docs/public/extension/banner.png" alt="l0-git: deterministic quality gates for the open workspace" width="820">
 </p>
 
 l0-git checks the repository you have open for things that are simply true or
@@ -22,8 +22,8 @@ is sent over the network. Two runs over the same tree always agree.
 Open it with **l0-git: Open Overview dashboard**. Click a gate or tag to
 filter the sidebar to it, or click a file to open it.
 
-Under the project name it says how old the numbers are — "checked 3 days ago",
-"never checked", or "directory not found" — because findings only change when a
+Under the project name it says how old the numbers are ("checked 3 days ago",
+"never checked" or "directory not found"), because findings only change when a
 project is re-checked. It turns into a warning past `l0-git.staleAfterDays`
 (default 7). When the shared store holds projects whose directory is gone, a
 second line points at `lgit prune`. An older `lgit` that does not report the age
