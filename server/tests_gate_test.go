@@ -90,7 +90,7 @@ func TestTestsPresent_DirectoryVariants(t *testing.T) {
 	}
 }
 
-// Empty `tests/` directories don't count — placeholders shouldn't game the
+// Empty `tests/` directories don't count: placeholders shouldn't game the
 // gate.
 func TestTestsPresent_EmptyTestDir(t *testing.T) {
 	root := t.TempDir()

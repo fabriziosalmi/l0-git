@@ -22,7 +22,7 @@ type blobInfo struct {
 // enumerateHistoryBlobs returns every blob reachable from any ref. It's
 // the workhorse for the history-aware gates. Two git invocations:
 //
-//  1. `git rev-list --all --objects` — pairs of (sha, path), with path
+//  1. `git rev-list --all --objects`: pairs of (sha, path), with path
 //     populated for blobs and trees.
 //  2. `git cat-file --batch-check` over the candidate shas, returning
 //     (objecttype, sha, size); we filter to objecttype == "blob".
@@ -45,7 +45,7 @@ func enumerateHistoryBlobs(ctx context.Context, root string) ([]blobInfo, error)
 		sp := strings.IndexByte(line, ' ')
 		var sha, path string
 		if sp < 0 {
-			// commit/tree entries with no path — skip.
+			// commit/tree entries with no path: skip.
 			continue
 		}
 		sha = line[:sp]
@@ -104,7 +104,7 @@ func readBlob(ctx context.Context, root, hash string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// shortHash returns the first 8 hex chars of an OID — convention from
+// shortHash returns the first 8 hex chars of an OID: convention from
 // `git log --abbrev-commit`. Used in finding messages so users can paste
 // it into `git show <short>` directly.
 func shortHash(h string) string {

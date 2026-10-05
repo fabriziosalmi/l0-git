@@ -5,7 +5,7 @@ description: "Project root should declare a license (LICENSE / LICENSE.md / LICE
 
 # LICENSE present
 
-Without a license file, default copyright applies and nobody may legally reuse the code — however open the repository looks.
+Without a license file, default copyright applies and nobody may legally reuse the code: however open the repository looks.
 
 <GateMeta id="license_present" severity="warning" tags="project-hygiene" scope="Project root" />
 

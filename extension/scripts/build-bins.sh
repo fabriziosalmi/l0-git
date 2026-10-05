@@ -11,7 +11,7 @@ out_root="$ext_root/bin"
 rm -rf "$out_root"
 mkdir -p "$out_root"
 
-# Stamp the same version string the standalone release binaries carry — no
+# Stamp the same version string the standalone release binaries carry: no
 # leading "v". Without this, the binary bundled in the .vsix reported "dev"
 # while the release it shipped in was 0.2.0, so there was no way to tell from
 # inside VS Code which version was running.

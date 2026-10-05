@@ -30,7 +30,7 @@ var testScanSkipDirs = map[string]bool{
 }
 
 // projectMarkerFiles are root files that signal "this is a real source
-// project" — used to decide whether the absence of tests is a warning
+// project": used to decide whether the absence of tests is a warning
 // (active project) or just info (sandbox/scratch repo).
 var projectMarkerFiles = []string{
 	"go.mod", "package.json", "pyproject.toml", "setup.py", "setup.cfg",

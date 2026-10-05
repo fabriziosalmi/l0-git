@@ -1,11 +1,11 @@
 # Contributing to l0-git
 
-Thanks for your interest. l0-git is intentionally small — keep contributions in that spirit.
+Thanks for your interest. l0-git is intentionally small: keep contributions in that spirit.
 
 ## Project layout
 
-- `server/` — Go binary (`lgit`). Acts as both an MCP stdio server and a CLI for the same SQLite findings store.
-- `extension/` — VSCode extension. Watches the workspace, runs gates, surfaces findings in a TreeView and the Problems pane. Shells out to the `lgit` binary.
+- `server/`: Go binary (`lgit`). Acts as both an MCP stdio server and a CLI for the same SQLite findings store.
+- `extension/`: VSCode extension. Watches the workspace, runs gates, surfaces findings in a TreeView and the Problems pane. Shells out to the `lgit` binary.
 
 ## Development
 
@@ -55,24 +55,24 @@ Open `extension/` in VSCode and press `F5` to launch the Extension Development H
    define a typed options struct embedding `scanOptions`, parse it from
    the `opts` parameter, and document the schema in the README.
 5. If the gate emits a tiered set of severities (like `secrets_scan`),
-   set each `Finding.Severity` directly — the runner respects it unless
+   set each `Finding.Severity` directly: the runner respects it unless
    the user pins the gate's severity in `.l0git.json`.
 6. Add a test file `server/<gate_id>_gate_test.go`. Table-driven where
    it fits (positive + negative cases). For history gates,
    `commitAndRemove` in `git_history_test.go` is a useful pattern.
-7. Run `make test` — both vet and `-race` must stay clean.
+7. Run `make test`: both vet and `-race` must stay clean.
 
 The CLI, the MCP server, and the extension's tree all pick up new gates
 automatically via `gateRegistry()`.
 
 ## Pull requests
 
-1. Open an issue first if the change is non-trivial — small scope wins.
+1. Open an issue first if the change is non-trivial: small scope wins.
 2. Keep PRs focused: one logical change per PR.
 3. Run the same checks CI runs:
-   - `make test` — `go vet` + `go test -race ./...` for the server.
-   - `cd extension && npm ci && npm run compile` — TypeScript compile.
-   - `make vsix` — full extension build with bundled binaries (only required if you change `extension/` or the build script).
+   - `make test`: `go vet` + `go test -race ./...` for the server.
+   - `cd extension && npm ci && npm run compile`: TypeScript compile.
+   - `make vsix`: full extension build with bundled binaries (only required if you change `extension/` or the build script).
 4. No new dependencies without a clear reason.
 
 ## Code style
@@ -83,7 +83,7 @@ automatically via `gateRegistry()`.
   `github.com/yuin/goldmark` (Markdown AST for `markdown_lint`). New deps
   need a justification and ideally MIT/BSD/Apache-2.0 licence.
 - TypeScript: `strict` mode (and the additional checks in
-  `extension/tsconfig.json`). No bundler — `tsc` only.
+  `extension/tsconfig.json`). No bundler: `tsc` only.
 
 ## Reporting bugs
 

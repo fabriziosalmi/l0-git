@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// An independent review of `lgit prune` — the one command that deletes — found
+// An independent review of `lgit prune`, the one command that deletes, found
 // these. Each reproduced on the first version of the branch.
 
 func mkdirs(t *testing.T, p string) string {
@@ -32,7 +32,7 @@ func touch(t *testing.T, dir string) {
 
 // DATA LOSS: `~/proj -> /Volumes/USB/proj` with the drive unplugged. os.Stat
 // follows the link, says "not found", and the link itself makes the parent
-// non-empty — so the project looked deleted and prune removed its findings,
+// non-empty, so the project looked deleted and prune removed its findings,
 // the ignored ones included.
 func TestReview_DanglingSymlinkIsOfflineNotGone(t *testing.T) {
 	root := t.TempDir()
@@ -77,7 +77,7 @@ func TestReview_DanglingSymlinkIsOfflineNotGone(t *testing.T) {
 // DATA LOSS: udisks mounts removable drives at /media/USER/LABEL. With USB1
 // mounted and USB2 unplugged, `/media/alice/USB2/proj` is missing, its nearest
 // ancestor `/media/alice` exists and is non-empty (USB1 is in it), and the
-// first-component mount-point rule looked at `/media/alice` — which exists.
+// first-component mount-point rule looked at `/media/alice`, which exists.
 func TestReview_TwoUSBDrivesUnderMediaUser(t *testing.T) {
 	root := t.TempDir()
 	media := mkdirs(t, filepath.Join(root, "media"))
@@ -106,7 +106,7 @@ func TestReview_TwoUSBDrivesUnderMediaUser(t *testing.T) {
 
 // DATA LOSS (resolved rows): time.Duration overflows int64 at 106,752 days, so a
 // natural way of writing "forever" put the cutoff in the FUTURE and deleted every
-// resolved finding — and the dry run inverted the same way, so it did not warn.
+// resolved finding, and the dry run inverted the same way, so it did not warn.
 func TestReview_KeepResolvedDaysHasAnUpperBound(t *testing.T) {
 	for _, bad := range []string{"106752", "200000", "999999", "9999999", "1099511627776"} {
 		if _, err := parsePruneFlags([]string{"-keep-resolved-days=" + bad}); err == nil {

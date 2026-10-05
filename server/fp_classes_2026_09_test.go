@@ -37,7 +37,7 @@ func TestConnectionStrings_EllipsisIsProseShorthand(t *testing.T) {
 
 // The rule applied to the USERNAME as well, so a short login silenced the whole
 // URL however strong the password behind it. `sa` is SQL Server's default
-// login and `x:<token>` is the standard way to put a token in an https URL —
+// login and `x:<token>` is the standard way to put a token in an https URL,
 // both were invisible. The username is not the secret; the password's shape is.
 func TestConnectionStrings_ShortUsernameDoesNotHideARealPassword(t *testing.T) {
 	for _, line := range []string{
@@ -219,7 +219,7 @@ func TestNetworkScan_SectionKeywordDoesNotHideRealAddresses(t *testing.T) {
 }
 
 // Rust test modules wire invented addresses: `fra:100.1.2.3,syd:100.4.5.6`.
-// They are still listed — as info, with advice to double-check.
+// They are still listed, as info, with advice to double-check.
 func TestNetworkScan_InventedAddressesAreInfoNotWarnings(t *testing.T) {
 	for _, ip := range []string{
 		"100.1.2.3", "100.4.5.6", "100.7.8.9", "100.3.2.1",
@@ -340,7 +340,7 @@ func TestMarkdown_JSONStreamIsNotOneBrokenDocument(t *testing.T) {
 // `# Bad: Missing space after colon`. A block the author calls broken is meant
 // to be; flagging it is always wrong.
 func TestMarkdown_BlockLabelledAsCounterExampleIsNotADefect(t *testing.T) {
-	// Genuinely invalid YAML — the "no label" case below is the control that
+	// Genuinely invalid YAML: the "no label" case below is the control that
 	// proves it, so the labelled cases cannot pass vacuously.
 	bad := "name: Smoke: engine syntax"
 	for name, doc := range map[string]string{
@@ -348,6 +348,8 @@ func TestMarkdown_BlockLabelledAsCounterExampleIsNotADefect(t *testing.T) {
 		"bold label above":         "**Bad**:\n\n" + mdBlock("yaml", bad),
 		"heading above":            "### Wrong\n" + mdBlock("yaml", bad),
 		"emoji label above":        "❌ Bad example\n\n" + mdBlock("yaml", bad),
+		"en dash separator":        mdBlock("yaml", "# Bad \u2013 a colon inside a plain scalar\n"+bad),
+		"em dash separator":        mdBlock("yaml", "# Bad \u2014 a colon inside a plain scalar\n"+bad),
 		"dont label above":         "Don't:\n" + mdBlock("yaml", bad),
 	} {
 		if got := invalidPayloadFindings(t, doc); len(got) != 0 {
@@ -512,7 +514,7 @@ func TestMergeMarkers_CompleteConflictInAFenceIsAnExample(t *testing.T) {
 	}
 }
 
-// The other axis — the reason this is a downgrade with conditions rather than a
+// The other axis: the reason this is a downgrade with conditions rather than a
 // blanket skip. Each of these is a real conflict, or cannot be vouched for.
 func TestMergeMarkers_RealConflictsStillError(t *testing.T) {
 	cases := map[string]struct{ rel, content string }{
@@ -559,7 +561,7 @@ func TestMergeMarkers_FindFirstMergeMarkerUnchanged(t *testing.T) {
 }
 
 // The gate read the password up to the FIRST `@`, so `user:p@ss@host` had the
-// password `p` — one character, dropped as prose shorthand — and was never
+// password `p`, one character, dropped as prose shorthand, and was never
 // reported. A raw `@` in a password is common in sloppy configuration; the
 // reviewer of the redaction work noticed the scanner and the redactor disagreed
 // about where the userinfo ends. They now share userinfoEnd.

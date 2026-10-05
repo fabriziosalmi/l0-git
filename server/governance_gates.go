@@ -73,7 +73,7 @@ func checkCodeownersPresent(ctx context.Context, root string, _ json.RawMessage)
 }
 
 // looksLikeCodebase returns true when the project has at least one tracked
-// source file in a recognised language. Cheap heuristic — we only need to
+// source file in a recognised language. Cheap heuristic: we only need to
 // distinguish "real source tree" from "literally just markdown / config".
 func looksLikeCodebase(ctx context.Context, root string) bool {
 	if !isGitRepo(root) {
@@ -109,7 +109,7 @@ func exists(path string) bool {
 //
 // .env.example (and friends) are a contract: they tell new developers
 // which secrets to fill in. A bare list of keys with no comments is
-// useless — for each key the contract should say what it is, what
+// useless: for each key the contract should say what it is, what
 // defaults are sensible, where to obtain it.
 //
 // Deterministic rule: every KEY= line must either (a) have a `#` comment

@@ -52,7 +52,7 @@ func TestRedactSecrets_NoSecretSurvives(t *testing.T) {
 	}
 	for _, sec := range secrets {
 		// The authority ends at `/`, so a slash in a password is the one shape
-		// the URL grammar cannot carry — the creds_in_url rule refuses it too.
+		// the URL grammar cannot carry: the creds_in_url rule refuses it too.
 		for _, sh := range shapes {
 			in := strings.Replace(sh, "%s", sec, 1)
 			got := redactSecrets(in)
@@ -186,7 +186,7 @@ func TestRedactSecrets_ParameterSpellingsAndDelimiters(t *testing.T) {
 
 // An `@` in a key=value QUERY of a URL that has no path must not be taken for the
 // end of the userinfo: that masked the host and rewrote stored rows with the
-// damage. (`https://host.io:8080?e=a@b.c` — no credential at all — is masked as
+// damage. (`https://host.io:8080?e=a@b.c`, no credential at all, is masked as
 // `host.io:***@b.c`: with nothing before the `?` to end a userinfo, the password
 // reading wins, because the other one hides `8675309#Secret`.)
 func TestRedactSecrets_AtSignInTheQueryDoesNotCorruptTheHost(t *testing.T) {

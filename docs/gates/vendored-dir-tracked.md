@@ -17,7 +17,7 @@ Recognised prefixes: `node_modules/`, `vendor/`, `target/`, `dist/`,
 `build/`, `.venv/`, `venv/`, `site-packages/`, `.next/`, `.nuxt/`, `.cache/`,
 `__pycache__/`, `.pytest_cache/`, `.mypy_cache/`, `.tox/`, `bower_components/`.
 
-One finding per offending top-level directory, not per file — a committed
+One finding per offending top-level directory, not per file: a committed
 `node_modules/` produces one finding, not forty thousand.
 
 Names that double as ordinary hand-authored directories (`build/`, `dist/`,
@@ -27,7 +27,7 @@ unambiguous. A `docs/build/` written by hand does not trip the gate.
 ## What a finding says
 
 ```text
-node_modules/ is tracked. node_modules is meant to rebuild from a manifest — committing it bloats the repo and produces merge conflicts. Add node_modules to .gitignore and remove with `git rm -r --cached node_modules`.
+node_modules/ is tracked. node_modules is meant to rebuild from a manifest: committing it bloats the repo and produces merge conflicts. Add node_modules to .gitignore and remove with `git rm -r --cached node_modules`.
 ```
 
 ## Turning it off

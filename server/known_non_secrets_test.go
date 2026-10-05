@@ -224,7 +224,7 @@ func TestKnownNonSecret_AzuriteKey(t *testing.T) {
 	}
 }
 
-// Slack tokens (xoxb-, xoxp-, …) are REAL OAuth tokens — there is no
+// Slack tokens (xoxb-, xoxp-, …) are REAL OAuth tokens: there is no
 // official Slack test/sandbox prefix. The all-same-char check in Tier 1
 // catches format examples like xoxb-000000000000-000000000000-XXXXXXXX
 // (all-X final segment). Real tokens must NOT be exempted.
@@ -339,7 +339,7 @@ func TestKnownNonSecret_JWTIODebuggerVariant(t *testing.T) {
 	}
 }
 
-// Each fingerprint claim alone is plausible in a real token — a sequential test
+// Each fingerprint claim alone is plausible in a real token: a sequential test
 // user id, a coincidental timestamp. Only both together identify jwt.io, and a
 // token carrying just one of them must still be reported.
 func TestKnownNonSecret_JWTWithOnlyOneFingerprintStillFires(t *testing.T) {

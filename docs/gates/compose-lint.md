@@ -76,7 +76,7 @@ Or keep it running at a lower severity:
 }
 ```
 
-For a single occurrence, prefer the inline directive — it records the reason next to the code:
+For a single occurrence, prefer the inline directive: it records the reason next to the code:
 
 ```text
 # l0git: ignore <rule_id> reason: …

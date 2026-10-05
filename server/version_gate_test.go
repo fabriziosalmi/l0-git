@@ -79,7 +79,7 @@ version = "1.9.9"
 }
 
 // Garbage-shape values (template placeholders, dev markers) should be
-// rejected by versionShape — no finding even if they "differ" from a
+// rejected by versionShape: no finding even if they "differ" from a
 // real version.
 func TestVersionDrift_RejectsNonShape(t *testing.T) {
 	root := t.TempDir()

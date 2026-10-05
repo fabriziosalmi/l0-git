@@ -34,7 +34,7 @@ jobs:
           cache-dependency-path: docs/package-lock.json
 
       # npm ci, not npm install: the lockfile is committed, and `install` is
-      # free to resolve something other than what it pins — so the site that
+      # free to resolve something other than what it pins, so the site that
       # gets published would not be the one built and reviewed locally. ci.yml
       # already uses `npm ci` for the extension.
       - name: Install dependencies

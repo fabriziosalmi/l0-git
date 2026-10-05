@@ -80,7 +80,7 @@ func TestHTML_MysteryMeatNav(t *testing.T) {
 	}
 }
 
-// SVG <title> provides an accessible name — must not fire mystery_meat_nav.
+// SVG <title> provides an accessible name: must not fire mystery_meat_nav.
 func TestHTML_MysteryMeatNav_SVGTitle(t *testing.T) {
 	fs := runHTMLRules(t, `<button><svg><title>Close</title><path/></svg></button>`)
 	if findFindingByRule(fs, "mystery_meat_nav") != nil {

@@ -2,7 +2,7 @@
    Brand palette.
 
    VitePress 1.x reads --vp-c-brand-1/2/3. The older single --vp-c-brand was
-   removed, so setting it does nothing — every rule below uses the current
+   removed, so setting it does nothing: every rule below uses the current
    names. Values track the accent used in the architecture diagram so the
    site and the artwork read as one thing.
    ------------------------------------------------------------------------ */
@@ -92,7 +92,7 @@
 }
 
 /* Example blocks ---------------------------------------------------------- */
-/* Untagged / `text` blocks hold finding messages — full sentences, not code.
+/* Untagged / `text` blocks hold finding messages: full sentences, not code.
    Wrapping them beats a horizontal scrollbar that hides half the sentence. */
 .vp-doc div[class*='language-text'] code {
   white-space: pre-wrap;

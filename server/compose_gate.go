@@ -22,7 +22,7 @@ type composeLintOptions struct {
 // composeFinding is the gate's intermediate structure: a (line, ruleID,
 // message) triple resolved into a Finding with severity from the rule
 // definition. Line is 1-based, taken from the YAML node where the
-// violation lives — that's what makes "deterministic + auditable" stick.
+// violation lives: that's what makes "deterministic + auditable" stick.
 type composeFinding struct {
 	ruleID  string
 	line    int
@@ -60,15 +60,15 @@ var composeRules = map[string]composeRule{
 		id:       "docker_socket_mount",
 		severity: SeverityWarning,
 		title:    "Compose service mounts the Docker socket",
-		advice:   "Mounting /var/run/docker.sock into a container effectively grants it root on the host. Tools like Traefik/Portainer/Watchtower do this by design — if so, override with `# l0git: ignore docker_socket_mount reason: …`.",
+		advice:   "Mounting /var/run/docker.sock into a container effectively grants it root on the host. Tools like Traefik/Portainer/Watchtower do this by design, if so, override with `# l0git: ignore docker_socket_mount reason: …`.",
 	},
-	// Same rule, info-level — emitted when the image is a well-known
+	// Same rule, info-level: emitted when the image is a well-known
 	// orchestrator/proxy that requires socket access by design.
 	"docker_socket_mount_orchestrator": {
 		id:              "docker_socket_mount_orchestrator",
 		severity:        SeverityInfo,
 		title:           "Compose orchestrator image mounts the Docker socket",
-		advice:          "This image (Traefik, Portainer, Watchtower, …) requires /var/run/docker.sock by design. The mount is expected — no action needed unless you want to restrict it.",
+		advice:          "This image (Traefik, Portainer, Watchtower, …) requires /var/run/docker.sock by design. The mount is expected: no action needed unless you want to restrict it.",
 		overrideAliases: []string{"docker_socket_mount"},
 	},
 	"missing_memory_limit": {
@@ -241,7 +241,7 @@ func scanComposeService(svc *yaml.Node, extraOrchestrators []string) []composeFi
 				msg := "volumes mount /var/run/docker.sock"
 				if isOrchestratorImage(svc, extraOrchestrators) {
 					sev = "docker_socket_mount_orchestrator"
-					msg = "volumes mount /var/run/docker.sock (orchestrator image — expected)"
+					msg = "volumes mount /var/run/docker.sock (orchestrator image: expected)"
 				}
 				out = append(out, composeFinding{
 					ruleID:  sev,
@@ -254,7 +254,7 @@ func scanComposeService(svc *yaml.Node, extraOrchestrators []string) []composeFi
 	}
 
 	// missing memory limit. Skip services that are explicitly build-only
-	// (no `image`/`command`/`entrypoint`) — they're build contexts, not
+	// (no `image`/`command`/`entrypoint`): they're build contexts, not
 	// runtime services, and OOM doesn't apply to them.
 	if isRuntimeService(svc) {
 		if !hasMemoryLimit(svc) {
@@ -435,7 +435,7 @@ const overrideLookbackLines = 6
 // override directive that matches ruleID or any of aliasIDs. Returns nil
 // when none applies.
 //
-// aliasIDs allows "parent" rule IDs to silence derived variants — e.g. an
+// aliasIDs allows "parent" rule IDs to silence derived variants: e.g. an
 // override for `docker_socket_mount` also silences
 // `docker_socket_mount_orchestrator`.
 func lookupOverrideForRule(line int, overrides map[int]*gateOverride, ruleID string, aliasIDs ...string) *gateOverride {

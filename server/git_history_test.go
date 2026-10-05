@@ -11,7 +11,7 @@ import (
 
 // commitAndRemove sets up a repo where `secret.txt` was committed once
 // (carrying a fake AWS key) and then removed in a second commit. The
-// working tree is therefore clean — only history holds the secret.
+// working tree is therefore clean, only history holds the secret.
 func commitAndRemove(t *testing.T, secret string) string {
 	t.Helper()
 	root := t.TempDir()
@@ -69,7 +69,7 @@ func TestSecretsScanHistory_DefaultOff(t *testing.T) {
 }
 
 func TestSecretsScanHistory_FindsRemovedSecret(t *testing.T) {
-	// A realistic high-entropy key — clears the 3.5 bits/char entropy floor
+	// A realistic high-entropy key: clears the 3.5 bits/char entropy floor
 	// the history gate now shares with the working-tree gate. (A synthetic
 	// all-same-char key would be suppressed as a placeholder, which is
 	// exactly what TestSecretsScanHistory_SuppressesDocExample asserts.)

@@ -64,7 +64,7 @@ func TestGitignoreCoverage_RustProject(t *testing.T) {
 	}
 }
 
-// A glob already present (`*.DS_Store`) covers the literal (`.DS_Store`) —
+// A glob already present (`*.DS_Store`) covers the literal (`.DS_Store`),
 // the gate must NOT propose a redundant add.
 func TestGitignoreCoverage_GlobPatternCoversLiteral(t *testing.T) {
 	root := t.TempDir()

@@ -180,7 +180,7 @@ func toolDefs() []map[string]any {
 		},
 		{
 			"name":        "findings_stats",
-			"description": "Aggregate counts for the Overview dashboard: by_severity, by_status, by_gate (top 50, open only), top_files (top 10, open only), by_tag (open only), and a 7-day trend over created_at. Also says how current they are: with a project, last_checked_at (ms; 0 = no check on record) and project_exists; without one, projects_tracked and projects_missing (directories that no longer exist — `lgit prune` removes their findings). Findings only change when a project is re-checked.",
+			"description": "Aggregate counts for the Overview dashboard: by_severity, by_status, by_gate (top 50, open only), top_files (top 10, open only), by_tag (open only), and a 7-day trend over created_at. Also says how current they are: with a project, last_checked_at (ms; 0 = no check on record) and project_exists; without one, projects_tracked and projects_missing (directories that no longer exist: `lgit prune` removes their findings). Findings only change when a project is re-checked.",
 			"inputSchema": map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -190,7 +190,7 @@ func toolDefs() []map[string]any {
 		},
 		{
 			"name":        "findings_remediate",
-			"description": "Return a structured remediation for a single finding. Always includes a self-contained `claude_prompt` you can act on; for ~8 gates with deterministic fixes (vendored_dir_tracked, ide_artifact_tracked, gitignore_coverage, unexpected_executable_bit, env_example_uncommented, merge_conflict_markers, large_blob_in_history, secrets_scan_history) it also includes a `recipe` with exact shell commands and file edits. Apply the recipe via your own tools (Bash/Edit) — this tool only describes the fix, never executes it.",
+			"description": "Return a structured remediation for a single finding. Always includes a self-contained `claude_prompt` you can act on; for ~8 gates with deterministic fixes (vendored_dir_tracked, ide_artifact_tracked, gitignore_coverage, unexpected_executable_bit, env_example_uncommented, merge_conflict_markers, large_blob_in_history, secrets_scan_history) it also includes a `recipe` with exact shell commands and file edits. Apply the recipe via your own tools (Bash/Edit): this tool only describes the fix, never executes it.",
 			"inputSchema": map[string]any{
 				"type":       "object",
 				"properties": map[string]any{"id": map[string]any{"type": "integer", "description": "Finding id from findings_list."}},

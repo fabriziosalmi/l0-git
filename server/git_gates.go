@@ -27,11 +27,11 @@ func requireGitRepo(root, gateID, why string) ([]Finding, bool) {
 
 // checkMergeConflictMarkers scans every tracked text file for unresolved
 // merge conflict markers. A single file with markers is one finding (line
-// of the first hit) — once you know one is there you'll go look at the file
+// of the first hit): once you know one is there you'll go look at the file
 // anyway. Severity error: this is never legitimate in main.
 func checkMergeConflictMarkers(ctx context.Context, root string, opts json.RawMessage) ([]Finding, error) {
 	if skip, stop := requireGitRepo(root, "merge_conflict_markers",
-		"Initialize git or run gates from inside a clone — this gate uses git ls-files."); stop {
+		"Initialize git or run gates from inside a clone: this gate uses git ls-files."); stop {
 		return skip, nil
 	}
 	files, err := gitLsFiles(ctx, root)
@@ -68,7 +68,7 @@ func checkMergeConflictMarkers(ctx context.Context, root string, opts json.RawMe
 		if line, example, ok := findMergeMarker(rel, data); ok {
 			if example {
 				// One complete conflict inside a fenced code block of a
-				// Markdown file. It is what a rule page or a git tutorial shows —
+				// Markdown file. It is what a rule page or a git tutorial shows,
 				// and it is also exactly what a real conflict in a README code
 				// sample looks like, when two branches edit the same example.
 				// So it is reported at WARNING, which the editor shows by
@@ -119,17 +119,17 @@ func findFirstMergeMarker(data []byte) (int, bool) {
 // A rule page or a git tutorial shows a conflict inside a fenced code block, and
 // the directional markers at the start of its lines are exactly what the gate
 // looks for (slopless's docs/rules/VBC-006-B.md). In a Markdown file each fenced
-// block is judged on its own: a block whose markers are exactly ONE conflict —
+// block is judged on its own: a block whose markers are exactly ONE conflict,
 // `<<<<<<<`, then `=======`, then `>>>>>>>` (optionally with a `|||||||` base in
-// between), and nothing else — is an example. A marker outside every block, in a
+// between), and nothing else: is an example. A marker outside every block, in a
 // block that does not hold exactly that, or in a block that is never closed, is
 // real. example is true only when EVERY marker in the file is of the first kind,
 // so a real conflict anywhere else in the file still wins, and its line is the
 // one reported.
 //
 // An example is still a finding (see checkMergeConflictMarkers): the same text is
-// what a real conflict in a README code sample looks like — two branches editing
-// the same example — and nothing here can tell the two apart.
+// what a real conflict in a README code sample looks like: two branches editing
+// the same example, and nothing here can tell the two apart.
 func findMergeMarker(rel string, data []byte) (line int, example, ok bool) {
 	low := strings.ToLower(rel)
 	if !strings.HasSuffix(low, ".md") && !strings.HasSuffix(low, ".markdown") && !strings.HasSuffix(low, ".mdx") {
@@ -267,7 +267,7 @@ func isMergeMarkerLine(line []byte) bool {
 				return false
 			}
 		}
-		// 8th char (if any) must be space or end of line — git emits
+		// 8th char (if any) must be space or end of line: git emits
 		// "<<<<<<< HEAD\n", never "<<<<<<<X".
 		if len(line) == 7 {
 			return true
@@ -290,7 +290,7 @@ type largeFileOptions struct {
 // checkLargeFileTracked finds tracked files heavier than the configured
 // threshold. Common cause: someone committed a build artefact, a video, or
 // a database dump that should live elsewhere (Git LFS, releases, …). Files
-// declared as LFS-managed in .gitattributes are skipped — they're already
+// declared as LFS-managed in .gitattributes are skipped: they're already
 // stored out-of-band by design.
 func checkLargeFileTracked(ctx context.Context, root string, opts json.RawMessage) ([]Finding, error) {
 	thresholdMB := 5
@@ -303,7 +303,7 @@ func checkLargeFileTracked(ctx context.Context, root string, opts json.RawMessag
 	thresholdBytes := int64(thresholdMB) * 1024 * 1024
 
 	if skip, stop := requireGitRepo(root, "large_file_tracked",
-		"Initialize git or run gates from inside a clone — this gate uses git ls-files."); stop {
+		"Initialize git or run gates from inside a clone: this gate uses git ls-files."); stop {
 		return skip, nil
 	}
 	files, err := gitLsFiles(ctx, root)
@@ -323,7 +323,7 @@ func checkLargeFileTracked(ctx context.Context, root string, opts json.RawMessag
 			continue
 		}
 		// A 9 MiB esbuild binary under node_modules/ is not a separate
-		// problem from "node_modules is tracked" — vendored_dir_tracked
+		// problem from "node_modules is tracked": vendored_dir_tracked
 		// already says that once, about the directory.
 		if isSubsumedByVendoredFinding(rel) {
 			continue
@@ -380,7 +380,7 @@ func loadLFSPatterns(root string) []string {
 
 // matchesLFSPatterns reports whether the repo-relative path rel is covered by
 // any of the .gitattributes LFS patterns. It implements gitattributes glob
-// semantics faithfully via lfsPatternToRegex — crucially the doublestar form
+// semantics faithfully via lfsPatternToRegex: crucially the doublestar form
 // `**/*.ext` (the single most common shape `git lfs track` emits), which a
 // naive substring check can never match because the literal `*` is not present
 // in a real path. A file that IS LFS-managed must never be flagged as bloat.

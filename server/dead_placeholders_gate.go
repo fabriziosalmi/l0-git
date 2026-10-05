@@ -13,7 +13,7 @@ import (
 // dead_placeholders walks every tracked text file (binary-skip + size-cap
 // like secrets_scan) and surfaces unfinished-work markers: TODO:/FIXME:/
 // XXX:/HACK: tags, "Update this later", and Lorem ipsum filler. Severity
-// is info — the markers are deliberate signals, not bugs — but they're
+// is info, the markers are deliberate signals, not bugs, but they're
 // almost always things that should land before a release rather than
 // stay in the doc/source forever.
 
@@ -68,7 +68,7 @@ func checkDeadPlaceholders(ctx context.Context, root string, opts json.RawMessag
 		if options.shouldSkipContent(rel) {
 			continue
 		}
-		// Changelog / release-note files narrate past work — a line like
+		// Changelog / release-note files narrate past work: a line like
 		// "Removed the FIXME: markers" or a documented "TODO:" log prefix is
 		// historical prose, not a live placeholder. Same policy the
 		// connection_strings / markdown_lint gates already apply.
@@ -80,7 +80,7 @@ func checkDeadPlaceholders(ctx context.Context, root string, opts json.RawMessag
 		if isDetectionRuleFile(rel) {
 			continue
 		}
-		// Files whose name IS the tracking register for placeholders — scanning
+		// Files whose name IS the tracking register for placeholders: scanning
 		// them produces 100% noise (every line would match).
 		if isPlaceholderRegistryFile(rel) {
 			continue
@@ -120,7 +120,7 @@ func scanForDeadPlaceholders(rel string, data []byte, disabled map[string]bool) 
 					Severity: SeverityInfo,
 					Title:    p.title,
 					Message: fmt.Sprintf(
-						"%s:%d %s — unfinished-work placeholders are easy to miss before release; chase them down or replace with a tracked issue.",
+						"%s:%d %s: unfinished-work placeholders are easy to miss before release; chase them down or replace with a tracked issue.",
 						rel, lineNum, match,
 					),
 					FilePath: fmt.Sprintf("%s:%d:%s", rel, lineNum, p.id),
@@ -142,7 +142,7 @@ func scanForDeadPlaceholders(rel string, data []byte, disabled map[string]bool) 
 }
 
 // placeholderRegistryBasenames are filenames that ARE the tracking register
-// for placeholder items — scanning them is 100% noise.
+// for placeholder items: scanning them is 100% noise.
 var placeholderRegistryBasenames = map[string]bool{
 	"todo.md":   true,
 	"todos.md":  true,

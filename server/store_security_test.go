@@ -158,8 +158,8 @@ func TestStore_SecureDeleteIsOn(t *testing.T) {
 }
 
 // Rewriting rows is not enough, and this is the case that proves it: a secret
-// that only lives in a FREE page — its row was deleted or replaced by a version
-// of lgit that kept no secure_delete — is invisible to every query and still
+// that only lives in a FREE page: its row was deleted or replaced by a version
+// of lgit that kept no secure_delete: is invisible to every query and still
 // readable in the file. The migration has to rebuild the file itself.
 func TestStore_MigrationRemovesRemnantsFromFreePages(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "findings.db")
@@ -301,8 +301,8 @@ func TestCheckpointTruncate_ReportsWhenABlockedByAReader(t *testing.T) {
 }
 
 // The claim "no gate can leak by forgetting" needs a gate that forgot. The gate
-// in the test returns a message with a password in it; finalizeFindings — the
-// step RunChecks applies to every gate — must mask it, whatever the gate did.
+// in the test returns a message with a password in it; finalizeFindings: the
+// step RunChecks applies to every gate: must mask it, whatever the gate did.
 func TestFinalizeFindings_MasksWhateverAGateSays(t *testing.T) {
 	fs := []Finding{
 		{Message: "connect with postgres://svc:Kq8vLw2nRt4x@db.prod.io/app now"},

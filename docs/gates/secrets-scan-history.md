@@ -35,7 +35,7 @@ git filter-repo --invert-paths --path <path>
 ## What a finding says
 
 ```text
-Possible AWS access key ID in blob 8c14ef0 (path config/deploy.sh, line 12). The secret is in repo history even if removed from the working tree — rotate the credential, then run `git filter-repo --invert-paths --path config/deploy.sh` (or BFG).
+Possible AWS access key ID in blob 8c14ef0 (path config/deploy.sh, line 12). The secret is in repo history even if removed from the working tree: rotate the credential, then run `git filter-repo --invert-paths --path config/deploy.sh` (or BFG).
 ```
 
 ## Options

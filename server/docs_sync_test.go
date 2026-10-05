@@ -13,7 +13,7 @@ import (
 // Nothing structural connected the two, and they had already drifted: the site
 // advertised "34 built-in gates" and listed 34 rows while the registry held 35,
 // so config_parse_error shipped undocumented. The sidebar had drifted the other
-// way too, linking ~35 gate pages of which three existed — every other link was
+// way too, linking ~35 gate pages of which three existed: every other link was
 // a 404 in production.
 //
 // These tests make both directions of that drift a build failure.
@@ -21,7 +21,7 @@ import (
 var gateMetaRe = regexp.MustCompile(`<GateMeta\s+id="([^"]+)"\s+severity="([^"]+)"\s+tags="([^"]*)"`)
 
 // docsGatesDir locates docs/gates relative to the server package, and reports
-// whether it is there at all — a checkout of server/ on its own is a legitimate
+// whether it is there at all: a checkout of server/ on its own is a legitimate
 // setup, and these tests have nothing to say about it.
 func docsGatesDir(t *testing.T) (string, bool) {
 	t.Helper()
@@ -138,7 +138,7 @@ var ruleTableRe = regexp.MustCompile("(?m)^\\| `([a-z_]+)` \\| (error|warning|in
 // The gate-level guard above checks each page's <GateMeta> against the gate's
 // DEFAULT severity. It could not see a per-rule table, and that is how
 // connection-strings.md came to say "everything else reports at info" while
-// ftp, telnet, smb, nfs and rsync were warning in code — written from memory,
+// ftp, telnet, smb, nfs and rsync were warning in code: written from memory,
 // and wrong from the day it was published.
 //
 // Every gate with a per-rule table is pinned here in both directions: each

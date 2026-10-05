@@ -15,8 +15,8 @@ import (
 // repository's own .gitignore says they should not be.
 //
 // The index and the ignore rules disagree, and one of them is wrong. Either the
-// file was committed before the rule existed or was force-added by mistake —
-// then it should be untracked — or it belongs in the repository and the
+// file was committed before the rule existed or was force-added by mistake,
+// then it should be untracked, or it belongs in the repository and the
 // exception was never written down, in which case the fix is a `!` negation in
 // .gitignore. The gate cannot tell which, so it reports the contradiction and
 // leaves the choice to the reader.
@@ -28,7 +28,7 @@ import (
 // Only COMMITTED .gitignore files are consulted
 // (`--exclude-per-directory=.gitignore`). `--exclude-standard` would also read
 // .git/info/exclude and the user's global excludes file, which differ from one
-// machine to the next — the same repository would then produce different
+// machine to the next: the same repository would then produce different
 // findings on two computers, which is exactly what a gate may not do.
 func checkIgnoredFileTracked(ctx context.Context, root string, opts json.RawMessage) ([]Finding, error) {
 	if skip, stop := requireGitRepo(root, "ignored_file_tracked",

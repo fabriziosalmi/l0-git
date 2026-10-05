@@ -26,12 +26,12 @@ type secretPattern struct {
 }
 
 // secretPatterns is the active rule set. Adding a pattern means appending
-// here — the gate auto-picks it up.
+// here: the gate auto-picks it up.
 //
 // minEntropy = 3.5 on all variable-body patterns filters out placeholder /
 // mock / documentation strings (e.g. AKIAIOSFODNN7EXAMPLE, ghp_aaa…) while
 // leaving real credentials untouched. Private-key headers are structural
-// markers, not variable strings — no entropy check needed there.
+// markers, not variable strings: no entropy check needed there.
 var secretPatterns = []secretPattern{
 	{id: "aws_access_key", title: "AWS access key ID", re: regexp.MustCompile(`AKIA[0-9A-Z]{16}`), minEntropy: 3.5},
 	{id: "github_pat_classic", title: "GitHub personal access token", re: regexp.MustCompile(`gh[psoru]_[A-Za-z0-9]{36}`), minEntropy: 3.5},
@@ -70,7 +70,7 @@ func shannonEntropy(s string) float64 {
 	return h
 }
 
-// Files larger than this are skipped — they're almost always artefacts
+// Files larger than this are skipped: they're almost always artefacts
 // (lockfiles, vendored dumps, generated bundles) where every line scan would
 // be wasted I/O and any match would be noise.
 const secretsMaxFileSize = 2 * 1024 * 1024
@@ -78,7 +78,7 @@ const secretsMaxFileSize = 2 * 1024 * 1024
 // secretMatchSuppressed reports whether a regex match for pattern p should be
 // treated as a non-secret and dropped. This is the single FP-suppression chain
 // shared by the working-tree gate (checkSecretsScan) and the history gate
-// (scanHistoryBlob) so both apply identical filtering — a doc example or
+// (scanHistoryBlob) so both apply identical filtering: a doc example or
 // placeholder must not surface in history just because it was once committed.
 //
 //   - match:     the bytes the pattern matched
@@ -95,7 +95,7 @@ func secretMatchSuppressed(p secretPattern, match []byte, rel string, content []
 	}
 	// Known-non-secret filter: skip values that are publicly documented
 	// defaults, template placeholders, test key prefixes, or canonical
-	// documentation examples — they carry zero information advantage.
+	// documentation examples: they carry zero information advantage.
 	if isKnownNonSecret(string(match)) {
 		return true
 	}
@@ -121,7 +121,7 @@ func secretMatchSuppressed(p secretPattern, match []byte, rel string, content []
 	//
 	// Ordering matters. An earlier revision consulted the quoted-literal
 	// heuristic first, which meant a real key assigned to a source constant
-	// was silently dropped — the exact leak this pattern exists to catch.
+	// was silently dropped: the exact leak this pattern exists to catch.
 	if p.id == "private_key_header" {
 		if pemBodyFollows(content, at+len(match), following) {
 			return false
@@ -133,7 +133,7 @@ func secretMatchSuppressed(p secretPattern, match []byte, rel string, content []
 
 // keyFileExtensions / keyFileBasenames name a file whose whole reason to
 // exist is to hold a private key. In one of those the header is proof enough
-// — the body check is skipped so an unusually-wrapped or truncated key still
+// : the body check is skipped so an unusually-wrapped or truncated key still
 // fires.
 var keyFileExtensions = map[string]bool{
 	".pem": true, ".key": true, ".p8": true, ".pkcs8": true, ".pk8": true,
@@ -155,7 +155,7 @@ func isKeyFileName(rel string) bool {
 }
 
 // pemBodyRunRe finds a candidate run of PEM key material. Length alone is not
-// enough to conclude anything — see looksLikePEMBody.
+// enough to conclude anything: see looksLikePEMBody.
 var pemBodyRunRe = regexp.MustCompile(`[A-Za-z0-9+/]{40,}={0,2}`)
 
 // looksLikePEMBody reports whether line contains a run that is really base64
@@ -211,8 +211,8 @@ const (
 
 // pemBodyFollows reports whether key material follows a PEM header.
 //
-// It reads the remainder of the header's own line first — an embedded literal
-// puts the whole key there, `"-----BEGIN PRIVATE KEY-----\nMIIEow…"` — then
+// It reads the remainder of the header's own line first: an embedded literal
+// puts the whole key there, `"-----BEGIN PRIVATE KEY-----\nMIIEow…"`, then
 // walks the following lines, stepping over blank lines and RFC 1421 metadata
 // headers so an ENCRYPTED key is not mistaken for prose.
 // pemSameLineWindow is how much of the header's own line is read for key material.
@@ -259,7 +259,7 @@ func checkSecretsScan(ctx context.Context, root string, opts json.RawMessage) ([
 		return []Finding{{
 			Severity: SeverityInfo,
 			Title:    "secrets_scan skipped (not a git repository)",
-			Message:  "Project root has no .git/. Initialize git or run gates from inside a clone — the secrets gate uses 'git ls-files' to honour .gitignore.",
+			Message:  "Project root has no .git/. Initialize git or run gates from inside a clone: the secrets gate uses 'git ls-files' to honour .gitignore.",
 			FilePath: ".git",
 		}}, nil
 	}
@@ -290,7 +290,7 @@ func checkSecretsScan(ctx context.Context, root string, opts json.RawMessage) ([
 			continue
 		}
 		// Detection-rule files (YARA, …) contain secret patterns as the
-		// payload of the rule — the file's reason to exist is the
+		// payload of the rule: the file's reason to exist is the
 		// pattern, not its leak. Skip outright.
 		if isDetectionRuleFile(rel) {
 			continue
@@ -339,7 +339,7 @@ func checkSecretsScan(ctx context.Context, root string, opts json.RawMessage) ([
 				}
 				msg := fmt.Sprintf("Possible %s in %s:%d. Verify, rotate if real, then purge it from git history (e.g. with git-filter-repo).", p.title, rel, lineNum)
 				if verdict == verdictExample {
-					msg = fmt.Sprintf("A string shaped like a %s in %s:%d fails GitHub's own checksum, so GitHub cannot have issued it — almost certainly a typed example. It is still listed in case the checksum rule ever changes.", p.title, rel, lineNum)
+					msg = fmt.Sprintf("A string shaped like a %s in %s:%d fails GitHub's own checksum, so GitHub cannot have issued it: almost certainly a typed example. It is still listed in case the checksum rule ever changes.", p.title, rel, lineNum)
 				}
 				out = append(out, Finding{
 					Severity: severity,
@@ -391,7 +391,7 @@ func gitLsFiles(ctx context.Context, root string) ([]string, error) {
 
 // gitFileEntry describes one entry from `git ls-files -s -z`. Mode is the
 // 6-digit octal git mode (100644 / 100755 / 120000 / 160000 / 040000),
-// not a unix file mode — git only stores a coarse subset.
+// not a unix file mode: git only stores a coarse subset.
 type gitFileEntry struct {
 	Mode string
 	Hash string
@@ -435,7 +435,7 @@ func gitLsFilesWithMode(ctx context.Context, root string) ([]gitFileEntry, error
 
 // isDetectionRuleFile returns true for files that exist to declare
 // detection patterns (YARA, …). These legitimately contain secret-like
-// strings as the rule's payload — flagging them generates noise on
+// strings as the rule's payload: flagging them generates noise on
 // every security/detection toolkit repo.
 func isDetectionRuleFile(rel string) bool {
 	switch strings.ToLower(filepath.Ext(rel)) {
@@ -474,7 +474,7 @@ func isDetectionRuleFile(rel string) bool {
 
 // isBinary uses the same heuristic git itself does: any NUL byte in the
 // first 8 KiB means binary. Cheap and correct for text-vs-blob, but blind to
-// formats whose header is ASCII — see isBinaryPath for the extension check
+// formats whose header is ASCII: see isBinaryPath for the extension check
 // that runs first.
 func isBinary(data []byte) bool {
 	n := len(data)
@@ -545,7 +545,7 @@ const sequentialRunFloor = 8
 // This is the hole the Shannon-entropy floor cannot cover: a fake token like
 // `ghp_abcdefghijklmnopqrstuvwxyz0123456789` uses 36 distinct characters and
 // therefore scores the MAXIMUM possible entropy (~5.17 bits/char), sailing
-// past a 3.5 floor — while being the most obviously synthetic string a
+// past a 3.5 floor, while being the most obviously synthetic string a
 // developer could type. Real credentials are drawn at random and effectively
 // never contain a monotone run this long.
 func hasSequentialRun(s string) bool {
@@ -614,14 +614,14 @@ const (
 // 2 MiB line of repeated headers was quadratic. Past the cap the rest of the line
 // is not looked at: a real credential after sixty-four suppressed look-alikes on
 // one line is a hostile or generated file, and the first sixty-four are still
-// judged — more than the single match the gate judged before.
+// judged: more than the single match the gate judged before.
 const maxSecretMatchesPerLine = 64
 
 // judgeSecretLine judges every match of p on a line and returns the worst verdict,
 // so a suppressed example in front of a real credential cannot hide it. It stops at
 // the first real one. Shared by the working-tree and the history gate.
 //
-// A classic GitHub token whose checksum fails is an example — but only when the
+// A classic GitHub token whose checksum fails is an example, but only when the
 // match is the whole token: the pattern takes 36 characters and stops, so a
 // longer alphanumeric run is not the format being checked and stays real.
 func judgeSecretLine(p secretPattern, content []byte, path string, following []byte) secretVerdict {

@@ -59,7 +59,7 @@ func checkLargeBlobInHistory(ctx context.Context, root string, opts json.RawMess
 			Severity: SeverityWarning,
 			Title:    "Large blob in git history",
 			Message: fmt.Sprintf(
-				"Blob %s (path %s, %s, threshold %d MiB) lives in .git even if it's no longer in the working tree. Big blobs in history bloat clones — purge with `git filter-repo --strip-blobs-bigger-than %dM` if it shouldn't have been committed.",
+				"Blob %s (path %s, %s, threshold %d MiB) lives in .git even if it's no longer in the working tree. Big blobs in history bloat clones: purge with `git filter-repo --strip-blobs-bigger-than %dM` if it shouldn't have been committed.",
 				shortHash(b.Hash), b.Path, humanSize(b.Size), thresholdMB, thresholdMB,
 			),
 			// One finding per blob hash (a blob shared across many

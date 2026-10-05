@@ -21,7 +21,7 @@ import (
 //     `branches:` entry carrying a `protection:` block.
 //
 // Other valid mechanisms (terraform/pulumi providers, GitHub native
-// rulesets, ad-hoc gh-api scripts) are NOT recognised — projects that
+// rulesets, ad-hoc gh-api scripts) are NOT recognised: projects that
 // use them disable this gate via .l0git.json. Severity is `info`,
 // gate is opt-in, so the false-negative cost (real protection set via
 // UI) only surfaces for users who explicitly enabled the check.
@@ -84,7 +84,7 @@ func noProtectionFinding(why string) Finding {
 		Severity: SeverityInfo,
 		Title:    "Branch protection not declared as code",
 		Message: fmt.Sprintf(
-			"%s. l0-git can only verify protection-as-code (Probot Settings format) — actual branch-protection rules live server-side on GitHub and aren't readable from the filesystem. If you protect main via the GitHub UI, disable this gate with `\"branch_protection_declared\": false` in your .l0git.json gate_options. Otherwise, install the Settings app (https://github.com/apps/settings) and commit a .github/settings.yml — use the quick-fix to scaffold one.",
+			"%s. l0-git can only verify protection-as-code (Probot Settings format), actual branch-protection rules live server-side on GitHub and aren't readable from the filesystem. If you protect main via the GitHub UI, disable this gate with `\"branch_protection_declared\": false` in your .l0git.json gate_options. Otherwise, install the Settings app (https://github.com/apps/settings) and commit a .github/settings.yml, use the quick-fix to scaffold one.",
 			why,
 		),
 		FilePath: probotSettingsPath,

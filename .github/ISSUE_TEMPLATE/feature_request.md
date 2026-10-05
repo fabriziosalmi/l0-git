@@ -15,7 +15,7 @@ What you would like the project to do.
 Other approaches you thought about, and why this one is preferable.
 
 ## Notes
-- Keep in mind the project's "intentionally small" scope — stdlib +
+- Keep in mind the project's "intentionally small" scope: stdlib +
   `modernc.org/sqlite` on the Go side, no bundler on the TS side.
 - New gates should be auditable in <50 lines and rely only on the filesystem
-  (or `git`) — no language-specific parsers, no network calls.
+  (or `git`): no language-specific parsers, no network calls.

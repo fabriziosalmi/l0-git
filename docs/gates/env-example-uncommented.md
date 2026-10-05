@@ -17,7 +17,7 @@ Applies to `.env.example`, `.env.sample`, `.env.template` and
 `.env.dist`. Every `KEY=` line must carry a `# …` comment either inline or on
 the line directly above.
 
-This gate ships one of the eight deterministic remediation recipes — `lgit fix`
+This gate ships one of the eight deterministic remediation recipes: `lgit fix`
 will tell you exactly which line to annotate.
 
 ## What a finding says

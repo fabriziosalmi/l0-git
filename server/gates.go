@@ -20,7 +20,7 @@ type Gate struct {
 	Description string
 	Severity    string
 	// Tags is a comma-separated list applied to every finding the gate
-	// emits — useful for grouping gates by theme (security, git-hygiene,
+	// emits: useful for grouping gates by theme (security, git-hygiene,
 	// release-hygiene, …) in future UIs.
 	Tags string
 	// Check returns the findings observed in projectRoot. opts carries the
@@ -35,7 +35,7 @@ type Gate struct {
 	// runs. Every option parser decodes with `_ = json.Unmarshal(...)`: a
 	// mistyped key or a string where a number belongs made the decode fail,
 	// the error was discarded, and the gate ran on defaults. The user's
-	// config was ignored with no error, no warning, and exit 0 — a
+	// config was ignored with no error, no warning, and exit 0: a
 	// `"threshold_mb": "20"` silently stayed 5. See validateGateOptions.
 	NewOptions func() any
 }
@@ -136,7 +136,7 @@ func gateRegistry() []Gate {
 		{
 			ID:          "config_parse_error",
 			Title:       "Config file failed to parse",
-			Description: "Parses every tracked JSON and YAML config file and flags any that don't parse — a broken package.json, CI workflow, or k8s manifest is a deterministic defect. JSONC (tsconfig, .vscode/*.json, *.jsonc) and template files (Helm/Jinja {{ }}, ERB <% %>) are skipped; custom YAML tags (!Ref, …) are accepted. TOML/INI are out of scope.",
+			Description: "Parses every tracked JSON and YAML config file and flags any that don't parse: a broken package.json, CI workflow, or k8s manifest is a deterministic defect. JSONC (tsconfig, .vscode/*.json, *.jsonc) and template files (Helm/Jinja {{ }}, ERB <% %>) are skipped; custom YAML tags (!Ref, …) are accepted. TOML/INI are out of scope.",
 			Severity:    SeverityWarning,
 			Tags:        "quality,build",
 			Check:       checkConfigParse,
@@ -234,7 +234,7 @@ func gateRegistry() []Gate {
 		{
 			ID:          "ignored_file_tracked",
 			Title:       "Tracked file matches .gitignore",
-			Description: "Reports files that are in the git index even though the repository's own .gitignore excludes them — committed before the rule existed, or force-added. Grouped by directory. Only committed .gitignore files are consulted, never .git/info/exclude or the user's global excludes, so the result is the same on every machine. .gitkeep files, env templates and vendored trees are left to the gates that own them.",
+			Description: "Reports files that are in the git index even though the repository's own .gitignore excludes them: committed before the rule existed, or force-added. Grouped by directory. Only committed .gitignore files are consulted, never .git/info/exclude or the user's global excludes, so the result is the same on every machine. .gitkeep files, env templates and vendored trees are left to the gates that own them.",
 			Severity:    SeverityWarning,
 			Tags:        "git-hygiene",
 			Check:       checkIgnoredFileTracked,
@@ -243,7 +243,7 @@ func gateRegistry() []Gate {
 		{
 			ID:          "filename_quality",
 			Title:       "File name quality",
-			Description: "Surfaces tracked filenames containing spaces, control chars, or non-ASCII characters — these break unquoted shell pipelines and CI scripts.",
+			Description: "Surfaces tracked filenames containing spaces, control chars, or non-ASCII characters: these break unquoted shell pipelines and CI scripts.",
 			Severity:    SeverityInfo,
 			Tags:        "git-hygiene,quality",
 			Check:       checkFilenameQuality,
@@ -260,7 +260,7 @@ func gateRegistry() []Gate {
 		{
 			ID:          "html_lint",
 			Title:       "HTML accessibility / WCAG violation",
-			Description: "Deterministic AST lint of tracked .html/.htm files via golang.org/x/net/html. Fires for: viewport blocking zoom, autoplay video without muted, target=_blank without rel=noopener, icon-only controls without an accessible name, placeholders used as labels, and form reset buttons. Inline override via `<!-- l0git: ignore <rule_id> reason: … -->`. (Note: findings currently pin to file:1 — line-precise pin is queued as Phase B-bis.)",
+			Description: "Deterministic AST lint of tracked .html/.htm files via golang.org/x/net/html. Fires for: viewport blocking zoom, autoplay video without muted, target=_blank without rel=noopener, icon-only controls without an accessible name, placeholders used as labels, and form reset buttons. Inline override via `<!-- l0git: ignore <rule_id> reason: … -->`. (Note: findings currently pin to file:1: line-precise pin is queued as Phase B-bis.)",
 			Severity:    SeverityWarning,
 			Tags:        "accessibility,frontend",
 			Check:       checkHtmlLint,
@@ -320,7 +320,7 @@ func gateRegistry() []Gate {
 		{
 			ID:          "dead_placeholders",
 			Title:       "Unfinished-work placeholder",
-			Description: "Scans every tracked text file (≤ 2 MiB, binaries skipped) for TODO:/FIXME:/XXX:/HACK: markers, the phrase \"update this later\", and \"Lorem ipsum\" filler. Severity info — these are intentional signals, but easy to miss before release. Disable individual patterns via gate_options.dead_placeholders.disabled_patterns.",
+			Description: "Scans every tracked text file (≤ 2 MiB, binaries skipped) for TODO:/FIXME:/XXX:/HACK: markers, the phrase \"update this later\", and \"Lorem ipsum\" filler. Severity info: these are intentional signals, but easy to miss before release. Disable individual patterns via gate_options.dead_placeholders.disabled_patterns.",
 			Severity:    SeverityInfo,
 			Tags:        "documentation,quality",
 			Check:       checkDeadPlaceholders,
@@ -347,7 +347,7 @@ func gateRegistry() []Gate {
 		{
 			ID:          "branch_protection_declared",
 			Title:       "Branch protection not declared as code",
-			Description: "Verifies the repo tracks branch-protection rules as code via .github/settings.yml (Probot Settings format). Cannot verify the actual GitHub server-side state — that's reachable only via the REST API with auth. Opt-in (gate_options.branch_protection_declared.enabled = true) so users who manage protection via the UI don't get a false signal.",
+			Description: "Verifies the repo tracks branch-protection rules as code via .github/settings.yml (Probot Settings format). Cannot verify the actual GitHub server-side state: that's reachable only via the REST API with auth. Opt-in (gate_options.branch_protection_declared.enabled = true) so users who manage protection via the UI don't get a false signal.",
 			Severity:    SeverityInfo,
 			Tags:        "governance,security",
 			Check:       checkBranchProtectionDeclared,
@@ -377,7 +377,7 @@ type gateMetadata struct {
 }
 
 // gateRegistryMarshallable returns the registered gates as plain data.
-// Used by `lgit gates` and the `gates_list` MCP tool — both originally
+// Used by `lgit gates` and the `gates_list` MCP tool: both originally
 // tried to JSON-encode Gate values directly, which fails because Check
 // is a func.
 func gateRegistryMarshallable() []gateMetadata {
@@ -439,7 +439,7 @@ func RunChecks(ctx context.Context, store *Store, projectRoot, gateID string) (*
 	var skippedNoGit []string
 	var configProblems []string
 	if cfgErr != nil {
-		// Surface but don't abort — bad config shouldn't take the whole
+		// Surface but don't abort: bad config shouldn't take the whole
 		// run with it, and the user needs visibility to fix it.
 		configProblems = append(configProblems, cfgErr.Error())
 	}
@@ -518,7 +518,7 @@ func RunChecks(ctx context.Context, store *Store, projectRoot, gateID string) (*
 		}
 	} else if isGitRepo(abs) {
 		// A run narrowed to one gate cannot state that the directory is not a
-		// repository — but it can see that it now IS one, and then the notice is
+		// repository, but it can see that it now IS one, and then the notice is
 		// simply false.
 		if _, err := store.MarkResolved(ctx, abs, notGitGateID, nil); err != nil {
 			return nil, fmt.Errorf("retire the not-a-git-repository notice: %w", err)
@@ -531,7 +531,7 @@ func RunChecks(ctx context.Context, store *Store, projectRoot, gateID string) (*
 //
 // The store keys a finding on (project, gate_id, file_path), and file_path is
 // `file:line:rule`. Two different broken links, or three addresses, on one line
-// therefore share a key, and Upsert's ON CONFLICT kept only the last write —
+// therefore share a key, and Upsert's ON CONFLICT kept only the last write,
 // message AND severity. Measured on 100 public repositories: 243 of 3,149
 // findings (7.7%) vanished that way. They were in `lgit check`'s JSON and
 // nowhere else: not in `lgit list`, the VS Code sidebar or MCP, and an `ignore`
@@ -604,8 +604,8 @@ type presenceArgs struct {
 	message  string
 	// rootOnly restricts the search to the project root. Set for LICENSE and
 	// .gitignore: GitHub's licensee reads only the root, so a licence filed
-	// anywhere else leaves the repository showing no license at all — which
-	// is exactly what the gate should keep saying — and git only honours a
+	// anywhere else leaves the repository showing no license at all, which
+	// is exactly what the gate should keep saying, and git only honours a
 	// .gitignore where it sits.
 	rootOnly bool
 }
@@ -652,7 +652,7 @@ func presenceGate(_ string, args presenceArgs) func(context.Context, string, jso
 
 // dirContainsFile returns true when dir has at least one regular file whose
 // lowercased basename matches predicate. A missing dir is reported as no
-// match (no error) — gates use this to detect "directory absent" too.
+// match (no error): gates use this to detect "directory absent" too.
 func dirContainsFile(dir string, predicate func(lowerName string) bool) (bool, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -687,7 +687,7 @@ var ciWorkflowDirs = []string{
 // ciWorkflowFiles are single-file pipeline definitions from the other major
 // providers. A project with a working .gitlab-ci.yml has CI; telling it to
 // "add a CI workflow" is false, and it was 23% of this gate's findings across
-// a 220-repository sweep — at warning severity.
+// a 220-repository sweep: at warning severity.
 var ciWorkflowFiles = []string{
 	".gitlab-ci.yml", ".gitlab-ci.yaml",
 	".travis.yml",
@@ -728,7 +728,7 @@ func checkCIWorkflow(_ context.Context, root string, _ json.RawMessage) ([]Findi
 
 func checkPRTemplate(_ context.Context, root string, _ json.RawMessage) ([]Finding, error) {
 	// GitHub accepts PULL_REQUEST_TEMPLATE in the root, .github/, or docs/,
-	// with a .md / .txt / no extension — plus a PULL_REQUEST_TEMPLATE/
+	// with a .md / .txt / no extension, plus a PULL_REQUEST_TEMPLATE/
 	// directory holding several named templates.
 	match := func(name string) bool {
 		return name == "pull_request_template.md" ||
@@ -790,7 +790,7 @@ func checkIssueTemplates(_ context.Context, root string, _ json.RawMessage) ([]F
 // The masking is the point of this being a function of its own. It is the one
 // funnel every finding passes through on its way to the store, the CLI and MCP,
 // so no gate's message may carry a secret whether or not that gate remembered
-// to mask it — which is only worth claiming if a test can hand it a gate that
+// to mask it, which is only worth claiming if a test can hand it a gate that
 // did NOT.
 func finalizeFindings(fs []Finding, projectRoot string, g Gate, override string, hasOverride bool) {
 	for i := range fs {
@@ -849,7 +849,7 @@ func reportNotGitOnce(ctx context.Context, store *Store, out *CheckResult, abs s
 		Project:  abs,
 		GateID:   notGitGateID,
 		Severity: SeverityInfo,
-		Title:    fmt.Sprintf("Not a git repository — %d gates skipped", len(skipped)),
+		Title:    fmt.Sprintf("Not a git repository: %d gates skipped", len(skipped)),
 		Message: fmt.Sprintf("Project root has no .git/, so the %d gates that read the git index were skipped: %s. "+
 			"Run `git init`, or run lgit from inside a clone.", len(skipped), strings.Join(skipped, ", ")),
 		FilePath: ".git",

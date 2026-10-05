@@ -119,7 +119,7 @@ func TestDeadPlaceholders_LinePinning(t *testing.T) {
 }
 
 // Files whose basename is a placeholder-registry (TODO.md, FIXME.md, …)
-// must be skipped — they ARE the register, not a file with unwanted markers.
+// must be skipped: they ARE the register, not a file with unwanted markers.
 func TestDeadPlaceholders_RegistryFilesSkipped(t *testing.T) {
 	for _, name := range []string{"TODO.md", "FIXME.md", "TODO.txt", "TODO"} {
 		t.Run(name, func(t *testing.T) {

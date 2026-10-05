@@ -38,7 +38,7 @@ func TestStore_UpsertInsertsAndUpdates(t *testing.T) {
 		t.Fatalf("timestamps must be populated")
 	}
 
-	// Same key, new message — should update in place, not insert.
+	// Same key, new message: should update in place, not insert.
 	second, err := s.Upsert(ctx, Finding{
 		Project: "/p", GateID: "g1", Severity: SeverityError,
 		Title: "T", Message: "m2", FilePath: "a",
@@ -92,7 +92,7 @@ func TestStore_MarkResolved(t *testing.T) {
 	mk("b")
 	mk("c")
 
-	// Keep only "b" — a and c should be resolved.
+	// Keep only "b": a and c should be resolved.
 	n, err := s.MarkResolved(ctx, "/p", "g", []string{"b"})
 	if err != nil {
 		t.Fatal(err)

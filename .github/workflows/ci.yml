@@ -28,7 +28,7 @@ jobs:
         # command"), and the comment said to drop it once 1.22 left the matrix.
         #
         # 1.25 is the floor because golang.org/x/net v0.55.0+ requires it, and
-        # that is the first release carrying the fix for GHSA-5cv4-jp36-h3mw —
+        # that is the first release carrying the fix for GHSA-5cv4-jp36-h3mw,
         # a DoS in the HTML parser html_lint runs over untrusted repositories.
         # 1.22 and 1.23 are both EOL, so this is the supported pair, not a
         # narrowing.

@@ -36,7 +36,7 @@ interface CheckResult {
 }
 
 // =============================================================================
-// View state — persisted across sessions, drives the tree.
+// View state: persisted across sessions, drives the tree.
 // =============================================================================
 
 type GroupBy = "none" | "severity" | "gate" | "file" | "tag" | "status";
@@ -51,7 +51,7 @@ interface ViewState {
   query: string;
 }
 
-// Info findings are off by default — they're audit-trail / nice-to-have
+// Info findings are off by default: they're audit-trail / nice-to-have
 // (TODO comments, missing CONTRIBUTING.md, override_accepted, …) and
 // drown out errors and warnings when they share the same tree. Toggle
 // them on via the severity filter when you want the full picture.
@@ -88,7 +88,7 @@ let treeView: vscode.TreeView<TreeNode>;
 const seenFindingKeys = new Set<string>();
 
 // Gate IDs for which we know how to generate a stub. Mirrors the cases
-// handled in stubs.stubFor / the LICENSE branch — kept here so the
+// handled in stubs.stubFor / the LICENSE branch: kept here so the
 // CodeActionProvider can advertise actions without invoking the generator.
 const fixableGates = new Set<string>([
   "readme_present",
@@ -113,7 +113,7 @@ export function activate(context: vscode.ExtensionContext) {
   statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   statusBar.command = "l0-git.findings.focus";
   statusBar.text = "$(shield) l0-git";
-  statusBar.tooltip = "l0-git — click to open the findings view";
+  statusBar.tooltip = "l0-git: click to open the findings view";
   statusBar.show();
   context.subscriptions.push(statusBar);
 
@@ -216,7 +216,7 @@ function registerReadmeWatchersForFolders(
 ) {
   // Watch every file the registered gates care about as INPUT (presence
   // or content used by the gate's decision). Source files are NOT
-  // watched here — content scanners (secrets, network, conn_strings,
+  // watched here: content scanners (secrets, network, conn_strings,
   // dead_placeholders, html/css/markdown) re-run as part of every full
   // check and would otherwise re-trigger on every keystroke.
   //
@@ -363,7 +363,7 @@ function workspaceRoots(): string[] {
 }
 
 // Coalesce watcher bursts. While one run is in flight, additional triggers
-// just set the "rerun" flag — when the current pass finishes we kick off
+// just set the "rerun" flag, when the current pass finishes we kick off
 // exactly one more. Eliminates the N-events-fire-N-runs pattern when files
 // land in quick succession (e.g. on workspace open or a multi-file save).
 let activeRun: Promise<void> | null = null;
@@ -386,7 +386,7 @@ function runChecksAndRefresh(context: vscode.ExtensionContext): Promise<void> {
 
 async function doRunChecksAndRefresh(context: vscode.ExtensionContext): Promise<void> {
   statusBar.text = "$(loading~spin) l0-git: checking…";
-  statusBar.tooltip = "l0-git — running gates…";
+  statusBar.tooltip = "l0-git: running gates…";
   const roots = workspaceRoots();
   if (roots.length === 0) {
     provider.refresh();
@@ -415,7 +415,7 @@ async function doRunChecksAndRefresh(context: vscode.ExtensionContext): Promise<
     }
   }
   // Toasts are reserved for errors. Warning/info toasts on every workspace
-  // open trained users to dismiss without reading — defeating the point.
+  // open trained users to dismiss without reading: defeating the point.
   // Errors-only keeps the interruption budget for things that actually need
   // a human now (leaked secret, merge conflict marker, …).
   const newErrors = newlyOpen.filter((f) => f.severity === "error");
@@ -443,14 +443,14 @@ async function syncDiagnostics(context: vscode.ExtensionContext, roots: string[]
     let findings: Finding[];
     try {
       // Diagnostics always reflect the full set of open findings,
-      // independent of the user's tree view filters — the Problems
+      // independent of the user's tree view filters: the Problems
       // pane is the universal "what's broken" surface.
       const diagLimit = 2000;
       const out = await runLGIT(context, ["list", `-project=${root}`, "-status=open", `-limit=${diagLimit}`]);
       findings = JSON.parse(out || "[]") as Finding[];
       if (findings.length >= diagLimit) {
         void vscode.window.showWarningMessage(
-          `l0-git: ${path.basename(root)} has ${diagLimit}+ open findings — diagnostics capped. Run 'lgit list' from the terminal for the full set.`,
+          `l0-git: ${path.basename(root)} has ${diagLimit}+ open findings: diagnostics capped. Run 'lgit list' from the terminal for the full set.`,
         );
       }
     } catch (e: unknown) {
@@ -460,7 +460,7 @@ async function syncDiagnostics(context: vscode.ExtensionContext, roots: string[]
     for (const f of findings) {
       const target = findingTargetUri(f);
       const range = new vscode.Range(0, 0, 0, 0);
-      const diag = new vscode.Diagnostic(range, `${f.title} — ${f.message}`, severityToDiag(f.severity));
+      const diag = new vscode.Diagnostic(range, `${f.title}: ${f.message}`, severityToDiag(f.severity));
       diag.source = "l0-git";
       diag.code = f.gate_id;
       const key = target.toString();
@@ -479,7 +479,7 @@ async function syncDiagnostics(context: vscode.ExtensionContext, roots: string[]
 }
 
 // projectFreshness asks the binary how current a project's findings are. A
-// failure, or an older binary that does not say, is "unknown" — shown as
+// failure, or an older binary that does not say, is "unknown": shown as
 // nothing, never as "never checked".
 async function projectFreshness(context: vscode.ExtensionContext, root: string): Promise<Freshness | undefined> {
   try {
@@ -507,7 +507,7 @@ function updateStatusBar(counts: { error: number; warning: number; info: number 
   const note = freshnessNote(fresh);
   if (total === 0) {
     statusBar.text = "$(check) l0-git: clean";
-    statusBar.tooltip = new vscode.MarkdownString(`l0-git — no open findings${note}`.replace(/\n/g, "  \n"), true);
+    statusBar.tooltip = new vscode.MarkdownString(`l0-git: no open findings${note}`.replace(/\n/g, "  \n"), true);
     statusBar.backgroundColor = undefined;
     return;
   }
@@ -518,8 +518,8 @@ function updateStatusBar(counts: { error: number; warning: number; info: number 
     counts.warning > 0 ? `warnings: ${counts.warning}` : "",
     counts.info > 0    ? `info: ${counts.info}`        : "",
   ].filter(Boolean);
-  statusBar.tooltip = new vscode.MarkdownString(`l0-git — ${lines.join(", ")} (click to open)${note}`.replace(/\n/g, "  \n"), true);
-  // Don't paint the bar red — that's reserved by VSCode for blocking issues
+  statusBar.tooltip = new vscode.MarkdownString(`l0-git: ${lines.join(", ")} (click to open)${note}`.replace(/\n/g, "  \n"), true);
+  // Don't paint the bar red: that's reserved by VSCode for blocking issues
   // and causes visual fatigue when warnings dominate. Tooltip + icon is
   // enough signal.
   statusBar.backgroundColor = undefined;
@@ -550,7 +550,7 @@ function notifyNewFindings(context: vscode.ExtensionContext, findings: Finding[]
   const shown = findings.slice(0, 3);
   for (const f of shown) {
     const fn = severityToToast(f.severity);
-    void fn(`l0-git: ${f.title} — ${path.basename(f.project)}`, "View", "Ignore").then((choice) => {
+    void fn(`l0-git: ${f.title}: ${path.basename(f.project)}`, "View", "Ignore").then((choice) => {
       if (choice === "View") {
         void vscode.commands.executeCommand("l0-git.findings.focus");
       } else if (choice === "Ignore") {
@@ -562,7 +562,7 @@ function notifyNewFindings(context: vscode.ExtensionContext, findings: Finding[]
   }
   if (findings.length > shown.length) {
     void vscode.window.showInformationMessage(
-      `l0-git: ${findings.length - shown.length} more findings — see the l0-git view.`,
+      `l0-git: ${findings.length - shown.length} more findings: see the l0-git view.`,
     );
   }
 }
@@ -601,7 +601,7 @@ async function openFinding(item: FindingItem) {
     `_gate:_ ${f.gate_id}  \n` +
     `_severity:_ ${f.severity}  \n` +
     `_project:_ ${f.project}  \n` +
-    `_file:_ ${f.file_path || "—"}  \n` +
+    `_file:_ ${f.file_path || "none"}  \n` +
     `_status:_ ${f.status}  \n` +
     `_updated:_ ${ts}\n\n` +
     `---\n\n` +
@@ -761,12 +761,12 @@ class FindingsTreeProvider implements vscode.TreeDataProvider<TreeNode> {
       outputChannel.appendLine(`tree load failed: ${err.message}`);
       if (err instanceof BinaryNotFoundError) {
         void notifyBinaryMissing(err.message);
-        return [PlaceholderItem.make("lgit binary not found — see notification")];
+        return [PlaceholderItem.make("lgit binary not found: see notification")];
       }
       return [PlaceholderItem.make(`Error: ${err.message}`)];
     }
 
-    // override_accepted is audit-trail noise in the working surface — it
+    // override_accepted is audit-trail noise in the working surface: it
     // exists so silent / unjustified overrides land in the DB and dashboard.
     // Hide it from the tree unconditionally (the warning-bumped variant for
     // missing-reason overrides also gets suppressed; query the dashboard
@@ -778,18 +778,18 @@ class FindingsTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 
     if (filtered.length === 0) {
       // When the default-hidden info layer is the only thing keeping the
-      // tree non-empty, say so explicitly — otherwise the user thinks the
+      // tree non-empty, say so explicitly, otherwise the user thinks the
       // project is clean while N info findings sit waiting.
       const hiddenInfoCount = !this.state.severities.info
         ? findings.filter((f) => f.severity === "info" && f.gate_id !== "override_accepted").length
         : 0;
       let empty: string;
       if (hiddenInfoCount > 0) {
-        empty = `No actionable findings — ${hiddenInfoCount} info hidden (toggle severity to view)`;
+        empty = `No actionable findings: ${hiddenInfoCount} info hidden (toggle severity to view)`;
       } else if (anyFilterActive(this.state)) {
-        empty = `No findings match the active filters — adjust or clear them`;
+        empty = `No findings match the active filters: adjust or clear them`;
       } else {
-        empty = `No ${this.state.status === "open" ? "open " : this.state.status + " "}findings — clean slate ✓`;
+        empty = `No ${this.state.status === "open" ? "open " : this.state.status + " "}findings: clean slate ✓`;
       }
       return [PlaceholderItem.make(empty)];
     }
@@ -818,7 +818,7 @@ class FindingsTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 }
 
 // listArgs converts the persisted view state into the backend's flag
-// vocabulary. Severity is intentionally NOT pushed to the backend — the
+// vocabulary. Severity is intentionally NOT pushed to the backend: the
 // view supports multi-select severities and we union them client-side.
 function listArgs(project: string, state: ViewState, limit = 1000): string[] {
   const args = ["list", `-project=${project}`, `-limit=${limit}`, `-sort=${state.sortBy}`];
@@ -848,7 +848,7 @@ function findingFileLine(f: Finding): { file: string; line: number } | null {
 
 // enrichWithBlame mutates the findings array in-place, attaching a
 // BlameInfo for each row whose file_path resolves to a real file. One git
-// blame per unique file, fired in parallel — the cost is bound by the
+// blame per unique file, fired in parallel: the cost is bound by the
 // slowest blame, not the sum.
 async function enrichWithBlame(project: string, findings: Finding[]): Promise<void> {
   // Group findings by file so each blame call covers many findings.
@@ -931,7 +931,7 @@ function blameSummary(b: BlameInfo): string {
 }
 
 // relativeTime formats a millis timestamp as "3d ago" / "5h ago" /
-// "2 months ago". Plain English, no dep — matches what GitLens shows.
+// "2 months ago". Plain English, no dep: matches what GitLens shows.
 function relativeTime(ms: number): string {
   const delta = Date.now() - ms;
   const sec = Math.round(delta / 1000);
@@ -1101,8 +1101,8 @@ class FindingItem extends vscode.TreeItem {
     item.tooltip = new vscode.MarkdownString(
       `**${f.title}** _(${f.severity})_\n\n${f.message}\n\n` +
       `_gate:_ ${f.gate_id}  \n_project:_ ${f.project}  \n` +
-      `_file:_ ${f.file_path || "—"}  \n` +
-      `_tags:_ ${f.tags || "—"}  \n` +
+      `_file:_ ${f.file_path || "none"}  \n` +
+      `_tags:_ ${f.tags || "none"}  \n` +
       blameLine +
       `_updated:_ ${ts}`,
     );
@@ -1157,14 +1157,14 @@ async function promptGroupBy(): Promise<void> {
     { label: "Severity", value: "severity", description: "errors / warnings / info" },
     { label: "Gate",     value: "gate",     description: "one node per gate ID" },
     { label: "File",     value: "file",     description: "one node per source file" },
-    { label: "Tag",      value: "tag",      description: "explode by tag — security / git-hygiene / …" },
+    { label: "Tag",      value: "tag",      description: "explode by tag: security / git-hygiene / …" },
     { label: "Status",   value: "status",   description: "open / ignored / resolved" },
     { label: "None",     value: "none",     description: "flat list" },
   ];
   const current = provider.state.groupBy;
   const picked = await vscode.window.showQuickPick(
     options.map((o) => ({ label: o.label, description: o.description, picked: o.value === current, value: o.value })),
-    { placeHolder: `Group by — currently: ${current}`, matchOnDescription: true },
+    { placeHolder: `Group by: currently: ${current}`, matchOnDescription: true },
   );
   if (!picked) return;
   provider.mutate({ groupBy: picked.value });
@@ -1172,7 +1172,7 @@ async function promptGroupBy(): Promise<void> {
 
 async function promptSortBy(): Promise<void> {
   const options: Array<{ label: string; value: SortBy; description: string }> = [
-    { label: "Updated (newest first)", value: "updated",  description: "default — show what just changed" },
+    { label: "Updated (newest first)", value: "updated",  description: "default: show what just changed" },
     { label: "Created (newest first)", value: "created",  description: "by first-seen time" },
     { label: "Severity (worst first)", value: "severity", description: "error → warning → info" },
     { label: "Gate (alphabetical)",    value: "gate",     description: "groups same-gate findings together" },
@@ -1181,7 +1181,7 @@ async function promptSortBy(): Promise<void> {
   const current = provider.state.sortBy;
   const picked = await vscode.window.showQuickPick(
     options.map((o) => ({ label: o.label, description: o.description, picked: o.value === current, value: o.value })),
-    { placeHolder: `Sort by — currently: ${current}` },
+    { placeHolder: `Sort by: currently: ${current}` },
   );
   if (!picked) return;
   provider.mutate({ sortBy: picked.value });
@@ -1197,7 +1197,7 @@ async function promptStatusFilter(): Promise<void> {
   const current = provider.state.status;
   const picked = await vscode.window.showQuickPick(
     options.map((o) => ({ label: o.label, picked: o.value === current, value: o.value })),
-    { placeHolder: `Status — currently: ${current}` },
+    { placeHolder: `Status: currently: ${current}` },
   );
   if (!picked) return;
   provider.mutate({ status: picked.value });
@@ -1250,7 +1250,7 @@ function resetFilters(): void {
 
 // openOverview wires the extension's runtime state into the self-contained
 // overview webview module. When multi-folder, prompt for which project to
-// analyse — the dashboard shows one project at a time.
+// analyse: the dashboard shows one project at a time.
 async function openOverview(context: vscode.ExtensionContext): Promise<void> {
   const roots = workspaceRoots();
   if (roots.length === 0) {
@@ -1299,7 +1299,7 @@ class L0GitCodeActions implements vscode.CodeActionProvider {
 
 // projectFromDiagnosticUri figures out which workspace folder a diagnostic
 // belongs to. Project-level findings target the folder URI directly; file
-// findings target a child path — in both cases the workspace folder
+// findings target a child path: in both cases the workspace folder
 // containing the URI is the right answer.
 function projectFromDiagnosticUri(d: vscode.Diagnostic): string | undefined {
   // VSCode invokes provideCodeActions with a document; the diagnostic's
@@ -1307,7 +1307,7 @@ function projectFromDiagnosticUri(d: vscode.Diagnostic): string | undefined {
   // collection. We use workspace folders as the source of truth instead.
   const folders = vscode.workspace.workspaceFolders ?? [];
   if (folders.length === 1) return folders[0].uri.fsPath;
-  // For multi-root, we can't disambiguate from a Diagnostic alone — fall
+  // For multi-root, we can't disambiguate from a Diagnostic alone: fall
   // back to the first folder; the user can re-run in their target workspace.
   // This branch is rare; the fix command itself prompts for confirmation.
   void d;
@@ -1383,7 +1383,7 @@ interface RemediationPayload {
 }
 
 // showRemediation runs `lgit fix <id>` and opens the human-readable output
-// in a plaintext doc — same surface as openFinding, but with the recipe
+// in a plaintext doc: same surface as openFinding, but with the recipe
 // instead of just the message. Plain text (not markdown) so the literal
 // `--- prompt ---` block survives intact for copy-paste into Claude Code.
 async function showRemediation(context: vscode.ExtensionContext, item: FindingItem): Promise<void> {
@@ -1404,7 +1404,7 @@ async function showRemediation(context: vscode.ExtensionContext, item: FindingIt
 
 // copyClaudePrompt grabs the structured remediation, copies the
 // claude_prompt to the system clipboard, and shows a one-line toast.
-// No subprocess, no auto-execution — the user pastes into Claude Code (or
+// No subprocess, no auto-execution: the user pastes into Claude Code (or
 // any agent) themselves. This is the safest possible HITL channel.
 async function copyClaudePrompt(context: vscode.ExtensionContext, item: FindingItem): Promise<void> {
   if (!item || !item.finding) return;
@@ -1433,6 +1433,6 @@ async function copyClaudePrompt(context: vscode.ExtensionContext, item: FindingI
   await vscode.env.clipboard.writeText(prompt);
   const conf = parsed.remediation.confidence === "deterministic" ? "deterministic recipe" : "guided remediation";
   vscode.window.showInformationMessage(
-    `l0-git: copied Claude Code prompt for finding #${id} (${conf}) — paste it into your Claude Code session.`,
+    `l0-git: copied Claude Code prompt for finding #${id} (${conf}): paste it into your Claude Code session.`,
   );
 }

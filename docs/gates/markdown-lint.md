@@ -17,7 +17,7 @@ Deterministic AST lint of tracked .md/.markdown files via goldmark. Fires for: i
 
 | Rule | Severity | Fires when |
 |---|---|---|
-| `image_no_alt` | warning | `![](…)` — empty alt text |
+| `image_no_alt` | warning | `![](…)`: empty alt text |
 | `link_local_broken` | warning | A relative link whose target is not in the repo |
 | `link_anchor_broken` | warning | A `#anchor` matching no heading in the same file |
 | `codeblock_invalid_payload` | warning | A block tagged `json`/`yaml` whose contents do not parse |
@@ -50,24 +50,24 @@ percent-encoded anchor (`#caf%C3%A9`) is decoded before it is compared.
 `codeblock_invalid_payload` answers "does the snippet parse?", and documentation
 has four honest reasons for a snippet that does not. None is reported:
 
-- **An excerpt** — the members of an object without its braces.
+- **An excerpt**: the members of an object without its braces.
 - **A stream** of JSON values one after another (`{"detail": "a"}` then
   `{"detail": "b"}`): how a troubleshooting page lists alternative responses.
 - **Comments and type placeholders** in JSON: `"features": {…}   // optional` and
   `"tenants": <integer>`. They are removed *outside string literals only*, a
-  placeholder only where a JSON **value** belongs (after `:`, `,` or `[` — an
+  placeholder only where a JSON **value** belongs (after `:`, `,` or `[`: an
   `<html>` tag on its own is not one), and the block is accepted only if what is
-  left parses strictly — one with a real syntax error as well is still reported.
+  left parses strictly: one with a real syntax error as well is still reported.
 - **A block labelled as the wrong way to do it**: its **first line** is a
   `# Bad: …` / `# Wrong: …` / `# Incorrect: …` / `# Invalid: …` comment, or the line
-  directly above it (one blank line allowed) is only a label — `**Bad**:`,
+  directly above it (one blank line allowed) is only a label: `**Bad**:`,
   `### Wrong`, `❌ Bad example`, `Don't:`. A comment in the *middle* of a block, such as
   `# Don't: expose 5432 publicly`, is advice about the configuration and does not
   excuse the block.
 
 ### Why codeblock_no_language is opt-in
 
-An untagged fence is a style preference, not a verifiable defect — an
+An untagged fence is a style preference, not a verifiable defect: an
 output or plain-text block legitimately has no language. It stayed the single
 largest finding category in the corpus while being the least actionable, so it
 is now opt-in via `enabled_rules`.
@@ -116,7 +116,7 @@ Or keep it running at a lower severity:
 }
 ```
 
-For a single occurrence, prefer the inline directive — it records the reason next to the code:
+For a single occurrence, prefer the inline directive: it records the reason next to the code:
 
 ```text
 <!-- l0git: ignore <rule_id> reason: … -->

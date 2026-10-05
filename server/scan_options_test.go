@@ -34,7 +34,7 @@ func TestIsDefaultFixturePath(t *testing.T) {
 		{"src/fixtures/leaky.txt", true},
 		{"src/__fixtures__/payload.json", true},
 
-		// Genuine source — must NOT match
+		// Genuine source: must NOT match
 		{"src/main.go", false},
 		{"server/secrets.go", false},
 		{"docs/intro.md", false},
@@ -115,7 +115,7 @@ func TestIsDefaultDataFile(t *testing.T) {
 		{"README.md", false},
 		{"server/main.go", false},
 		{"data.json", false},   // .json is structured but not line-delimited; gates handle it
-		{"config.yaml", false}, // structured config — must still scan
+		{"config.yaml", false}, // structured config: must still scan
 		{"weights.bin", false}, // binary, but content scanners catch it via isBinary
 	}
 	for _, c := range cases {
@@ -159,7 +159,7 @@ func TestIsDefaultBackupPath(t *testing.T) {
 		{"backupable_module.py", false},                   // contains "backup" as substring only
 		{"old/file.go", false},                            // "old" alone isn't a backup-dir marker
 		{"checks/aws/efs/check_backup_enabled.py", false}, // "backup" is domain word, no timestamp
-		{"src/check_backup_policy.py", false},             // same — code checking backup policies
+		{"src/check_backup_policy.py", false},             // same: code checking backup policies
 	}
 	for _, c := range cases {
 		t.Run(c.path, func(t *testing.T) {
@@ -178,7 +178,7 @@ func TestScanOptions_ShouldSkipContent(t *testing.T) {
 		t.Errorf("default opts must skip .csv in content scan")
 	}
 	if parsed.shouldSkip("data/blocklist.csv") {
-		t.Errorf("shouldSkip (metadata path) must NOT skip .csv — large_file/vendored need to see it")
+		t.Errorf("shouldSkip (metadata path) must NOT skip .csv: large_file/vendored need to see it")
 	}
 
 	// Explicit false: data files become scannable.
@@ -197,7 +197,7 @@ func TestScanOptions_ShouldSkipContent(t *testing.T) {
 	if !parsed.shouldSkipContent("bak/build.func") || !parsed.shouldSkipContent("main.go.bak") {
 		t.Errorf("default opts must skip backup paths in content scan")
 	}
-	// But shouldSkip (metadata path) must still see backups —
+	// But shouldSkip (metadata path) must still see backups,
 	// vendored_dir_tracked / large_file_tracked may want to flag them.
 	if parsed.shouldSkip("bak/build.func") {
 		t.Errorf("shouldSkip (metadata path) must NOT skip backup paths")
@@ -211,7 +211,7 @@ func TestScanOptions_ShouldSkipContent(t *testing.T) {
 }
 
 // Dataset-directory skip: ambiguous-extension files (.json/.txt/.cm/…) under a
-// recognised data directory are payload, not source — content gates skip them.
+// recognised data directory are payload, not source: content gates skip them.
 // Source files (.go/.py/…) in the same tree, and the same extensions outside a
 // data directory, are NOT skipped.
 func TestIsDefaultDataDirFile(t *testing.T) {
@@ -312,7 +312,7 @@ func TestIsCoverageReportPage(t *testing.T) {
 		}
 	}
 	// First-party files that share the directory name or the extension must
-	// keep being scanned — `coverage/` is an ordinary name for a feature or a
+	// keep being scanned: `coverage/` is an ordinary name for a feature or a
 	// docs section, and a skip here would hide real content.
 	firstParty := []string{
 		"coverage/index.html",         // could be hand-written; one page either way

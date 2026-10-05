@@ -5,7 +5,7 @@ description: "Deterministic AST-based lint of tracked Dockerfiles. Fires for: un
 
 # Dockerfile lint
 
-An AST-based lint over tracked Dockerfiles — reproducibility and least privilege, nothing stylistic.
+An AST-based lint over tracked Dockerfiles: reproducibility and least privilege, nothing stylistic.
 
 <GateMeta id="dockerfile_lint" severity="warning" tags="containers,security,build" scope="Tracked files (`git ls-files`)" />
 
@@ -51,7 +51,7 @@ Dockerfile:1 FROM node:latest pins :latest. `:latest` is a moving target. Pin to
 ```
 
 Use `disabled_rules` for a repo-wide policy decision. For a single line, prefer
-the inline directive — it records *why*:
+the inline directive: it records *why*:
 
 ```dockerfile
 # l0git: ignore from_latest reason: dev base image, never released
@@ -76,7 +76,7 @@ Or keep it running at a lower severity:
 }
 ```
 
-For a single occurrence, prefer the inline directive — it records the reason next to the code:
+For a single occurrence, prefer the inline directive: it records the reason next to the code:
 
 ```text
 # l0git: ignore <rule_id> reason: …

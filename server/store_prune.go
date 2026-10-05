@@ -85,11 +85,11 @@ const mountDepth = 3
 
 // classifyProject decides whether a project that no longer has a directory is
 // GONE or merely OFFLINE. The two must not be confused, because pruning a
-// project deletes its findings — the ignored ones, which are the user's own
-// decisions, included — and deleting them because a drive was unplugged is data
+// project deletes its findings: the ignored ones, which are the user's own
+// decisions, included, and deleting them because a drive was unplugged is data
 // loss. Whenever it cannot tell, the answer is "unreachable".
 //
-// A project is unreachable — never pruned — when any of these holds:
+// A project is unreachable, never pruned, when any of these holds:
 //   - something IS at the path, or at an ancestor, but it is not a directory we
 //     can enter: a symlink to a drive that is away (`~/proj -> /Volumes/USB/proj`,
 //     `~/code -> /Volumes/T7/code`), a file;
@@ -98,14 +98,14 @@ const mountDepth = 3
 //   - on Windows, its drive is missing;
 //   - it sits below a mount root (`/Volumes`, `/media`, `/run/media`,
 //     `~/Library/CloudStorage`, …) and the nearest ancestor that still exists is
-//     fewer than mountDepth components below it — a missing mount point, or a
+//     fewer than mountDepth components below it: a missing mount point, or a
 //     directory directly under one;
 //   - the nearest directory above it that still exists is EMPTY: an unmounted
 //     volume leaves its mount point behind as an empty directory, where a
 //     deleted project leaves its neighbours;
 //   - the nearest directory above it that still exists is the filesystem root.
 //
-// Otherwise it is vanished. An earlier rule — "the parent must exist" — was too
+// Otherwise it is vanished. An earlier rule, "the parent must exist", was too
 // timid: deleting a whole tree (`work/` and every clone in it) leaves no parent
 // either, and those were the largest piles of findings nothing could resolve.
 func classifyProject(project string) projectState {
@@ -175,7 +175,7 @@ type PruneOptions struct {
 }
 
 // maxKeepResolvedDays is a century. The cutoff is computed in a time.Duration,
-// which overflows int64 at 106,752 days — and a natural way of writing "keep
+// which overflows int64 at 106,752 days, and a natural way of writing "keep
 // everything" (-keep-resolved-days=999999) then put the cutoff in the FUTURE and
 // deleted every resolved finding, while the dry run inverted the same way and so
 // did not warn.

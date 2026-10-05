@@ -11,7 +11,7 @@ import (
 // marked "regression" were reported by main and silenced by the PR.
 
 // Regression: the "host made of regex syntax" rule tested everything after the
-// `@` — path, query, and any punctuation glued to the URL — so a real credential
+// `@`, path, query, and any punctuation glued to the URL, so a real credential
 // in a Markdown link, a parenthetical, a shell substitution or a Go string was
 // silenced.
 func TestReview_PunctuationAroundAURLDoesNotHideItsCredential(t *testing.T) {
@@ -69,8 +69,8 @@ func TestReview_PasswordsWithAtHashAndQuestionMark(t *testing.T) {
 			t.Errorf("part of the password survived redaction: %q -> %q", in, got)
 		}
 	}
-	// A query that really is a query — `key=value` between the `?` and the last
-	// `@` — still ends the userinfo before it.
+	// A query that really is a query: `key=value` between the `?` and the last
+	// `@`, still ends the userinfo before it.
 	if got := redactSecrets("https://user:pw@host.acme.io?x=a@b"); got != "https://user:***@host.acme.io?x=a@b" {
 		t.Errorf("an @ inside a key=value query must not be taken for the end of the userinfo: %q", got)
 	}

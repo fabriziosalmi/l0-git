@@ -92,7 +92,7 @@ becomes noise, and noise gets switched off entirely.
 ### Why fixtures are skipped by default
 
 Test fixtures legitimately contain mock secrets, fake IP addresses and
-placeholder URLs — that is what makes them fixtures. Scanning them produces
+placeholder URLs: that is what makes them fixtures. Scanning them produces
 findings that are correct about the bytes and wrong about the meaning.
 
 Covered: `*_test.go`, `test_*.py` / `*_test.py`, `*.test.{ts,tsx,js,jsx}`,
@@ -116,8 +116,8 @@ In a `.csv` of network ranges or a `.jsonl` of records, the addresses and keys
 *are* the payload of the file, not literals embedded in source. Covered:
 `.csv`, `.tsv`, `.jsonl`, `.ndjson`, `.parquet`, `.arrow`, `.feather`.
 
-This applies to content-scanning gates only. Metadata gates —
-`large_file_tracked`, `vendored_dir_tracked` and friends — still see these
+This applies to content-scanning gates only. Metadata gates,
+`large_file_tracked`, `vendored_dir_tracked` and friends, still see these
 files, because for them the size and the path are the point.
 
 Some gates additionally detect address lists by content: `network_scan` treats
@@ -134,7 +134,7 @@ An unparseable `.l0git.json` is itself reported, by the
 
 ### A typo is reported, not absorbed
 
-Every key is validated — the top-level fields, and each `gate_options` sub-tree
+Every key is validated: the top-level fields, and each `gate_options` sub-tree
 against the gate that owns it. Unknown keys and wrong types are both rejected:
 
 ```json
@@ -149,15 +149,15 @@ The warning goes to **stderr**, and the same text appears in the `config_error`
 field of `lgit check`'s JSON. This matters because the failure it replaces was
 invisible: a mistyped option key used to be discarded and the gate ran on its
 defaults, so `"threshold_mb": "20"` quietly stayed 5 and `"exclude_path"`
-excluded nothing — with no error, no warning, and exit 0.
+excluded nothing, with no error, no warning, and exit 0.
 
 ::: warning A bad key discards more than itself
 A problem in the **top level** (`ignore`, `severity`, `gate_options`) means the
-whole file fails to parse, so *none* of your configuration applies — not just
+whole file fails to parse, so *none* of your configuration applies, not just
 the offending key. A problem inside one `gate_options` sub-tree is contained:
 only that gate falls back to its defaults.
 
 Either way the run continues and the exit code stays `0`. A broken config
 should not take a whole CI job with it, but it should never be silent, so
-check stderr — or `config_error` — if a setting seems not to be taking effect.
+check stderr, or `config_error`, if a setting seems not to be taking effect.
 :::

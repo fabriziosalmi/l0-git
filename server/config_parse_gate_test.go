@@ -13,7 +13,7 @@ func TestConfigKind(t *testing.T) {
 		"k8s.yaml":                 cfgYAML,
 		"deploy.yml":               cfgYAML,
 		".github/workflows/ci.yml": cfgYAML,
-		// JSONC family — never parsed as strict JSON.
+		// JSONC family, never parsed as strict JSON.
 		"tsconfig.json":                   cfgNone,
 		"tsconfig.build.json":             cfgNone,
 		"jsconfig.json":                   cfgNone,
@@ -57,7 +57,7 @@ func TestConfigParseNoFalsePositives(t *testing.T) {
 		{"empty yaml is valid", cfgYAML, "c.yml", "\n"},
 		{"yaml custom tag (cloudformation)", cfgYAML, "tpl.yaml", "Resources:\n  Bucket:\n    Name: !Ref MyBucket\n  Arn: !GetAtt Bucket.Arn\n"},
 		{"yaml anchors/aliases", cfgYAML, "c.yml", "base: &b\n  x: 1\nuse:\n  <<: *b\n"},
-		// Templates are not standalone YAML — skipped, never flagged.
+		// Templates are not standalone YAML: skipped, never flagged.
 		{"helm template braces", cfgYAML, "templates/deploy.yaml", "image: {{ .Values.image }}\nport: {{ .Values.port }}\n"},
 		{"erb template", cfgYAML, "config/database.yml", "production:\n  host: <%= ENV['DB_HOST'] %>\n"},
 		{"gh actions expression (valid yaml plain scalar)", cfgYAML, ".github/workflows/ci.yml", "jobs:\n  b:\n    steps:\n      - run: echo done\n"},

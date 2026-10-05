@@ -51,7 +51,7 @@ func fullProject(t *testing.T) string {
 // creation is expensive, that copy was a measurable slice of the run.
 //
 // It also disables background maintenance. `git commit` can detach a
-// `gc --auto`, and git does not wait for it — so it keeps writing into
+// `gc --auto`, and git does not wait for it, so it keeps writing into
 // .git/objects/pack after the test function returns, and t.TempDir()'s
 // RemoveAll loses the race:
 //
@@ -79,7 +79,7 @@ func gitInit(t *testing.T, dir string) {
 	}
 }
 
-// The flake this guards against cannot be reproduced on demand — it showed up
+// The flake this guards against cannot be reproduced on demand: it showed up
 // once, on macOS with git 2.55. If a refactor drops the config write, the only
 // signal would be another intermittent red on someone else's PR months later.
 func TestGitInitDisablesBackgroundMaintenance(t *testing.T) {
@@ -189,7 +189,7 @@ func TestRunChecks_ConfigIgnore(t *testing.T) {
 	ctx := context.Background()
 	root := emptyProject(t)
 
-	// First run with no config — readme_present should fire.
+	// First run with no config: readme_present should fire.
 	if _, err := RunChecks(ctx, store, root, ""); err != nil {
 		t.Fatal(err)
 	}

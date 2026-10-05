@@ -51,7 +51,7 @@ func TestParseDockerfile_LineContinuation(t *testing.T) {
 	}
 }
 
-// CRLF input must produce identical line numbers to LF input — editors
+// CRLF input must produce identical line numbers to LF input: editors
 // and CI runners differ on this, the gate must not.
 func TestParseDockerfile_CRLF(t *testing.T) {
 	src := "FROM scratch\r\nUSER 0\r\n"
@@ -65,7 +65,7 @@ func TestParseDockerfile_CRLF(t *testing.T) {
 }
 
 // TestParseGateOverride covers every shape the directive grammar accepts
-// or rejects — this is the security boundary between "rule fired" and
+// or rejects: this is the security boundary between "rule fired" and
 // "rule deliberately silenced", so the parse table must be exhaustive.
 func TestParseGateOverride(t *testing.T) {
 	cases := []struct {

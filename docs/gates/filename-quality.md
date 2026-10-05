@@ -1,6 +1,6 @@
 ---
 title: "File name quality"
-description: "Surfaces tracked filenames containing spaces, control chars, or non-ASCII characters — these break unquoted shell pipelines and CI scripts."
+description: "Surfaces tracked filenames containing spaces, control chars, or non-ASCII characters: these break unquoted shell pipelines and CI scripts."
 ---
 
 # File name quality
@@ -11,7 +11,7 @@ Filenames containing spaces or invisible characters break every shell pipeline t
 
 ## What it checks
 
-Surfaces tracked filenames containing spaces, control chars, or non-ASCII characters — these break unquoted shell pipelines and CI scripts.
+Surfaces tracked filenames containing spaces, control chars, or non-ASCII characters: these break unquoted shell pipelines and CI scripts.
 
 Reported categories:
 
@@ -19,7 +19,7 @@ Reported categories:
 |---|---|
 | `spaces` | The name contains a space or tab |
 | `control chars` | C0/C1 control characters, or `DEL` |
-| `bidi override chars` | Unicode bidirectional overrides — the [Trojan Source](https://trojansource.codes/) class |
+| `bidi override chars` | Unicode bidirectional overrides: the [Trojan Source](https://trojansource.codes/) class |
 | `zero-width chars` | Zero-width and other invisible code points |
 
 Bidi and zero-width characters are worth more than a style note: a filename can

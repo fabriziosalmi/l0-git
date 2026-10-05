@@ -7,7 +7,7 @@ description: All 36 built-in gates, grouped by theme.
 
 l0-git ships **36 built-in gates**. Every one of them fires only when the
 violation can be stated as a binary condition over the file system, the git
-index, or a parse tree — so a finding is reproducible on any machine, and two
+index, or a parse tree, so a finding is reproducible on any machine, and two
 runs over the same tree always agree.
 
 Three gates are **opt-in** and do nothing until you enable them in
@@ -23,7 +23,7 @@ lgit gates          # the same list, straight from the binary
 
 Many of the gates read the git index. On a directory with no `.git/`, `lgit check`
 does not repeat that once per gate: it files **one** info finding under the id
-`git_repository` — *"Not a git repository — 17 gates skipped"* — that names the gates
+`git_repository`, *"Not a git repository, 17 gates skipped"*, that names the gates
 it stopped. `git_repository` is not a gate of its own and is not in `lgit gates`; it
 retires itself the next time the directory is a repository, and `"ignore": ["git_repository"]`
 in `.l0git.json` silences it. Asking for a single gate
@@ -34,7 +34,7 @@ in `.l0git.json` silences it. Asking for a single gate
 | Gate | Severity | What it catches |
 |---|---|---|
 | [README present](/gates/readme-present) | Warning | A repository with no README is a repository nobody can adopt. |
-| [LICENSE present](/gates/license-present) | Warning | Without a license file, default copyright applies and nobody may legally reuse the code — however open the repository looks. |
+| [LICENSE present](/gates/license-present) | Warning | Without a license file, default copyright applies and nobody may legally reuse the code: however open the repository looks. |
 | [CONTRIBUTING present](/gates/contributing-present) | Info | Tells an outside contributor how to build, test and submit a change before they burn an afternoon guessing. |
 | [SECURITY policy present](/gates/security-present) | Info | A SECURITY.md is the difference between a researcher mailing you privately and a researcher opening a public issue with a working exploit. |
 | [CHANGELOG present](/gates/changelog-present) | Info | One place users can look to see what changed between releases, instead of reading the commit log. |
@@ -69,7 +69,7 @@ in `.l0git.json` silences it. Asking for a single gate
 | Gate | Severity | What it catches |
 |---|---|---|
 | [Secrets scan](/gates/secrets-scan) | Error | Scans tracked files for credential shapes that are unambiguous enough to act on. |
-| [Connection strings](/gates/connection-strings) | Info | Finds connection URIs in tracked source — legacy plaintext protocols, database URIs, and anything carrying inline credentials. |
+| [Connection strings](/gates/connection-strings) | Info | Finds connection URIs in tracked source: legacy plaintext protocols, database URIs, and anything carrying inline credentials. |
 | [Network scan](/gates/network-scan) | Info | Surfaces hardcoded IPv4 literals, CIDR blocks and ASN references. |
 
 ## Git history (opt-in)
@@ -83,14 +83,14 @@ in `.l0git.json` silences it. Asking for a single gate
 
 | Gate | Severity | What it catches |
 |---|---|---|
-| [Dockerfile lint](/gates/dockerfile-lint) | Warning | An AST-based lint over tracked Dockerfiles — reproducibility and least privilege, nothing stylistic. |
+| [Dockerfile lint](/gates/dockerfile-lint) | Warning | An AST-based lint over tracked Dockerfiles: reproducibility and least privilege, nothing stylistic. |
 | [Compose lint](/gates/compose-lint) | Warning | A YAML-AST lint over tracked Compose files, aimed at the settings that hand a container the host. |
 
 ## Frontend & accessibility
 
 | Gate | Severity | What it catches |
 |---|---|---|
-| [HTML lint](/gates/html-lint) | Warning | Accessibility violations in tracked HTML that can be decided from the parse tree alone — no rendering, no heuristics. |
+| [HTML lint](/gates/html-lint) | Warning | Accessibility violations in tracked HTML that can be decided from the parse tree alone: no rendering, no heuristics. |
 | [CSS lint](/gates/css-lint) | Warning | Three things that are wrong in any stylesheet, regardless of taste. |
 
 ## Documentation

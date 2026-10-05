@@ -7,7 +7,7 @@ import (
 )
 
 // findFindingByRule returns the first finding whose FilePath ends with
-// `:<ruleID>` — the canonical way the gate marks each rule's output.
+// `:<ruleID>`: the canonical way the gate marks each rule's output.
 func findFindingByRule(fs []Finding, ruleID string) *Finding {
 	for i := range fs {
 		if strings.HasSuffix(fs[i].FilePath, ":"+ruleID) {
@@ -34,7 +34,7 @@ func TestDockerfile_FromUntagged(t *testing.T) {
 
 // TestDockerfile_FromStageAliasNotUntagged locks in the FP fix: a second-stage
 // `FROM builder` references an internal `AS builder` stage, which cannot carry a
-// tag — the most common multi-stage idiom must not fire from_untagged.
+// tag: the most common multi-stage idiom must not fire from_untagged.
 func TestDockerfile_FromStageAliasNotUntagged(t *testing.T) {
 	src := "FROM golang:1.22 AS builder\nRUN go build -o app\n\nFROM builder AS final\nUSER nobody\nCMD [\"app\"]\n"
 	fs := runRules(t, src)
@@ -44,7 +44,7 @@ func TestDockerfile_FromStageAliasNotUntagged(t *testing.T) {
 }
 
 // TestDockerfile_HeredocBodyNotInstruction locks in the FP fix: BuildKit heredoc
-// body lines are file/script data, not Dockerfile instructions — a `USER root`
+// body lines are file/script data, not Dockerfile instructions: a `USER root`
 // inside a heredoc must not fire user_root.
 func TestDockerfile_HeredocBodyNotInstruction(t *testing.T) {
 	src := "FROM alpine:3.19\nCOPY <<FILE /app/config.txt\nsetting=value\nUSER root\nFILE\nUSER appuser\n"
@@ -73,7 +73,7 @@ func TestDockerfile_FromLatest(t *testing.T) {
 	}
 }
 
-// FROM with a digest is pinned by definition — must not fire either tag rule.
+// FROM with a digest is pinned by definition: must not fire either tag rule.
 func TestDockerfile_FromDigestPinned(t *testing.T) {
 	fs := runRules(t, "FROM node@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n")
 	if findFindingByRule(fs, "from_untagged") != nil {

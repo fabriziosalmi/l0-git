@@ -120,7 +120,7 @@ func parseDockerfile(content string) []dockerfileInstr {
 		lineNum := i + 1
 
 		if trimmed == "" {
-			// Blank lines clear a pending override — overrides must be
+			// Blank lines clear a pending override: overrides must be
 			// directly adjacent to their target instruction.
 			pending = nil
 			i++
@@ -175,7 +175,7 @@ func parseDockerfile(content string) []dockerfileInstr {
 		i++
 
 		// BuildKit heredoc: COPY/RUN <<EOF … EOF. The body lines are file or
-		// script data, NOT Dockerfile instructions — consume them so a
+		// script data, NOT Dockerfile instructions: consume them so a
 		// `USER root` or `FROM x` inside a heredoc isn't misclassified as a
 		// directive (which would fire user_root / from_* false positives).
 		if delims := heredocDelims(acc); len(delims) > 0 {

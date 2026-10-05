@@ -11,14 +11,14 @@ import (
 //
 //   - Recipe: an exact, copy-pasteable set of shell commands and/or file
 //     edits. Populated only when we can produce a fix that's safe to apply
-//     verbatim — no judgement calls, no project-specific guesses.
+//     verbatim: no judgement calls, no project-specific guesses.
 //   - ClaudePrompt: always populated. A self-contained prompt the user can
 //     paste into Claude Code (or any LLM agent). Frames the finding,
 //     constraints, and verification step. For deterministic gates it just
 //     wraps the recipe; for guided gates it's the only actionable channel.
 //
 // The struct is computed on demand from a Finding (see RemediationFor) and
-// never persisted — improving a recipe doesn't require a DB migration.
+// never persisted: improving a recipe doesn't require a DB migration.
 type Remediation struct {
 	// Summary: a single sentence stating the action ("Stop tracking
 	// node_modules and add it to .gitignore."). Always populated.
@@ -36,7 +36,7 @@ type Remediation struct {
 
 // Recipe is the deterministic-fix payload: shell commands plus file edits,
 // with caveats the user should read first. Both Commands and FileEdits may
-// be empty (unusual but legal — some recipes are entirely "open this file
+// be empty (unusual but legal: some recipes are entirely "open this file
 // and resolve manually").
 type Recipe struct {
 	Commands  []Command  `json:"commands,omitempty"`
@@ -49,7 +49,7 @@ type Recipe struct {
 
 // Command is one shell command in a recipe. Run is the literal command
 // (already shell-quoted where needed); Note is an optional one-liner
-// explaining intent — useful when the same recipe has multiple steps.
+// explaining intent: useful when the same recipe has multiple steps.
 type Command struct {
 	Run  string `json:"run"`
 	Note string `json:"note,omitempty"`
@@ -58,7 +58,7 @@ type Command struct {
 // FileEdit is a structured edit. Op is "append" (concatenate Content to
 // the file, creating it if missing) or "insert_before_line" (insert
 // Content as a new line above Line, 1-based). Other ops are intentionally
-// not supported in the MVP — gates that need them emit Commands instead.
+// not supported in the MVP: gates that need them emit Commands instead.
 type FileEdit struct {
 	Path    string `json:"path"`
 	Op      string `json:"op"`
@@ -80,7 +80,7 @@ const (
 // verify with gates_check; delivering via `lgit fix` on the CLI means the
 // user has `lgit` on their PATH (they just ran it), so it can verify with
 // `lgit check`. Promising the wrong surface is the whole point of this
-// split — an agent session frequently has one but not the other.
+// split: an agent session frequently has one but not the other.
 type Channel int
 
 const (
@@ -91,7 +91,7 @@ const (
 )
 
 // RemediationFor dispatches by gate_id and returns the remediation for the
-// given finding. Always returns a non-zero Remediation — the ClaudePrompt
+// given finding. Always returns a non-zero Remediation: the ClaudePrompt
 // is always usable even when no deterministic recipe exists. The channel
 // determines which verification surface the ClaudePrompt points at (see
 // Channel); pass the one matching how you're delivering the prompt.
@@ -105,11 +105,11 @@ func RemediationFor(f Finding, ch Channel) Remediation {
 // there is nothing mechanical to run.
 //
 // Summary used to be set to the finding's own Title at seven call sites. That
-// made `lgit fix` print the same sentence three times — header, Detected, and
-// again under a heading called "Fix" — and it handed MCP clients a `summary`
+// made `lgit fix` print the same sentence three times: header, Detected, and
+// again under a heading called "Fix", and it handed MCP clients a `summary`
 // field that restated `title`, which tells an agent nothing it did not already
 // have. Saying "this one needs judgement" is less, and worth more.
-const GuidedNoRecipeSummary = "No mechanical fix for this gate — it needs judgement. " +
+const GuidedNoRecipeSummary = "No mechanical fix for this gate: it needs judgement. " +
 	"Work from the detected message, or act on the framing prompt."
 
 // guidedRemediation is the "real finding, no mechanical fix" answer, in one
@@ -144,7 +144,7 @@ func remediationBody(f Finding) Remediation {
 	case "secrets_scan_history":
 		return remediateSecretsHistory(f)
 	}
-	// No deterministic recipe — the LLM is the only channel.
+	// No deterministic recipe: the LLM is the only channel.
 	return guidedRemediation(f)
 }
 
@@ -163,10 +163,10 @@ func remediateVendoredDir(f Finding) Remediation {
 			{Run: fmt.Sprintf("git rm -r --cached %s", shellQuote(dir)), Note: "remove from the index, leave on disk"},
 			{Run: fmt.Sprintf("git commit -m %s", shellQuote("stop tracking "+dir))},
 		},
-		Caveats: []string{"Other contributors will see the directory disappear from git on next pull — they keep their local copies."},
+		Caveats: []string{"Other contributors will see the directory disappear from git on next pull: they keep their local copies."},
 	}
 	// The dir is TRACKED. If .gitignore already covers it, re-appending the line is
-	// redundant — and an agent/gate that rejects redundant .gitignore edits would drop
+	// redundant, and an agent/gate that rejects redundant .gitignore edits would drop
 	// the whole fix, leaving the dir tracked forever. Only add the line when it's missing.
 	summary := fmt.Sprintf("Stop tracking %s in git and add it to .gitignore.", dir)
 	if ignoreAlreadyCovered(f.Project, dir+"/") {
@@ -203,7 +203,7 @@ func remediateIdeArtifact(f Finding) Remediation {
 		},
 	}
 	// The artefact is TRACKED. If .gitignore already covers it, re-appending the line is
-	// redundant — and an agent/gate that rejects redundant .gitignore edits would drop the
+	// redundant, and an agent/gate that rejects redundant .gitignore edits would drop the
 	// whole fix, leaving the file tracked forever. Only add the line when it's missing.
 	summary := fmt.Sprintf("Untrack %s and ignore it going forward.", rel)
 	if ignoreAlreadyCovered(f.Project, ignoreLine) {
@@ -220,7 +220,7 @@ func remediateIdeArtifact(f Finding) Remediation {
 }
 
 func remediateGitignoreCoverage(f Finding) Remediation {
-	// FilePath shape: ".gitignore:<pattern>" — see checkGitignoreCoverage.
+	// FilePath shape: ".gitignore:<pattern>": see checkGitignoreCoverage.
 	parts := strings.SplitN(f.FilePath, ":", 2)
 	if len(parts) != 2 || parts[1] == "" {
 		return guidedRemediation(f)
@@ -259,7 +259,7 @@ func remediateExecBit(f Finding) Remediation {
 }
 
 func remediateEnvExample(f Finding) Remediation {
-	// FilePath shape: "<file>:<line>:<KEY>" — see evaluateEnvExample.
+	// FilePath shape: "<file>:<line>:<KEY>": see evaluateEnvExample.
 	parts := strings.SplitN(f.FilePath, ":", 3)
 	if len(parts) != 3 {
 		return guidedRemediation(f)
@@ -270,7 +270,7 @@ func remediateEnvExample(f Finding) Remediation {
 		return guidedRemediation(f)
 	}
 	key := parts[2]
-	// We don't know what the key means — only the user / Claude Code does.
+	// We don't know what the key means, only the user / Claude Code does.
 	// The recipe is a placeholder comment; the prompt asks Claude to fill
 	// in the real explanation.
 	placeholder := fmt.Sprintf("# TODO: explain what %s is used for", key)
@@ -278,7 +278,7 @@ func remediateEnvExample(f Finding) Remediation {
 		FileEdits: []FileEdit{
 			{Path: file, Op: OpInsertBeforeLine, Line: line, Content: placeholder + "\n"},
 		},
-		Caveats: []string{"The inserted comment is a placeholder — replace `TODO: explain what " + key + " is used for` with a one-line explanation of the variable's purpose."},
+		Caveats: []string{"The inserted comment is a placeholder: replace `TODO: explain what " + key + " is used for` with a one-line explanation of the variable's purpose."},
 	}
 	return Remediation{
 		Summary:    fmt.Sprintf("Add an explanatory comment above %s in %s:%d.", key, file, line),
@@ -291,7 +291,7 @@ func remediateEnvExample(f Finding) Remediation {
 }
 
 func remediateMergeConflict(f Finding) Remediation {
-	// No deterministic recipe — only the human/LLM can resolve the
+	// No deterministic recipe, only the human/LLM can resolve the
 	// semantic conflict. We still print the file:line so the user can
 	// jump straight there.
 	return Remediation{
@@ -305,7 +305,7 @@ func remediateMergeConflict(f Finding) Remediation {
 
 func remediateLargeBlobHistory(f Finding) Remediation {
 	// We can show the canonical filter-repo recipe, but the threshold
-	// comes from the project config — re-read it so the recipe matches
+	// comes from the project config: re-read it so the recipe matches
 	// what the gate ran with.
 	thresholdMB := largeBlobThresholdMB(f.Project)
 	cmd := fmt.Sprintf("git filter-repo --strip-blobs-bigger-than %dM", thresholdMB)
@@ -317,7 +317,7 @@ func remediateLargeBlobHistory(f Finding) Remediation {
 		Caveats: []string{
 			"Rewrites git history. Every collaborator must re-clone or `git fetch && git reset --hard origin/<branch>`.",
 			"Requires the `git-filter-repo` tool: `brew install git-filter-repo` or `pip install git-filter-repo`.",
-			"Run on a fresh clone of the repo — `git filter-repo` refuses to operate on a non-fresh clone by default.",
+			"Run on a fresh clone of the repo: `git filter-repo` refuses to operate on a non-fresh clone by default.",
 		},
 	}
 	return Remediation{
@@ -325,7 +325,7 @@ func remediateLargeBlobHistory(f Finding) Remediation {
 		Confidence: ConfidenceDeter,
 		Recipe:     recipe,
 		ClaudePrompt: buildClaudePrompt(f,
-			"This rewrites git history — confirm with the user before running. Use `git filter-repo --strip-blobs-bigger-than "+strconv.Itoa(thresholdMB)+"M` on a fresh clone, then force-push with `--force-with-lease`. Make sure every collaborator is told to re-clone afterwards.",
+			"This rewrites git history: confirm with the user before running. Use `git filter-repo --strip-blobs-bigger-than "+strconv.Itoa(thresholdMB)+"M` on a fresh clone, then force-push with `--force-with-lease`. Make sure every collaborator is told to re-clone afterwards.",
 			recipe),
 	}
 }
@@ -339,10 +339,10 @@ func remediateSecretsHistory(f Finding) Remediation {
 			{Run: "echo '<the-leaked-secret>==>REDACTED' > /tmp/lgit-replace.txt", Note: "write a replace-text file with the literal value(s) to scrub"},
 			{Run: "git filter-repo --replace-text /tmp/lgit-replace.txt", Note: "rewrites every reachable commit"},
 			{Run: "git push --force-with-lease --all", Note: "publish the rewritten history"},
-			{Run: "rm /tmp/lgit-replace.txt", Note: "the file contained the literal secret — don't leave it on disk"},
+			{Run: "rm /tmp/lgit-replace.txt", Note: "the file contained the literal secret: don't leave it on disk"},
 		},
 		Caveats: []string{
-			"ROTATE THE CREDENTIAL FIRST. Purging history doesn't help if the leaked value is still valid — assume any secret committed to git is compromised.",
+			"ROTATE THE CREDENTIAL FIRST. Purging history doesn't help if the leaked value is still valid: assume any secret committed to git is compromised.",
 			"Rewrites git history. Every collaborator must re-clone or hard-reset.",
 			"Requires `git-filter-repo`: `brew install git-filter-repo` or `pip install git-filter-repo`.",
 		},
@@ -352,7 +352,7 @@ func remediateSecretsHistory(f Finding) Remediation {
 		Confidence: ConfidenceDeter,
 		Recipe:     recipe,
 		ClaudePrompt: buildClaudePrompt(f,
-			"This is a leaked credential. Step 1 (cannot be skipped): the user must rotate the credential at the issuing service — do not proceed until they confirm. Step 2: replace `<the-leaked-secret>` in the recipe with the literal value. Step 3: run `git filter-repo --replace-text` and force-push. Coordinate the force-push with collaborators.",
+			"This is a leaked credential. Step 1 (cannot be skipped): the user must rotate the credential at the issuing service: do not proceed until they confirm. Step 2: replace `<the-leaked-secret>` in the recipe with the literal value. Step 3: run `git filter-repo --replace-text` and force-push. Coordinate the force-push with collaborators.",
 			recipe),
 	}
 }
@@ -394,7 +394,7 @@ func ignoreAlreadyCovered(root, ignoreLine string) bool {
 }
 
 // shellQuote returns s wrapped in single quotes, with any embedded single
-// quotes escaped. Safe for paste into bash/zsh — handles paths with
+// quotes escaped. Safe for paste into bash/zsh: handles paths with
 // spaces, parentheses, etc.
 func shellQuote(s string) string {
 	if s == "" {
@@ -452,7 +452,7 @@ func buildClaudePrompt(f Finding, extra string, recipe *Recipe) string {
 // Channel). This is the fix for the mismatch where every prompt promised both
 // `lgit check` (absent unless lgit is on PATH) and the MCP tools (absent
 // unless the l0-git MCP server is registered for the session) regardless of
-// which — if either — the recipient actually had.
+// which, if either, the recipient actually had.
 func verificationBlock(f Finding, ch Channel) string {
 	switch ch {
 	case ChannelCLI:
@@ -480,10 +480,10 @@ func indent(s, prefix string) string {
 // =============================================================================
 
 // RenderRemediationText writes a human-readable view of (finding, remediation)
-// to w. Format is intentionally plain — no ANSI colour, no boxes — so it
+// to w. Format is intentionally plain, no ANSI colour, no boxes, so it
 // pipes well to `less`, `pbcopy`, or a markdown viewer.
 func RenderRemediationText(w *strings.Builder, f Finding, r Remediation) {
-	fmt.Fprintf(w, "l0-git finding #%d — %s (%s)\n", f.ID, f.GateID, f.Severity)
+	fmt.Fprintf(w, "l0-git finding #%d: %s (%s)\n", f.ID, f.GateID, f.Severity)
 	fmt.Fprintf(w, "%s\n", f.Title)
 	if f.FilePath != "" {
 		fmt.Fprintf(w, "Location: %s\n", f.FilePath)
@@ -541,7 +541,7 @@ func RenderRemediationText(w *strings.Builder, f Finding, r Remediation) {
 	} else if !noRecipeText {
 		// Only worth saying when Fix carried a real summary; otherwise Fix has
 		// already said it.
-		w.WriteString("No deterministic recipe — this gate needs human or LLM judgement.\n\n")
+		w.WriteString("No deterministic recipe: this gate needs human or LLM judgement.\n\n")
 	}
 
 	w.WriteString("Confidence\n")

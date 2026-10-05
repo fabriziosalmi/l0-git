@@ -141,14 +141,14 @@ func runCLI(args []string) error {
 		// Prints a remediation recipe for the finding. Default output is
 		// human-readable plain text (pipes well to less / pbcopy);
 		// --json emits the structured Remediation for tooling.
-		// Never executes commands — that's the user's call.
+		// Never executes commands: that's the user's call.
 		return runFixCommand(ctx, store, rest)
 	default:
 		return fmt.Errorf("unknown command: %s", cmd)
 	}
 }
 
-// runFixCommand is the lgit fix <id> implementation — extracted so it
+// runFixCommand is the lgit fix <id> implementation: extracted so it
 // reads top-down without inflating the main switch.
 func runFixCommand(ctx context.Context, store *Store, rest []string) error {
 	if len(rest) < 1 {
@@ -188,7 +188,7 @@ func writeJSON(w io.Writer, v any) error {
 // parseListFlags converts `-key=value` / `-key value` arguments into a
 // FindingFilter. Stays close to the stdlib `flag` semantics so users (and
 // the extension) can pass options in any order. Status defaults to "open"
-// for ergonomics — `lgit list` on its own shows current open findings.
+// for ergonomics: `lgit list` on its own shows current open findings.
 func parseListFlags(args []string) (FindingFilter, error) {
 	f := FindingFilter{Status: "open"}
 	i := 0
@@ -269,7 +269,7 @@ func parseFixFlags(args []string) (bool, error) {
 // It replaces an inline loop that only ever honoured the inline `-project=x`
 // spelling. Given the space-separated `-project /path`, splitFlag returned an
 // empty value, the loop assigned it anyway, and Stats fell back to its
-// "every project" behaviour — so the command answered a question nobody asked
+// "every project" behaviour, so the command answered a question nobody asked
 // and looked authoritative doing it. Both spellings work now, and anything
 // else is an error, which is how `lgit list` has always behaved.
 func parseStatsFlags(args []string) (string, error) {

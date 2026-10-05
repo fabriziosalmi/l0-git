@@ -51,7 +51,7 @@ var ErrNotFound = errors.New("finding not found")
 func resolveDBPath() (path string, isDefault bool, err error) {
 	if p := os.Getenv("LGIT_DB"); p != "" {
 		// A directory this creates is private. One that already exists is
-		// somebody else's — `LGIT_DB=/tmp/x.db` must never chmod /tmp — so it
+		// somebody else's, `LGIT_DB=/tmp/x.db` must never chmod /tmp, so it
 		// is left exactly as it was.
 		if dir := filepath.Dir(p); dir != "" && dir != "." {
 			if err := os.MkdirAll(dir, storeDirMode); err != nil {
@@ -236,7 +236,7 @@ func scanFinding(s scannable) (*Finding, error) {
 
 // FindingFilter is the structured query used by the rich-list endpoint.
 // Empty string fields mean "no filter on this dimension"; Limit==0 falls
-// back to a sensible default (500). Sort accepts a small whitelist —
+// back to a sensible default (500). Sort accepts a small whitelist,
 // unknown values fall back to updated_at DESC.
 type FindingFilter struct {
 	Project  string
@@ -288,7 +288,7 @@ func (s *Store) List(ctx context.Context, f FindingFilter) ([]Finding, error) {
 		args = append(args, f.GateID)
 	}
 	if f.Tag != "" {
-		// (',' || tags || ',') LIKE '%,<tag>,%' — matches whole CSV
+		// (',' || tags || ',') LIKE '%,<tag>,%': matches whole CSV
 		// elements only, so "git" doesn't accidentally match "git-hygiene".
 		q += ` AND (',' || tags || ',') LIKE ?`
 		args = append(args, "%,"+f.Tag+",%")
@@ -398,7 +398,7 @@ func (s *Store) ClearProject(ctx context.Context, project string) (int, error) {
 
 // FindingsStats is the aggregate the dashboard renders. Severity/status
 // counts cover ALL statuses so users see the full picture; gate/file/tag
-// breakdowns and the 7-day trend are scoped to currently-open findings —
+// breakdowns and the 7-day trend are scoped to currently-open findings,
 // they're the actionable set.
 type FindingsStats struct {
 	Project    string         `json:"project"`
@@ -415,7 +415,7 @@ type FindingsStats struct {
 	// or a dashboard reading them needs to know how long ago that was.
 	//
 	// With a project filter: when it was last checked (milliseconds since the
-	// epoch; 0 = no check on record — present, and 0, rather than absent) and
+	// epoch; 0 = no check on record: present, and 0, rather than absent) and
 	// whether its directory is there (absent when the stat did not answer).
 	LastCheckedAt *int64 `json:"last_checked_at,omitempty"`
 	ProjectExists *bool  `json:"project_exists,omitempty"`
@@ -440,7 +440,7 @@ type DayCount struct {
 }
 
 // Stats computes every aggregation the Overview webview needs in one trip.
-// Empty project means "across all projects" — useful for a global view.
+// Empty project means "across all projects": useful for a global view.
 func (s *Store) Stats(ctx context.Context, project string) (*FindingsStats, error) {
 	project = normalizeProject(project)
 	out := &FindingsStats{
@@ -466,7 +466,7 @@ func (s *Store) Stats(ctx context.Context, project string) (*FindingsStats, erro
 		out.Total += n
 	}
 
-	// Severity / gate / file / tag breakdowns are all open-only — they
+	// Severity / gate / file / tag breakdowns are all open-only: they
 	// describe what the user has to act on right now, not what's been
 	// dealt with. Mixing statuses here was confusing in practice.
 	openClause := whereProject + appendCondition(whereProject, "status = 'open'")
@@ -615,7 +615,7 @@ func (s *Store) knownProjects(ctx context.Context) ([]string, error) {
 // filepath.Abs, which also cleans. Every method that takes a project applies
 // it, on the way in and on the way out, so `-project=/repo/` or `/x/../repo`
 // finds what `lgit check /repo` stored. Before, only RunChecks normalised, and
-// list, stats and clear answered "0" for a project that had findings — a wrong
+// list, stats and clear answered "0" for a project that had findings: a wrong
 // answer in silence. Normalising reads alone is not enough: on Windows
 // Abs("/p") is `D:\p`, so an unnormalised write would no longer match.
 // Empty stays empty: it means "every project".
@@ -707,7 +707,7 @@ func explodeTags(rows *sql.Rows) []KeyCount {
 }
 
 // build7DayTrend pads the SQL result so callers always get exactly 7
-// entries — today plus the prior six days, oldest first. Each entry
+// entries: today plus the prior six days, oldest first. Each entry
 // carries a YYYY-MM-DD date string in UTC.
 func build7DayTrend(rows *sql.Rows, now time.Time) []DayCount {
 	defer rows.Close()

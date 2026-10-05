@@ -17,7 +17,7 @@ type dockerfileLintOptions struct {
 	// silence belongs in `# l0git: ignore` comments.
 	DisabledRules []string `json:"disabled_rules,omitempty"`
 	// SuggestWhenMissing emits one info finding when no Dockerfile is
-	// tracked. Default false — repos that don't ship containers
+	// tracked. Default false: repos that don't ship containers
 	// shouldn't see noise.
 	SuggestWhenMissing bool `json:"suggest_when_missing,omitempty"`
 }
@@ -42,7 +42,7 @@ var dockerfileRules = []dockerfileRule{
 		id:       "from_untagged",
 		severity: SeverityWarning,
 		title:    "Dockerfile FROM has no tag",
-		advice:   "Pin the base image (e.g. `node:20-alpine`) — untagged FROM resolves to whatever moves on the registry, breaking reproducibility.",
+		advice:   "Pin the base image (e.g. `node:20-alpine`): untagged FROM resolves to whatever moves on the registry, breaking reproducibility.",
 		check:    checkFromUntagged,
 	},
 	{
@@ -107,7 +107,7 @@ func checkFromUntagged(instrs []dockerfileInstr) []dockerfileViolation {
 			continue
 		}
 		// A reference to an earlier build stage (e.g. `FROM builder`) is an
-		// internal alias, not a registry image — it cannot be tagged. The
+		// internal alias, not a registry image: it cannot be tagged. The
 		// single most common multi-stage idiom; flagging it is a pure FP.
 		if aliases[strings.ToLower(image)] {
 			continue
@@ -184,7 +184,7 @@ func checkAddInstruction(instrs []dockerfileInstr) []dockerfileViolation {
 //
 // Only a NON-root inherited user counts. Inheriting an explicit `USER root`
 // still leaves the child running as root with no USER of its own, so it still
-// fires — the parent's line is separately reported by user_root.
+// fires: the parent's line is separately reported by user_root.
 func checkMissingUser(instrs []dockerfileInstr) []dockerfileViolation {
 	out := []dockerfileViolation{}
 	aliases := stageAliases(instrs)
@@ -298,7 +298,7 @@ func isDockerfileBasename(name string) bool {
 	if name == "Dockerfile" {
 		return true
 	}
-	// Dockerfile.<suffix>, e.g. Dockerfile.dev — common in repos with
+	// Dockerfile.<suffix>, e.g. Dockerfile.dev: common in repos with
 	// multiple build flavours.
 	if strings.HasPrefix(name, "Dockerfile.") {
 		return true
@@ -395,7 +395,7 @@ func evaluateDockerfileRules(rel string, instrs []dockerfileInstr, disabled map[
 }
 
 // overrideAcceptedFinding builds the audit-trail finding emitted when a
-// rule was deliberately silenced inline. The reason — when present — is
+// rule was deliberately silenced inline. The reason, when present, is
 // the persisted record of *why*; missing reason → severity bumps to
 // warning so silent overrides stand out.
 func overrideAcceptedFinding(gateID, rel, ruleID string, instr dockerfileInstr) Finding {
@@ -404,7 +404,7 @@ func overrideAcceptedFinding(gateID, rel, ruleID string, instr dockerfileInstr) 
 	reasonText := reason
 	if reason == "" {
 		severity = SeverityWarning
-		reasonText = "(no reason given — please add `reason: …` after the rule id)"
+		reasonText = "(no reason given: please add `reason: …` after the rule id)"
 	}
 	return Finding{
 		Severity: severity,

@@ -119,8 +119,8 @@ func TestEnvExample_HashInsideQuoteIsNotAComment(t *testing.T) {
 
 // Quoted values containing = must not be split incorrectly. The first `=`
 // correctly yields key=DATABASE_URL (the `=` inside the quoted value is not a
-// second split point); the key is uncommented, so — exactly like the
-// hash-in-quote twin above — it fires precisely one finding. (The prior `!= 0`
+// second split point); the key is uncommented, so: exactly like the
+// hash-in-quote twin above: it fires precisely one finding. (The prior `!= 0`
 // expectation was inconsistent with that twin and never matched the gate.)
 func TestEnvExample_EqualsInsideQuoteIsNotAKeyValSplit(t *testing.T) {
 	src := `DATABASE_URL="postgres://example.com/db?token=abc"
@@ -132,7 +132,7 @@ func TestEnvExample_EqualsInsideQuoteIsNotAKeyValSplit(t *testing.T) {
 }
 
 func TestEnvExample_BlankLineBetweenCommentBreaksAdjacency(t *testing.T) {
-	// Comment, then blank line, then key — strict rule says comment must
+	// Comment, then blank line, then key: strict rule says comment must
 	// be the *immediately preceding* non-empty line; blank lines don't
 	// break it.
 	src := `# Database host

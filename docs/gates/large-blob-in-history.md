@@ -24,7 +24,7 @@ git filter-repo --strip-blobs-bigger-than 5M
 ## What a finding says
 
 ```text
-Blob 3f9a2c1 (path assets/old-demo.mov, 118 MiB, threshold 5 MiB) lives in .git even if it's no longer in the working tree. Big blobs in history bloat clones — purge with `git filter-repo --strip-blobs-bigger-than 5M`.
+Blob 3f9a2c1 (path assets/old-demo.mov, 118 MiB, threshold 5 MiB) lives in .git even if it's no longer in the working tree. Big blobs in history bloat clones: purge with `git filter-repo --strip-blobs-bigger-than 5M`.
 ```
 
 ## Options

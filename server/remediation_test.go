@@ -40,7 +40,7 @@ func TestRemediationFor_VendoredDir(t *testing.T) {
 
 func TestRemediationFor_IdeArtifactPicksDirGlob(t *testing.T) {
 	// .vscode/ subpath should ignore the whole directory, not the
-	// specific file — that's what users expect.
+	// specific file: that's what users expect.
 	r := RemediationFor(Finding{
 		GateID:   "ide_artifact_tracked",
 		FilePath: ".vscode/settings.json",
@@ -148,7 +148,7 @@ func TestRemediationFor_EnvExampleParsesLineAndKey(t *testing.T) {
 	if !strings.Contains(e.Content, "DATABASE_URL") {
 		t.Errorf("expected key in placeholder content, got %q", e.Content)
 	}
-	// Caveat is essential — the placeholder is a TODO, not a real
+	// Caveat is essential: the placeholder is a TODO, not a real
 	// description, and the user needs to be told that.
 	if len(r.Recipe.Caveats) == 0 {
 		t.Error("expected a caveat about the TODO placeholder")
@@ -172,7 +172,7 @@ func TestRemediationFor_SecretsHistoryFlagsRotation(t *testing.T) {
 	if r.Recipe == nil || len(r.Recipe.Caveats) == 0 {
 		t.Fatal("expected recipe with caveats")
 	}
-	// "Rotate first" must be the loudest signal — not just buried in
+	// "Rotate first" must be the loudest signal, not just buried in
 	// the prompt. Look for it in caveats.
 	joined := strings.ToUpper(strings.Join(r.Recipe.Caveats, " "))
 	if !strings.Contains(joined, "ROTATE") {
@@ -182,7 +182,7 @@ func TestRemediationFor_SecretsHistoryFlagsRotation(t *testing.T) {
 
 func TestRemediationFor_UnknownGateFallsBackToGuided(t *testing.T) {
 	r := RemediationFor(Finding{
-		GateID: "secrets_scan", // no deterministic recipe — needs rotation
+		GateID: "secrets_scan", // no deterministic recipe: needs rotation
 		Title:  "API key in source",
 	}, ChannelMCP)
 	if r.Confidence != ConfidenceGuided {
@@ -222,7 +222,7 @@ func TestShellQuote_NoEscapeNeeded(t *testing.T) {
 
 // The verification step must name only the surface guaranteed present for
 // the delivery channel: gates_check (MCP) vs `lgit check` (CLI). Promising
-// the other one is exactly the mismatch this split fixes — an agent session
+// the other one is exactly the mismatch this split fixes: an agent session
 // often has one but not the other.
 func TestClaudePrompt_VerificationIsChannelAware(t *testing.T) {
 	find := Finding{
@@ -241,7 +241,7 @@ func TestClaudePrompt_VerificationIsChannelAware(t *testing.T) {
 		t.Error("MCP prompt should mention findings_remediate so the agent can re-fetch context")
 	}
 	if strings.Contains(mcp, "lgit check") {
-		t.Error("MCP prompt must NOT tell the agent to run `lgit check` — lgit is not guaranteed on PATH in an MCP session")
+		t.Error("MCP prompt must NOT tell the agent to run `lgit check`: lgit is not guaranteed on PATH in an MCP session")
 	}
 	if !strings.Contains(mcp, "/srv/proj") {
 		t.Error("MCP prompt should include the project path")
@@ -249,10 +249,10 @@ func TestClaudePrompt_VerificationIsChannelAware(t *testing.T) {
 
 	cli := RemediationFor(find, ChannelCLI).ClaudePrompt
 	if !strings.Contains(cli, "lgit check") {
-		t.Error("CLI prompt should verify via `lgit check` — lgit is on PATH in a `lgit fix` session")
+		t.Error("CLI prompt should verify via `lgit check`: lgit is on PATH in a `lgit fix` session")
 	}
 	if strings.Contains(cli, "gates_check") {
-		t.Error("CLI prompt must NOT reference gates_check — the MCP server may not be registered for a CLI user")
+		t.Error("CLI prompt must NOT reference gates_check: the MCP server may not be registered for a CLI user")
 	}
 	if !strings.Contains(cli, "/srv/proj") {
 		t.Error("CLI prompt should include the project path")
@@ -313,7 +313,7 @@ func TestRenderRemediationText_GuidedSkipsRunSection(t *testing.T) {
 
 // A gate with no recipe sets Summary to the finding's own title. The renderer
 // used to print that under a "Fix" heading, so the same sentence appeared three
-// times — header, Detected, Fix — and the one labelled "Fix" told the reader
+// times, header, Detected, Fix, and the one labelled "Fix" told the reader
 // nothing they could act on.
 func TestRenderRemediationText_FixDoesNotEchoTitle(t *testing.T) {
 	f := Finding{
@@ -343,7 +343,7 @@ func TestRenderRemediationText_FixDoesNotEchoTitle(t *testing.T) {
 	}
 }
 
-// A gate that supplies a real summary must keep it — the de-duplication is
+// A gate that supplies a real summary must keep it: the de-duplication is
 // about echoed titles, not about suppressing guidance.
 func TestRenderRemediationText_KeepsRealSummary(t *testing.T) {
 	f := Finding{
@@ -420,7 +420,7 @@ func TestRemediationFor_GuidedSummaryIsNotTheTitle(t *testing.T) {
 	}
 }
 
-// Deterministic gates must keep their real, specific summary — the change is
+// Deterministic gates must keep their real, specific summary: the change is
 // about removing an echo, not about flattening every gate to one sentence.
 func TestRemediationFor_DeterministicSummarySurvives(t *testing.T) {
 	r := RemediationFor(Finding{

@@ -17,7 +17,7 @@ import (
 // matches several flavours of address.
 
 // IPv4 literal: four 1-3-digit octets, dots between. We validate octet
-// ranges in classifyIPv4 — the regex itself is intentionally loose so
+// ranges in classifyIPv4: the regex itself is intentionally loose so
 // "999.0.0.0" becomes a non-match downstream rather than a match nobody
 // asked for.
 var ipv4Re = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`)
@@ -40,7 +40,7 @@ var asnRe = regexp.MustCompile(`\bAS[0-9]{1,7}\b`)
 // They are reported under the "reserved" category at info, like 240.0.0.0/4.
 //
 // The public-repo sweep found `192.0.0.0/24` classified as a public address
-// at warning — in an SSRF blocklist, commented `# IETF protocol assignments`.
+// at warning: in an SSRF blocklist, commented `# IETF protocol assignments`.
 // SSRF and egress blocklists are exactly where these ranges appear in real
 // code, so misclassifying them turned the most defensive file in a project
 // into its noisiest.
@@ -106,7 +106,7 @@ func parseNetworkOptions(opts json.RawMessage) networkScanOptions {
 
 func checkNetworkScan(ctx context.Context, root string, opts json.RawMessage) ([]Finding, error) {
 	if skip, stop := requireGitRepo(root, "network_scan",
-		"Initialize git or run gates from inside a clone — this gate scans tracked files only."); stop {
+		"Initialize git or run gates from inside a clone: this gate scans tracked files only."); stop {
 		return skip, nil
 	}
 	files, err := gitLsFiles(ctx, root)
@@ -157,8 +157,8 @@ func checkNetworkScan(ctx context.Context, root string, opts json.RawMessage) ([
 			continue
 		}
 		// A file whose lines are overwhelmingly bare literals is a list whose
-		// payload IS those literals — a blocklist, a Tor exit dump, a cache of
-		// resolved hosts, a scan-target dump — so every line is a self-evident
+		// payload IS those literals: a blocklist, a Tor exit dump, a cache of
+		// resolved hosts, a scan-target dump, so every line is a self-evident
 		// FP. This catches the .txt/line-oriented lists that the
 		// extension-based isDefaultDataFile (.csv/.jsonl/…) does not.
 		//
@@ -198,14 +198,14 @@ func checkNetworkScan(ctx context.Context, root string, opts json.RawMessage) ([
 //
 // Doc-range hits (RFC 5737/2544/6598, MCAST-TEST-NET) are suppressed: the
 // category itself means "intended for documentation/testing", so emitting a
-// finding only generates noise — the maintainer already declared this is
+// finding only generates noise: the maintainer already declared this is
 // not a real address by picking that range.
 func scanNetworkLine(rel string, lineNum int, content []byte, reportLoopback, reportUnspecified, prose bool) []Finding {
 	out := []Finding{}
 	// Inline SVG geometry attributes carry packed decimal coordinates
 	// ("d=\"M8 0C3.58 0 0 3.58 0 8c0 3.54 …\"") in which `1.23.82.72` is
 	// three numbers, not an address. Blank the attribute values before any
-	// regex runs — this was, by a wide margin, the single largest source of
+	// regex runs: this was, by a wide margin, the single largest source of
 	// false "public IPv4" warnings across real repositories.
 	content = stripSvgGeometry(content)
 	cidrSpans := map[string]bool{}
@@ -295,7 +295,7 @@ func scanNetworkLine(rel string, lineNum int, content []byte, reportLoopback, re
 // IP / CIDR literals (a blocklist, allowlist, resolver cache, …) rather than
 // source that happens to mention an address. Detection is exact: a line
 // qualifies only when, after stripping an inline comment and surrounding
-// whitespace, it parses as a single IP or CIDR — so "server 1.2.3.4:80;" or
+// whitespace, it parses as a single IP or CIDR, so "server 1.2.3.4:80;" or
 // "1.2.3.4 hostname" (multi-token) and "999.0.0.0" (invalid) never count.
 func looksLikeAddressList(data []byte) bool {
 	return looksLikeListFile(data, isBareAddress)
@@ -362,14 +362,14 @@ func classifyIPv4(ip net.IP) (string, string) {
 	//
 	// Its own category, NOT "doc-range": doc-range is dropped outright by
 	// scanNetworkLine, and unlike 192.0.2.0/24 these addresses are really
-	// allocated and routable — the author only conventionally treats them as
+	// allocated and routable: the author only conventionally treats them as
 	// fictional. Reporting at info says exactly that, and matches what the
 	// changelog promises.
 	if isSequentialOctets(ip) {
 		return SeverityInfo, "doc-placeholder"
 	}
 	// A public resolver constant (8.8.8.8, 1.1.1.1, 9.9.9.9, …) is a
-	// deliberate, globally-anycast choice — not "infrastructure this project
+	// deliberate, globally-anycast choice, not "infrastructure this project
 	// accidentally pinned itself to". Worth seeing, never worth a warning.
 	if publicResolvers[ip.String()] {
 		return SeverityInfo, "public-resolver"
@@ -387,14 +387,14 @@ func classifyIPv4(ip net.IP) (string, string) {
 		return SeverityInfo, "multicast"
 	}
 	if v4 := ip.To4(); v4 != nil && v4[0] >= 240 {
-		// 240.0.0.0/4 — reserved for future use, never routed.
+		// 240.0.0.0/4: reserved for future use, never routed.
 		return SeverityInfo, "reserved"
 	}
 	return SeverityWarning, "public"
 }
 
 // classifyCIDR classifies `ip/bits`. A network is classified by its address like
-// a host, with two refinements that only apply to a /24 or narrower — a prefix
+// a host, with two refinements that only apply to a /24 or narrower: a prefix
 // that wide names ONE network, not a region of the internet:
 //
 //   - a resolver provider's own prefix (1.1.1.0/24 holds 1.1.1.1; 8.8.8.0/24
@@ -432,7 +432,7 @@ func classifyCIDR(ip net.IP, bits int) (string, string) {
 // That is stricter than the host rules, on purpose. A host needs four octets in
 // the pattern; a network address has only three to show, and with larger numbers
 // the same shape is a real prefix (23.23.23.0/24 is Amazon, 52.53.54.0/24 is AWS,
-// 20.21.22.0/24 and 12.13.14.0/24 are allocations) — found by review. People
+// 20.21.22.0/24 and 12.13.14.0/24 are allocations): found by review. People
 // invent networks out of 1-9, and that is what the sweep found.
 func isSyntheticNetwork(v4 net.IP) bool {
 	a, b, c := int(v4[0]), int(v4[1]), int(v4[2])
@@ -481,27 +481,27 @@ func isChangelogBasename(name string) bool {
 func networkAdvice(category string) string {
 	switch category {
 	case "public":
-		return "Hardcoding a public address into source ties the project to fixed infrastructure — consider config/env."
+		return "Hardcoding a public address into source ties the project to fixed infrastructure: consider config/env."
 	case "private":
 		return "Private RFC1918 ranges in source are usually intentional but easy to leak into production by accident."
 	case "loopback":
 		return "Loopback literals are typical of local-dev defaults; flag is informational."
 	case "doc-range":
-		return "RFC 5737 documentation range — fine if used in examples."
+		return "RFC 5737 documentation range: fine if used in examples."
 	case "link-local":
-		return "Link-local address — usually a transient identifier; review the context."
+		return "Link-local address: usually a transient identifier; review the context."
 	case "unspecified":
-		return "0.0.0.0 / similar — review the surrounding bind/listen logic."
+		return "0.0.0.0 / similar: review the surrounding bind/listen logic."
 	case "public-resolver":
-		return "Well-known public DNS resolver — an intentional constant, not accidental infrastructure coupling."
+		return "Well-known public DNS resolver: an intentional constant, not accidental infrastructure coupling."
 	case "doc-placeholder":
-		return "Octets in a run or all alike (1.2.3.4, 100.1.2.3, 2.2.2.2) are the conventional stand-in — but the range may really be allocated, so double-check it is an example."
+		return "Octets in a run or all alike (1.2.3.4, 100.1.2.3, 2.2.2.2) are the conventional stand-in, but the range may really be allocated, so double-check it is an example."
 	case "broadcast":
-		return "Limited-broadcast address — a protocol constant, not a host."
+		return "Limited-broadcast address: a protocol constant, not a host."
 	case "multicast":
-		return "Multicast group address — a protocol constant, not a host."
+		return "Multicast group address: a protocol constant, not a host."
 	case "reserved":
-		return "240.0.0.0/4 is reserved and never routed — almost certainly a sentinel value."
+		return "240.0.0.0/4 is reserved and never routed: almost certainly a sentinel value."
 	}
 	return ""
 }
@@ -511,7 +511,7 @@ func networkAdvice(category string) string {
 // =============================================================================
 
 // svgGeometryRe matches an SVG geometry attribute together with its
-// double-quoted value. These attributes hold packed coordinate data — SVG
+// double-quoted value. These attributes hold packed coordinate data: SVG
 // lets `1.5.5` mean "1.5 then 0.5", so a path routinely contains runs that
 // are byte-for-byte valid dotted quads (`2.2.82.64`, `1.23.82.72`).
 //
@@ -570,7 +570,7 @@ const versionLookback = 24
 // looksLikeVersionLiteral reports whether the dotted quad at [start,end) is a
 // four-component version number rather than an address. A version and an
 // IPv4 literal are syntactically identical, so context is the only signal
-// available — and without it every `Chrome/120.0.0.0` User-Agent string in a
+// available, and without it every `Chrome/120.0.0.0` User-Agent string in a
 // codebase reports as a hardcoded public address.
 func looksLikeVersionLiteral(content []byte, start, end int) bool {
 	from := start - versionLookback
@@ -583,7 +583,7 @@ func looksLikeVersionLiteral(content []byte, start, end int) bool {
 	}
 	// A fifth NUMERIC component means the regex clipped a longer dotted run:
 	// `1.3.6.1.4.1.311` is an OID, `537.36.1.2.3` a build string. The digit
-	// requirement matters — `169.254.169.254.nip.io` is a hostname wrapping
+	// requirement matters: `169.254.169.254.nip.io` is a hostname wrapping
 	// a real address, and must stay reported.
 	if end+1 < len(content) && content[end] == '.' && content[end+1] >= '0' && content[end+1] <= '9' {
 		return true
@@ -622,7 +622,7 @@ var publicResolvers = map[string]bool{
 // isSequentialOctets reports whether the four octets form a strictly
 // consecutive run, ascending or descending: 1.2.3.4, 5.6.7.8, 4.3.2.1.
 // Real allocations are never laid out that way, so such a literal is a
-// documentation stand-in by construction — the same reasoning RFC 5737
+// documentation stand-in by construction: the same reasoning RFC 5737
 // applies to 192.0.2.0/24, just without the RFC.
 func isSequentialOctets(ip net.IP) bool {
 	v4 := ip.To4()
@@ -654,7 +654,7 @@ func isSequentialOctets(ip net.IP) bool {
 // and three findings were not worth hiding those.
 //
 // It is weaker than isSequentialOctets, which demands all FOUR octets in a run,
-// so it only ever moves a finding from warning to info — the finding stays
+// so it only ever moves a finding from warning to info: the finding stays
 // visible, with advice to double-check. Found in Rust test modules that wire
 // `"fra:100.1.2.3,syd:100.4.5.6:9999,100.7.8.9"` (traefik-simple-cdn, zion):
 // about one warning in ten of a sweep over the author's own repositories.
@@ -693,7 +693,7 @@ var sectionRefRe = regexp.MustCompile(`(?:§|\bsections?|\bsec\.|\bclauses?|\bre
 const sectionNumberMaxOctet = 30
 
 // looksLikeSectionNumber reports whether the dotted quad at [start,end) is a
-// section number quoted from a standard — `RFC 6749 §4.1.2.1` — rather than an
+// section number quoted from a standard, `RFC 6749 §4.1.2.1`, rather than an
 // address. Like a version literal it is byte-identical to a dotted quad and
 // only its surroundings tell them apart, so BOTH conditions are required: the
 // keyword directly before it, and small components. Either alone would hide

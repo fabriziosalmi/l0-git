@@ -13,7 +13,7 @@ func runMDRules(t *testing.T, source string) []Finding {
 }
 
 func TestMD_ImageNoAlt(t *testing.T) {
-	fs := runMDRules(t, "Look: ![](image.png) — no alt.\n")
+	fs := runMDRules(t, "Look: ![](image.png): no alt.\n")
 	if findFindingByRule(fs, "image_no_alt") == nil {
 		t.Fatalf("expected image_no_alt: %+v", fs)
 	}
@@ -65,7 +65,7 @@ func TestMD_CodeblockNoLanguage_SkippedInChangelogFiles(t *testing.T) {
 }
 
 // Structural rules (broken link, invalid payload) must still run on
-// CHANGELOG files — only the no-language nag is suppressed.
+// CHANGELOG files, only the no-language nag is suppressed.
 func TestMD_OtherRulesStillFireInChangelog(t *testing.T) {
 	src := "```json\n{ not_quoted: 1 }\n```\n"
 	fs := evaluateMarkdownFile("CHANGELOG.md", t.TempDir(), []byte(src), nil)
@@ -301,7 +301,7 @@ func TestMD_InlineOverride(t *testing.T) {
 
 // goldmark's FencedCodeBlock segments cover the body, so we pin to the
 // first body line (line 6 for "```\nno lang"). Pinning to the opening
-// fence is a UX polish queued for later — the body line is unambiguous
+// fence is a UX polish queued for later: the body line is unambiguous
 // enough to navigate to.
 func TestMD_LinePinning(t *testing.T) {
 	src := "# Intro\n\nSome text.\n\n```\nno lang\n```\n"
@@ -340,7 +340,7 @@ func TestMD_CodeblockNoLanguage_OptIn(t *testing.T) {
 }
 
 // Home-relative and filesystem/site-absolute links are not repo-relative
-// paths — resolving them yields a guaranteed-missing target, i.e. a false
+// paths: resolving them yields a guaranteed-missing target, i.e. a false
 // "broken link". Only a genuinely missing repo-relative link should fire.
 func TestMD_LocalLink_NonRepoPathsNotFlagged(t *testing.T) {
 	src := "[a](~/.config/app/settings.md)\n" +
@@ -363,7 +363,7 @@ func TestMD_LocalLink_NonRepoPathsNotFlagged(t *testing.T) {
 }
 
 // A ```json block using documentation shorthand (ellipsis, line comments) is
-// illustrative, not a literal payload — it must not fire codeblock_invalid_payload.
+// illustrative, not a literal payload: it must not fire codeblock_invalid_payload.
 func TestMD_IllustrativeJSONNotFlagged(t *testing.T) {
 	cases := []string{
 		"```json\n{\n  \"name\": \"x\",\n  ...\n}\n```\n",
@@ -375,7 +375,7 @@ func TestMD_IllustrativeJSONNotFlagged(t *testing.T) {
 			t.Errorf("illustrative JSON must not fire: %+v", f)
 		}
 	}
-	// A URL inside a value must NOT be mistaken for a comment — real breakage
+	// A URL inside a value must NOT be mistaken for a comment: real breakage
 	// still fires.
 	src := "```json\n{ \"u\": \"http://x.io\", bad }\n```\n"
 	if findFindingByRule(runMDRules(t, src), "codeblock_invalid_payload") == nil {
@@ -415,7 +415,7 @@ func TestMD_HTMLLinkToSiblingMarkdownUnderSiteGenerator(t *testing.T) {
 }
 
 // Without a generator, a `.html` link to a file that only exists as `.md` is
-// broken for everyone reading on the forge — it must keep firing. So must a
+// broken for everyone reading on the forge: it must keep firing. So must a
 // `.html` link with no `.md` behind it, generator or not.
 func TestMD_HTMLLinkStillBrokenWithoutGeneratorOrSource(t *testing.T) {
 	cases := map[string]map[string]string{

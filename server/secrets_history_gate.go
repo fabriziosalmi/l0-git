@@ -64,7 +64,7 @@ func checkSecretsScanHistory(ctx context.Context, root string, opts json.RawMess
 		// Apply the same content-scan skips as the working-tree gate:
 		// data files / backup snapshots, and detection-rule files (YARA)
 		// whose payload IS the pattern. Mirrors secrets_scan by using the
-		// except-data-dirs variant — a leaked credential inside a dataset
+		// except-data-dirs variant: a leaked credential inside a dataset
 		// directory must still surface in history.
 		if options.shouldSkipContentExceptDataDirs(b.Path) {
 			continue
@@ -118,14 +118,14 @@ func scanHistoryBlob(b blobInfo, data []byte) []Finding {
 			if verdict == verdictNone {
 				continue
 			}
-			sev := SeverityWarning // never error — already in history, requires filter-repo
+			sev := SeverityWarning // never error: already in history, requires filter-repo
 			msg := fmt.Sprintf(
-				"Possible %s in blob %s (path %s, line %d). The secret is in repo history even if removed from the working tree — rotate the credential, then run `git filter-repo --invert-paths --path %s` (or BFG) to scrub it.",
+				"Possible %s in blob %s (path %s, line %d). The secret is in repo history even if removed from the working tree: rotate the credential, then run `git filter-repo --invert-paths --path %s` (or BFG) to scrub it.",
 				p.title, shortHash(b.Hash), b.Path, lineNum, b.Path,
 			)
 			if verdict == verdictExample {
 				sev = SeverityInfo
-				msg = fmt.Sprintf("A string shaped like a %s in blob %s (path %s, line %d) fails GitHub's own checksum, so GitHub cannot have issued it — almost certainly a typed example. Nothing to rotate or scrub.", p.title, shortHash(b.Hash), b.Path, lineNum)
+				msg = fmt.Sprintf("A string shaped like a %s in blob %s (path %s, line %d) fails GitHub's own checksum, so GitHub cannot have issued it: almost certainly a typed example. Nothing to rotate or scrub.", p.title, shortHash(b.Hash), b.Path, lineNum)
 			}
 			out = append(out, Finding{
 				Severity: sev,

@@ -27,7 +27,7 @@ $ lgit version
 0.2.1
 ```
 
-It prints the release number without a leading `v` — the same string the
+It prints the release number without a leading `v`: the same string the
 VS Code extension and the MCP server report.
 
 ::: tip Downloaded through a browser on macOS?
@@ -37,7 +37,7 @@ Fetching with `curl` as above does not set it in the first place.
 
 ### From source
 
-Needs Go — the version is pinned in `server/go.mod`.
+Needs Go: the version is pinned in `server/go.mod`.
 
 ```sh
 git clone https://github.com/fabriziosalmi/l0-git.git
@@ -95,7 +95,7 @@ lgit stats -project=$PWD
 ```
 
 ::: warning `-project` wants an absolute path
-It has to match the path `check` recorded. `-project=.` matches nothing — use
+It has to match the path `check` recorded. `-project=.` matches nothing: use
 `-project=$PWD`.
 :::
 
@@ -109,7 +109,7 @@ lgit fix 16
 
 For the eight gates with deterministic recipes you get the exact commands and
 file edits. For the rest you get the framing an agent needs to decide. Either
-way `lgit fix` only prints — it never touches your tree.
+way `lgit fix` only prints: it never touches your tree.
 
 Confirm the fix by re-running just that gate:
 
@@ -123,7 +123,7 @@ history of what you fixed stays intact.
 ## Turning down the noise
 
 The first scan on a mature repository usually surfaces a pile of info-level
-findings. That is the audit layer, not a work queue — start with
+findings. That is the audit layer, not a work queue: start with
 `-severity=error`.
 
 When a gate is wrong for your project rather than merely unwelcome, disable it
@@ -144,6 +144,6 @@ See [Configuration](./configuration) for the full schema, including the
 
 ## Where next
 
-- [VS Code extension](./vscode) — the same findings in the editor.
-- [Claude Code / MCP](./mcp) — let an agent run the gates and read the fixes.
-- [Gate reference](/gates/) — what all 36 gates actually check.
+- [VS Code extension](./vscode): the same findings in the editor.
+- [Claude Code / MCP](./mcp): let an agent run the gates and read the fixes.
+- [Gate reference](/gates/): what all 36 gates actually check.

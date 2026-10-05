@@ -14,7 +14,7 @@ Routes pull requests to the people who actually own the touched paths.
 Looks for a CODEOWNERS file at project root, .github/, or docs/. Silent on docs-only repos; fires when the project has source files in a recognised language.
 
 Searched at the project root, `.github/`, and `docs/`. The gate stays
-silent on documentation-only repositories — it fires only once the project
+silent on documentation-only repositories: it fires only once the project
 contains source files in a recognised language.
 
 ## What a finding says
