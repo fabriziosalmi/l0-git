@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-15
+
 ### Added
 
 - **Homebrew tap**: `brew install fabriziosalmi/l0-git/l0-git` installs the release binary as `lgit`. The release workflow points the formula at each stable tag, taking the hashes from `checksums.txt`, and fails rather than push a formula it could not fully update (a bump script that only rewrote what it matched would have left one target on the old version and reported success).
