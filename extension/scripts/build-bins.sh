@@ -25,6 +25,7 @@ if [ -z "$version" ]; then
   version="$(git -C "$ext_root" describe --tags --always --dirty 2>/dev/null || echo dev)"
   version="${version#v}"
 fi
+version="${version#v}"
 echo "version: $version"
 
 build() {

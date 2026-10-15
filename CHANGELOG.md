@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Homebrew tap**: `brew install fabriziosalmi/l0-git/l0-git` installs the release binary as `lgit`. The release workflow points the formula at each stable tag, taking the hashes from `checksums.txt`, and fails rather than push a formula it could not fully update (a bump script that only rewrote what it matched would have left one target on the old version and reported success).
+- **Install script**: `curl -fsSL https://github.com/fabriziosalmi/l0-git/releases/latest/download/install.sh | sh` picks the archive for the OS and CPU (an Apple Silicon Mac under Rosetta still gets arm64), refuses to install unless the sha256 matches the release's `checksums.txt`, installs into `~/.local/bin` without sudo and runs the binary before reporting success. Tested on macOS, Alpine (busybox) and Debian (dash), including a tampered checksum and a release without checksums, both refused.
+- Every release publishes `checksums.txt` (sha256 of every asset) and `install.sh`.
+
+### Changed
+
+- **macOS binaries are signed with a Developer ID and notarized.** A clean Mac blocked `lgit` downloaded through a browser: the binary carried only the Go linker's ad-hoc signature, so Gatekeeper rejected it once the browser set the quarantine flag. The darwin binaries are now built on a macOS runner, signed with hardened runtime and a secure timestamp, and notarized; the job fails unless Gatekeeper, on a copy carrying a browser's quarantine flag, accepts each one as `Notarized Developer ID`. The same signed binaries are bundled in the `.vsix`. Checked against a signed but unnotarized binary, which the same check rejects.
+- A pull request that changes the release pipeline runs it as a dry run (build, sign, notarize, no release, no tap update).
+
 ## [0.3.2] - 2026-10-05
 
 ### Added
