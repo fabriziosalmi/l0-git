@@ -7,32 +7,60 @@ description: Install lgit, run the first scan, and read what comes back.
 
 ## Install
 
-### From a release
+### With Homebrew
 
-Pre-built binaries are published for `linux-amd64`, `linux-arm64`,
-`darwin-amd64`, `darwin-arm64` and `windows-amd64`.
+On macOS and Linux:
 
 ```sh
-OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-ARCH=$(uname -m); [ "$ARCH" = x86_64 ] && ARCH=amd64; [ "$ARCH" = aarch64 ] && ARCH=arm64
-
-curl -fsSL "https://github.com/fabriziosalmi/l0-git/releases/latest/download/lgit-$OS-$ARCH.tar.gz" | tar xz
-sudo mv "lgit-$OS-$ARCH" /usr/local/bin/lgit
+brew install fabriziosalmi/l0-git/l0-git
 ```
+
+`brew upgrade` picks up each new release. The formula prints the command that
+registers `lgit` with Claude Code: see [MCP](/guide/mcp).
+
+### With the install script
+
+```sh
+curl -fsSL https://github.com/fabriziosalmi/l0-git/releases/latest/download/install.sh | sh
+```
+
+It picks the archive for your OS and CPU (`linux` or `darwin`, `amd64` or
+`arm64`; an Apple Silicon Mac is detected as such even from a shell running
+under Rosetta), downloads it with the release's `checksums.txt`, and refuses to
+install unless the sha256 matches. Then it puts `lgit` in `~/.local/bin`
+without sudo, runs `lgit version` to prove the binary starts, and tells you if
+that directory is not on your `PATH`.
+
+| Variable | Default | Effect |
+|---|---|---|
+| `LGIT_INSTALL_DIR` | `~/.local/bin` | Where the binary goes |
+| `LGIT_VERSION` | `latest` | Release to install, e.g. `0.3.3` |
+
+Releases before 0.3.3 publish no `checksums.txt`, so the script will not
+install them.
 
 Confirm it landed:
 
 ```sh
 $ lgit version
-0.2.1
+0.3.3
 ```
 
 It prints the release number without a leading `v`: the same string the
 VS Code extension and the MCP server report.
 
-::: tip Downloaded through a browser on macOS?
-Gatekeeper quarantines it. `xattr -d com.apple.quarantine lgit` clears the flag.
-Fetching with `curl` as above does not set it in the first place.
+### By hand
+
+Every [release](https://github.com/fabriziosalmi/l0-git/releases) carries
+`lgit-<os>-<arch>.tar.gz` for `linux-amd64`, `linux-arm64`, `darwin-amd64`,
+`darwin-arm64`, `lgit-windows-amd64.zip`, and `checksums.txt` for all of them.
+
+::: tip macOS and Gatekeeper
+From 0.3.3 the macOS binaries are signed with a Developer ID and notarized by
+Apple: a copy downloaded with a browser runs without a warning. Gatekeeper
+checks the notarization online the first time, because a bare binary cannot
+carry the ticket. Older releases were not notarized, and a browser download of
+one is blocked until `xattr -d com.apple.quarantine lgit` clears the flag.
 :::
 
 ### From source

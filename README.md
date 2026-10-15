@@ -34,15 +34,24 @@ recipes it hands you the exact commands instead of a paragraph of advice.
 ## Install
 
 ```sh
-OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-ARCH=$(uname -m); [ "$ARCH" = x86_64 ] && ARCH=amd64; [ "$ARCH" = aarch64 ] && ARCH=arm64
-
-curl -fsSL "https://github.com/fabriziosalmi/l0-git/releases/latest/download/lgit-$OS-$ARCH.tar.gz" | tar xz
-sudo mv "lgit-$OS-$ARCH" /usr/local/bin/lgit
+brew install fabriziosalmi/l0-git/l0-git
 ```
 
-Binaries are published for linux and darwin (amd64, arm64) and windows (amd64). From
-source: `make build` (needs Go, version pinned in [`server/go.mod`](server/go.mod)).
+Without Homebrew, on macOS or Linux:
+
+```sh
+curl -fsSL https://github.com/fabriziosalmi/l0-git/releases/latest/download/install.sh | sh
+```
+
+The script picks the archive for your OS and CPU, refuses to install it unless
+its sha256 matches the release's `checksums.txt`, and puts `lgit` in
+`~/.local/bin` without sudo (`LGIT_INSTALL_DIR` changes the directory,
+`LGIT_VERSION` pins a release).
+
+From 0.3.3 the macOS binaries are signed with a Developer ID and notarized by
+Apple, so a copy downloaded with a browser opens without a Gatekeeper warning.
+Binaries are published for linux and darwin (amd64, arm64) and windows (amd64).
+From source: `make build` (needs Go, version pinned in [`server/go.mod`](server/go.mod)).
 
 ## Quick start
 

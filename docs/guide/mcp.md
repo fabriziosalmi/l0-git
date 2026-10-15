@@ -26,6 +26,9 @@ claude mcp add -s user l0-git /absolute/path/to/lgit mcp
 `-s user` matters: without it Claude Code registers the server for the current
 directory only, and the l0-git tools vanish in every other project.
 
+Installed with Homebrew, the absolute path is `$(brew --prefix)/opt/l0-git/bin/lgit`,
+which survives `brew upgrade`; with the install script it is `~/.local/bin/lgit`.
+
 Or write it into `~/.claude.json` yourself:
 
 ```json

@@ -47,11 +47,9 @@ tells you the exact commands rather than a paragraph of advice.
 ## Install
 
 ```sh
-OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-ARCH=$(uname -m); [ "$ARCH" = x86_64 ] && ARCH=amd64; [ "$ARCH" = aarch64 ] && ARCH=arm64
-
-curl -fsSL "https://github.com/fabriziosalmi/l0-git/releases/latest/download/lgit-$OS-$ARCH.tar.gz" | tar xz
-sudo mv "lgit-$OS-$ARCH" /usr/local/bin/lgit
+brew install fabriziosalmi/l0-git/l0-git
+# or, without Homebrew:
+curl -fsSL https://github.com/fabriziosalmi/l0-git/releases/latest/download/install.sh | sh
 
 lgit check .
 ```
